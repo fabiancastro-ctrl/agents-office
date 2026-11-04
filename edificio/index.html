@@ -9,69 +9,215 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f3b74f'/%3E%3Cpath d='M9 26V8h14v18M13 12h2M17 12h2M13 16h2M17 16h2M13 20h2M17 20h2' stroke='%231a2230' stroke-width='2' fill='none'/%3E%3C/svg%3E">
 <style>
+/* Pixelify Sans en 700 cierra la C y parece una O («OINOO»): los textos pixelados del edificio van en 500 */
 :root{
   --bg:#111722;--panel:#161d29;--panel-2:#1e2735;--ink:#e8edf4;--muted:#97a5ba;--line:#2d394c;
-  --amber:#f3b74f;--teal:#5fcbb9;--rose:#ef7f8a;--sky:#7cb6f0;
+  --amber:#f3b74f;--teal:#5fcbb9;--rose:#ef7f8a;--violet:#a99cf2;--sky:#7cb6f0;
   --display:"Pixelify Sans","Courier New",monospace;--body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  /* cielo: lo cambia la hora del día (clases t-* en <body>) */
+  --sky-top:#0b1222;--sky-bot:#1d2b45;--star:1;--lamp:1;
+  --wall:#2a3446;--wall-2:#232c3c;--brick:rgba(255,255,255,.035);--slab:#3a475c;--glass:#0d1420;
   color-scheme:dark;
 }
+body.t-dawn{--sky-top:#25305a;--sky-bot:#c97a5b;--star:.25;--lamp:.6}
+body.t-day{--sky-top:#2f6496;--sky-bot:#8dbfe0;--star:0;--lamp:0}
+body.t-dusk{--sky-top:#1d2550;--sky-bot:#b25e57;--star:.35;--lamp:.8}
 *{box-sizing:border-box}
-html,body{background:var(--bg);color:var(--ink);margin:0}
 html{font-variant-ligatures:none} /* Pixelify Sans convierte «fi» en una ligadura que parece una A */
-body{font-family:var(--body);font-size:14px;line-height:1.45;padding:0 16px 40px}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink)}
+body{font-family:var(--body);font-size:14px;line-height:1.45;background:linear-gradient(var(--sky-top),var(--sky-bot) 78%) fixed;transition:background 2s}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 18px;padding:18px 0 14px;border-bottom:1px solid var(--line);max-width:1200px;margin:0 auto}
-.top h1{font-family:var(--display);font-size:24px;margin:0;font-weight:700}
-.top p{margin:0;color:var(--muted)}
-.top .sum{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
-.grid{max-width:1200px;margin:18px auto 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.of{--oh:174;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px 14px;display:grid;gap:10px;align-content:start;overflow:hidden}
-.of::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:hsl(var(--oh) 60% 55%)}
-.of.off{opacity:.72}
-.of.need{border-color:color-mix(in srgb,var(--rose) 60%,var(--line))}
-.of-h{display:flex;align-items:center;gap:10px;min-width:0}
-.badge{width:34px;height:34px;flex:none;border-radius:8px;display:grid;place-items:center;font:700 18px/1 Arial,sans-serif;color:#fff;background:hsl(var(--oh) 60% 48%)}
-.of-t{min-width:0;flex:1}
-.of-t b{display:block;font-family:var(--display);font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.of-t small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.st{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--muted);white-space:nowrap}
-.st.on{color:var(--teal);border-color:#2b5a52}
-.st.on::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);margin-right:6px;vertical-align:1px}
-.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+[hidden]{display:none!important}
+
+/* ---------- cielo ---------- */
+.stars{position:fixed;inset:0;pointer-events:none;opacity:var(--star);transition:opacity 2s;
+  background-image:radial-gradient(1px 1px at 12% 18%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 28% 8%,#cfe 50%,transparent 51%),radial-gradient(1.5px 1.5px at 44% 22%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 61% 11%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 77% 26%,#dfe 50%,transparent 51%),radial-gradient(1.5px 1.5px at 88% 9%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 6% 40%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 94% 44%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 36% 36%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 70% 40%,#fff 50%,transparent 51%)}
+.orb{position:fixed;top:70px;right:9%;width:46px;height:46px;border-radius:50%;pointer-events:none;background:#f4efe2;box-shadow:0 0 30px 6px rgba(244,239,226,.25);transition:all 2s}
+.orb::after{content:"";position:absolute;inset:0 0 0 12px;border-radius:50%;background:var(--sky-top);transition:background 2s} /* luna menguante */
+body.t-day .orb{background:#ffe08a;box-shadow:0 0 50px 14px rgba(255,224,138,.45)}
+body.t-day .orb::after,body.t-dawn .orb::after,body.t-dusk .orb::after{display:none}
+body.t-dawn .orb,body.t-dusk .orb{background:#ffb36b;top:auto;bottom:170px;box-shadow:0 0 50px 16px rgba(255,160,90,.35)}
+.cloud{position:fixed;height:14px;border-radius:7px;background:rgba(255,255,255,.08);pointer-events:none;animation:drift linear infinite}
+.cloud::before{content:"";position:absolute;left:18%;top:-8px;width:40%;height:14px;border-radius:7px;background:inherit}
+body.t-day .cloud{background:rgba(255,255,255,.55)}
+@keyframes drift{from{transform:translateX(-30vw)}to{transform:translateX(130vw)}}
+
+/* ---------- barra superior ---------- */
+.hud{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:12px max(16px,calc(50vw - 600px));background:rgba(12,17,27,.82);backdrop-filter:blur(6px);border-bottom:1px solid rgba(255,255,255,.06)}
+.hud h1{font-family:var(--display);font-size:22px;margin:0;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--mono);font-size:11.5px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 9px;white-space:nowrap}
+.chip b{color:var(--ink);font-weight:600}
+.chip.need{color:#ffd9de;border-color:color-mix(in srgb,var(--rose) 60%,var(--line));background:color-mix(in srgb,var(--rose) 14%,transparent)}
+.chip.need b{color:var(--rose)}
+.hud .sp{flex:1}
+.btn{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:5px 12px;text-decoration:none;color:var(--ink);font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:#4a5a73}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:#1a2230;font-weight:600}
+.btn.danger{color:var(--rose);border-color:rgba(239,127,138,.45)}
+.btn.danger.solid{background:#c94452;border-color:#c94452;color:#fff;font-weight:600}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* ---------- escena ---------- */
+.scene{position:relative;padding:56px 16px 0;display:grid;justify-items:center;min-height:calc(100vh - 58px);align-content:end;overflow-x:clip}
+.bld{--w:min(900px,100%);position:relative;width:var(--w);filter:drop-shadow(0 20px 30px rgba(0,0,0,.35))}
+
+/* azotea */
+.roof{position:relative;height:74px;margin:0 22px}
+.parapet{position:absolute;left:0;right:0;bottom:0;height:16px;background:var(--slab);border-radius:4px 4px 0 0;box-shadow:inset 0 -3px 0 rgba(0,0,0,.25)}
+.sign{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);padding:5px 14px 4px;background:#141b27;border:2px solid #4a5870;border-bottom:0;border-radius:6px 6px 0 0;font-family:var(--display);font-weight:500;font-size:16px;letter-spacing:.08em;color:var(--amber);text-shadow:0 0 6px rgba(243,183,79,.55);white-space:nowrap}
+.sign::before,.sign::after{content:"";position:absolute;bottom:-1px;width:4px;height:10px;background:#4a5870}
+.sign::before{left:16%}.sign::after{right:16%}
+.antenna{position:absolute;right:16%;bottom:16px;width:4px;height:58px;background:#6b7891}
+.antenna::before{content:"";position:absolute;left:-7px;top:16px;width:18px;height:3px;background:#6b7891;box-shadow:0 12px 0 #6b7891}
+.antenna i{position:absolute;left:-3px;top:-6px;width:10px;height:10px;border-radius:50%;background:#7a2730;animation:beacon 1.6s steps(1) infinite}
+.antenna.alert i{background:#ff4d63;animation-duration:.6s}
+@keyframes beacon{0%{box-shadow:0 0 10px 3px rgba(255,77,99,.85);background:#ff4d63}50%{box-shadow:none;background:#7a2730}}
+.tank{position:absolute;left:12%;bottom:16px;width:44px;height:36px}
+.tank::before{content:"";position:absolute;inset:0 4px 10px;background:#5a4636;border-radius:4px 4px 2px 2px;box-shadow:inset 0 6px 0 rgba(255,255,255,.08),inset 0 -4px 0 rgba(0,0,0,.2)}
+.tank::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:10px;border-left:3px solid #4a5870;border-right:3px solid #4a5870}
+
+/* cuerpo con pisos */
+.body{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 54px;background:var(--wall);border-left:6px solid var(--wall-2);border-right:6px solid var(--wall-2);
+  background-image:linear-gradient(var(--brick) 1px,transparent 1px),linear-gradient(90deg,var(--brick) 1px,transparent 1px);background-size:100% 12px,24px 12px}
+.floors{display:grid}
+.floor{--oh:174;position:relative;display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:12px;padding:14px 12px 16px 14px;cursor:pointer;border-bottom:8px solid var(--slab);transition:background .2s;outline-offset:-3px}
+.floor::before{content:"";position:absolute;left:0;right:0;bottom:-8px;height:3px;background:hsl(var(--oh) 55% 50%);opacity:.9}
+.floor:hover{background:rgba(255,255,255,.035)}
+.floor.need{animation:needglow 1.6s ease-in-out infinite}
+@keyframes needglow{50%{background:color-mix(in srgb,var(--rose) 9%,transparent)}}
+.plq{display:grid;gap:3px;min-width:0;padding:8px 10px;background:#141b27;border:1px solid #3c4a60;border-left:4px solid hsl(var(--oh) 60% 55%);border-radius:6px}
+.plq .no{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.08em}
+.plq b{font-family:var(--display);font-weight:500;font-size:17px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:hsl(var(--oh) 70% 78%)}
+.st{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.st::before{content:"";width:6px;height:6px;border-radius:50%;background:#56627a}
+.st.on{color:var(--teal)} .st.on::before{background:var(--teal);box-shadow:0 0 6px var(--teal)}
+.st.orp{color:var(--amber)} .st.orp::before{background:var(--amber)}
+.plq .needb{font-family:var(--mono);font-size:11px;color:var(--rose);font-weight:600}
+
+/* ventanas: un puesto por ventana */
+.wins{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.win{position:relative;aspect-ratio:5/6;border-radius:3px;overflow:hidden;background:var(--glass);border:3px solid #4a5870;border-bottom-width:5px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
+.win::after{content:"";position:absolute;inset:0;background:linear-gradient(125deg,transparent 40%,rgba(255,255,255,.07) 41%,rgba(255,255,255,.07) 52%,transparent 53%);pointer-events:none} /* reflejo */
+.win svg{position:absolute;left:50%;bottom:-4px;width:72%;transform:translateX(-50%)}
+.win .p{display:none} /* utilería de la oficina (hojas, ondas…): aquí no */
+.win .tag{position:absolute;top:3px;left:50%;transform:translateX(-50%);font:700 8.5px/1 var(--mono);padding:2px 3px;border-radius:2px;white-space:nowrap;z-index:1}
+.on .win{background:linear-gradient(#3a3424,#2a2619)} /* luz encendida, puesto vacío */
+.on .win.r{background:radial-gradient(circle at 50% 70%,#ffe2a0,#e9b864 60%,#b9863e)}
+.on .win.s-delegating{background:radial-gradient(circle at 50% 70%,#e2dcff,#b6a9f2 60%,#7d6fc4)}
+.on .win.s-input{animation:winneed 1s steps(2) infinite}
+@keyframes winneed{0%{background:radial-gradient(circle at 50% 70%,#ffd0d6,#ef7f8a 70%)}50%{background:radial-gradient(circle at 50% 70%,#ffe2a0,#e9b864 70%)}}
+.on .win.s-done{background:radial-gradient(circle at 50% 70%,#fff0c8,#d9c58f 70%)}
+.win.s-working svg,.win.s-delegating svg{animation:bob 1.2s ease-in-out infinite}
+.win.s-input svg{animation:hop .5s ease-in-out infinite alternate}
+@keyframes bob{50%{transform:translate(-50%,-2px)}}
+@keyframes hop{to{transform:translate(-50%,-4px)}}
+.win .tag.done{background:var(--amber);color:#2a1d05}
+.win .tag.crit{background:#e0414f;color:#fff}
+.win .tag.ask{background:var(--rose);color:#3a0d13}
+/* piso detenido: ventanas a oscuras; robots que siguen vivos en tmux, como siluetas ámbar */
+.floor.off .win{background:#0a0f18}
+.floor.off .win.orph svg{opacity:.55;filter:grayscale(1) brightness(.6) sepia(1) saturate(4) hue-rotate(-12deg)}
+.floor.off .win.orph{border-color:color-mix(in srgb,var(--amber) 55%,#4a5870)}
+.floor.off .win.orph.busy svg{animation:flick 1.4s steps(2) infinite}
+@keyframes flick{50%{opacity:.25}}
+.floor.orph .plq{border-color:color-mix(in srgb,var(--amber) 60%,#3c4a60)}
+
+/* ascensor: sube al piso donde alguien te necesita */
+.shaft{position:relative;background:#1b2230;border-left:3px solid var(--wall-2)}
+.shaft::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:2px;background:repeating-linear-gradient(#3a475c 0 6px,transparent 6px 12px)}
+.car{position:absolute;left:7px;right:7px;height:56px;background:#c9d2de;border:2px solid #8b98ad;border-radius:3px;transition:top 1.6s cubic-bezier(.6,0,.3,1);display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:4px}
+.car i{background:#9aa6b8;border-radius:1px}
+.car b{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font:700 9px/1 var(--mono);color:var(--ink);background:#141b27;border:1px solid #4a5870;padding:2px 4px;border-radius:2px;white-space:nowrap}
+.car.alert{border-color:var(--rose);box-shadow:0 0 12px rgba(239,127,138,.6)}
+.car.alert b{color:var(--rose);border-color:var(--rose)}
+
+/* planta baja */
+.lobby{position:relative;display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:14px;min-height:150px;padding:16px 16px 0;background:#1f2736;border-top:10px solid var(--slab)}
+.awning{position:absolute;left:50%;top:-1px;transform:translateX(-50%);width:230px;height:18px;background:repeating-linear-gradient(90deg,var(--amber) 0 18px,#e7d6ac 18px 36px);border-radius:0 0 8px 8px;box-shadow:0 4px 0 rgba(0,0,0,.25)}
+.door{position:relative;width:190px;height:118px;border:4px solid #4a5870;border-bottom:0;border-radius:4px 4px 0 0;background:linear-gradient(rgba(124,182,240,.18),rgba(124,182,240,.06));display:grid;grid-template-columns:1fr 1fr;padding:0;overflow:hidden}
+.door i{border-right:2px solid #4a5870;transition:transform .5s ease}
+.door i:last-of-type{border:0}
+.door:hover i:first-of-type{transform:translateX(-80%)}
+.door:hover i:last-of-type{transform:translateX(80%)}
+.door span{position:absolute;inset:auto 0 30px;text-align:center;font-family:var(--display);font-weight:500;font-size:16px;color:var(--amber);text-shadow:0 1px 0 #000}
+.door small{position:absolute;inset:auto 0 12px;text-align:center;font-size:11px;color:var(--muted)}
+.door::before{content:"+";position:absolute;top:16px;left:50%;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;border:2px dashed var(--amber);color:var(--amber);font:700 22px/30px var(--mono);text-align:center}
+.reception{justify-self:start;display:flex;align-items:end;gap:12px}
+.desk{position:relative;width:120px;height:44px;background:#5a4636;border-radius:4px 4px 0 0;box-shadow:inset 0 4px 0 rgba(255,255,255,.08)}
+.desk::after{content:"RECEPCIÓN";position:absolute;inset:auto 0 8px;text-align:center;font:600 8.5px/1 var(--mono);letter-spacing:.12em;color:#d9c49d}
+.me{width:40px;margin-bottom:44px;margin-left:-86px}
+.mail{justify-self:end;display:grid;justify-items:center;gap:4px;margin-bottom:6px;background:none;border:0;padding:0}
+.mail .box{position:relative;width:62px;height:46px;background:#2c5a8a;border-radius:24px 24px 4px 4px;border:2px solid #4c7fb5;display:grid;place-items:end center;padding-bottom:6px;font:700 17px/1 var(--mono);color:#fff}
+.mail .box::after{content:"";position:absolute;left:14px;right:14px;top:11px;height:3px;background:#173554;border-radius:2px}
+.mail .post{width:8px;height:40px;background:#4a5870}
+.mail small{font-size:11px;color:var(--muted);white-space:nowrap}
+.plant{width:26px;height:44px;position:relative}
+.plant::before{content:"";position:absolute;bottom:0;left:3px;width:20px;height:14px;background:#7a5a3c;border-radius:2px 2px 6px 6px}
+.plant::after{content:"";position:absolute;bottom:12px;left:0;width:26px;height:30px;border-radius:50% 50% 40% 40%;background:#4f9a62;box-shadow:inset -4px -4px 0 rgba(0,0,0,.18)}
+
+/* calle */
+.street{position:relative;width:100vw;height:96px;margin:0 calc(50% - 50vw);justify-self:center;background:linear-gradient(#5b6578 0 16px,#3a4252 16px 22px,#20252f 22px)}
+.street::after{content:"";position:absolute;left:0;right:0;top:58px;height:4px;background:repeating-linear-gradient(90deg,#d9c58f 0 34px,transparent 34px 72px);opacity:.7}
+.lamp{position:absolute;bottom:80px;width:6px;height:150px;background:#4a5870;z-index:1}
+.lamp::before{content:"";position:absolute;top:-4px;left:-10px;width:26px;height:8px;border-radius:4px;background:#6b7891}
+.lamp::after{content:"";position:absolute;top:4px;left:-34px;width:74px;height:140px;background:radial-gradient(ellipse at top,rgba(255,224,150,.32),transparent 70%);opacity:var(--lamp);transition:opacity 2s;pointer-events:none}
+.tree{position:absolute;bottom:80px;width:70px;height:110px;z-index:1}
+.tree::before{content:"";position:absolute;bottom:0;left:30px;width:10px;height:44px;background:#6b4b33}
+.tree::after{content:"";position:absolute;bottom:34px;left:0;width:70px;height:76px;border-radius:46% 46% 40% 40%;background:#3f7d50;box-shadow:inset -8px -8px 0 rgba(0,0,0,.18)}
+
+/* vacío */
+.empty-lot{padding:26px 16px;text-align:center;color:var(--muted);font-size:13px;background:repeating-linear-gradient(135deg,#2a3446 0 14px,#262f40 14px 28px)}
+.empty-lot b{display:block;font-family:var(--display);font-weight:500;font-size:18px;color:var(--ink);margin-bottom:4px}
+
+/* tooltip de ventana */
+.tip{position:fixed;z-index:50;pointer-events:none;background:#0f141c;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;white-space:nowrap;transform:translate(-50%,calc(-100% - 8px))}
+.tip b{font-family:var(--mono)}
+
+/* ---------- construcción y demolición ---------- */
+.floor.build{animation:build 1.3s cubic-bezier(.2,.8,.2,1) both;transform-origin:bottom}
+.floor.build::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,183,79,.85) 0 12px,rgba(26,34,48,.85) 12px 24px);animation:scaffold 1.6s ease-in both;pointer-events:none}
+@keyframes build{from{transform:scaleY(0);opacity:0}to{transform:none;opacity:1}}
+@keyframes scaffold{0%,55%{opacity:1}100%{opacity:0}}
+.floor.demolish{animation:shake .5s linear both,collapse .9s .55s cubic-bezier(.55,0,.9,.4) forwards;transform-origin:bottom;pointer-events:none;z-index:3}
+.floor.demolish .win{animation:pop .5s .5s ease-in forwards}
+.floor.demolish .win:nth-child(odd){animation-delay:.6s}
+.floor.demolish .crack{position:absolute;inset:0;pointer-events:none;background:
+  linear-gradient(63deg,transparent 48%,#0b0f16 49%,#0b0f16 50%,transparent 51%) 18% 0/30% 100% no-repeat,
+  linear-gradient(-58deg,transparent 48%,#0b0f16 49%,#0b0f16 50.5%,transparent 51.5%) 62% 0/26% 100% no-repeat,
+  linear-gradient(80deg,transparent 48%,#0b0f16 49%,#0b0f16 50%,transparent 51%) 88% 0/14% 100% no-repeat;opacity:0;animation:crack .3s .15s forwards}
+@keyframes shake{0%,100%{transform:none}10%,50%,90%{transform:translateX(-4px) rotate(-.4deg)}30%,70%{transform:translateX(4px) rotate(.4deg)}}
+@keyframes crack{to{opacity:.9}}
+@keyframes collapse{0%{transform:none;filter:none}100%{transform:translateY(30%) scaleY(0) skewX(-6deg);filter:brightness(.4);opacity:.2}}
+@keyframes pop{to{transform:translateY(40px) rotate(25deg);opacity:0}}
+.dust{position:fixed;z-index:30;width:var(--s);height:var(--s);border-radius:50%;background:#b9ad97;pointer-events:none;animation:dust 1.4s ease-out forwards}
+@keyframes dust{from{transform:translate(0,0) scale(.4);opacity:.9}to{transform:translate(var(--dx),var(--dy)) scale(1.6);opacity:0}}
+.debris{position:fixed;z-index:31;width:var(--s);height:var(--s);background:#5c6880;pointer-events:none;animation:debris 1.1s cubic-bezier(.3,0,.9,.6) forwards}
+@keyframes debris{to{transform:translate(var(--dx),var(--dy)) rotate(var(--r));opacity:0}}
+
+/* ---------- diálogos ---------- */
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:20px 22px;width:min(560px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(5,8,12,.7)}
+dialog h2{font-family:var(--display);font-weight:500;font-size:20px;margin:0 0 4px}
+dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
+.dh{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.badge{width:36px;height:36px;flex:none;border-radius:8px;display:grid;place-items:center;font:700 18px/1 Arial,sans-serif;color:#fff;background:hsl(var(--oh) 60% 48%)}
+.dh .t{flex:1;min-width:0}.dh .t h2{margin:0}.dh .t small{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.x{background:none;border:1px solid var(--line);border-radius:6px;width:30px;height:30px;color:var(--muted)}
+.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
 .n{background:var(--panel-2);border-radius:8px;padding:6px 8px}
 .n b{display:block;font-family:var(--mono);font-size:19px;font-weight:600;line-height:1.2}
 .n span{font-size:11px;color:var(--muted)}
 .n.need.on b{color:var(--rose)} .n.done.on b{color:var(--amber)} .n.inbox.on b{color:var(--sky)}
-.meta{font-family:var(--mono);font-size:11px;color:var(--muted);display:grid;gap:2px}
+.meta{font-family:var(--mono);font-size:11.5px;color:var(--muted);display:grid;gap:3px;margin-bottom:12px}
 .meta span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acts{display:flex;gap:8px;flex-wrap:wrap}
-.btn{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:5px 12px;text-decoration:none;color:var(--ink);font-size:13px}
-.btn:hover{border-color:#4a5a73}
-.btn.primary{background:var(--amber);border-color:var(--amber);color:#1a2230;font-weight:600}
-.btn.danger{color:var(--rose);border-color:rgba(239,127,138,.45)}
-.btn[disabled]{opacity:.5;cursor:wait}
-.empty{max-width:1200px;margin:24px auto;color:var(--muted)}
-.empty code,.help code{font-family:var(--mono);background:var(--panel-2);padding:1px 5px;border-radius:4px;color:var(--ink)}
-.help{max-width:1200px;margin:22px auto 0;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:12px}
-.err{color:var(--rose);font-family:var(--mono);font-size:11px;white-space:pre-wrap}
-.warn{font-size:12.5px;line-height:1.4;color:#ffe3b0;background:color-mix(in srgb,var(--amber) 12%,var(--panel-2));border:1px solid color-mix(in srgb,var(--amber) 45%,var(--line));border-radius:8px;padding:7px 10px}
+.zone{margin-top:16px;padding-top:12px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:10px;justify-content:space-between}
+.zone small{color:var(--muted);font-size:12px}
+.warn{font-size:12.5px;line-height:1.4;color:#ffe3b0;background:color-mix(in srgb,var(--amber) 12%,var(--panel-2));border:1px solid color-mix(in srgb,var(--amber) 45%,var(--line));border-radius:8px;padding:7px 10px;margin-bottom:12px}
 .warn b{color:var(--amber)}
-.of.orph{opacity:1;border-color:color-mix(in srgb,var(--amber) 55%,var(--line))}
-.btn.ghost{background:transparent;border-color:transparent;color:var(--muted);padding-inline:6px}
-.btn.ghost:hover{color:var(--rose);border-color:rgba(239,127,138,.45)}
-@media (prefers-reduced-motion:no-preference){.of.need .n.need{animation:pulse 1.4s ease-in-out infinite}}
-@keyframes pulse{50%{background:color-mix(in srgb,var(--rose) 18%,var(--panel-2))}}
-.top .btn{margin-left:12px}
-.of.add{place-items:center;align-content:center;min-height:200px;border-style:dashed;background:transparent;color:var(--muted);cursor:pointer;font:inherit;text-align:center}
-.of.add::before{display:none}
-.of.add:hover{border-color:var(--amber);color:var(--ink)}
-.of.add b{font-family:var(--display);font-size:17px;display:block}
-.of.add span{font-size:28px;line-height:1}
-dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:20px 22px;width:min(520px,calc(100vw - 32px))}
-dialog::backdrop{background:rgba(5,8,12,.7)}
-dialog h2{font-family:var(--display);font-size:20px;margin:0 0 4px}
-dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
+.err{color:var(--rose);font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;margin-bottom:12px}
 .f{display:grid;gap:4px;margin-bottom:12px}
 .f label{font-size:12px;color:var(--muted)}
 .f input[type=text],.f input[type=number]{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;color:var(--ink);font-family:var(--mono);font-size:13px;width:100%}
@@ -79,106 +225,360 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
 .f small{font-size:11.5px;color:var(--muted)}
 .chk{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px}
 .dlg-acts{display:flex;justify-content:flex-end;gap:8px}
-#nf-err{margin-bottom:12px}
+.del-list{margin:0 0 14px;padding-left:18px;color:var(--muted);font-size:13px}
+.del-list b{color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:60;background:#0f141c;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:13px;max-width:calc(100vw - 32px)}
+
+@media (max-width:760px){
+  .hud{position:static}
+  .floor{grid-template-columns:1fr}
+  .wins{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .body{grid-template-columns:minmax(0,1fr) 40px}
+  .lobby{grid-template-columns:1fr;justify-items:center}
+  .reception,.mail{justify-self:center}
+  .roof{margin:0 10px}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
-<header class="top"><h1>Edificio de Oficinas</h1><p>Cada oficina: su carpeta de trabajo, su puerto y su sesión de tmux.</p><span class="sum" id="sum"></span><button class="btn primary" type="button" data-new>Nueva oficina</button></header>
-<main class="grid" id="grid" aria-live="polite"></main>
-<p class="help">Desde la consola: crear <code>bin/office create &lt;nombre&gt; --workspace &lt;carpeta&gt;</code> · listar <code>bin/office ls</code> · registros <code>bin/office logs &lt;nombre&gt;</code></p>
+<div class="stars" aria-hidden="true"></div>
+<div class="orb" aria-hidden="true"></div>
+<div class="cloud" style="top:110px;width:120px;animation-duration:140s" aria-hidden="true"></div>
+<div class="cloud" style="top:190px;width:80px;animation-duration:190s;animation-delay:-80s" aria-hidden="true"></div>
+
+<header class="hud">
+  <h1>Edificio de Oficinas</h1>
+  <div class="chips" id="chips" aria-live="polite"></div>
+  <span class="sp"></span>
+  <button class="btn primary" type="button" data-new>Nueva oficina</button>
+</header>
+
+<main class="scene">
+  <div class="bld" id="bld">
+    <div class="roof" aria-hidden="true">
+      <div class="tank"></div>
+      <div class="sign">EDIFICIO DE OFICINAS</div>
+      <div class="antenna" id="antenna"><i></i></div>
+      <div class="parapet"></div>
+    </div>
+    <div class="body">
+      <div class="floors" id="floors"></div>
+      <div class="shaft" aria-hidden="true"><div class="car" id="car"><i></i><i></i><b>PB</b></div></div>
+    </div>
+    <div class="lobby">
+      <div class="awning" aria-hidden="true"></div>
+      <div class="reception" aria-hidden="true">
+        <div class="plant"></div>
+        <div class="desk"></div>
+        <svg class="me" viewBox="0 0 40 48"><circle cx="20" cy="13" r="9" fill="#e7c9a5"/><path d="M11 12a9 9 0 0118 0c-3-3-12-3-18 0z" fill="#3b2c22"/><rect x="8" y="24" width="24" height="20" rx="8" fill="#f3b74f"/></svg>
+      </div>
+      <button class="door" type="button" data-new aria-label="Nueva oficina: construir un piso nuevo"><i></i><i></i><span>Nueva oficina</span><small>construir un piso</small></button>
+      <div class="mail" title="Documentos nuevos en las bandejas de todas las oficinas"><div class="box" id="mail">0</div><div class="post"></div><small>bandejas</small></div>
+    </div>
+  </div>
+  <div class="street" aria-hidden="true">
+    <div class="lamp" style="left:calc(50% - 520px)"></div><div class="tree" style="left:calc(50% - 640px)"></div>
+    <div class="lamp" style="left:calc(50% + 500px)"></div><div class="tree" style="left:calc(50% + 560px)"></div>
+  </div>
+</main>
+
+<div class="tip" id="tip" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<!-- panel de un piso -->
+<dialog id="fp" aria-labelledby="fp-t"><div id="fp-body"></div></dialog>
+
+<!-- nueva oficina -->
 <dialog id="nf" aria-labelledby="nf-t">
   <form id="nf-form" method="dialog" novalidate>
     <h2 id="nf-t">Nueva oficina</h2>
-    <p>Un grupo de robots que trabaja sobre una carpeta. Se le asigna solo un puerto libre y su propia sesión de tmux.</p>
-    <div class="f"><label for="nf-name">Nombre</label><input type="text" id="nf-name" name="name" required pattern="[a-z0-9][a-z0-9\-]{0,29}" maxlength="30" placeholder="finance" autocomplete="off" spellcheck="false"><small>Minúsculas, números y guiones. Será su sesión tmux: <span id="nf-sess">office-…</span></small></div>
-    <div class="f"><label for="nf-ws">Carpeta de trabajo</label><input type="text" id="nf-ws" name="workspace" required placeholder="~/dropicode-Diagrams/dropi-finance" autocomplete="off" spellcheck="false"><small>Ruta completa o con ~. Ahí se abren las consolas de claude y de ahí salen las skills.</small></div>
-    <div class="f"><label for="nf-max">Robots a la vez</label><input type="number" id="nf-max" name="max" min="1" max="20" value="3"><small>Todos gastan de la misma cuota. Se puede cambiar después desde la oficina.</small></div>
+    <p>Un piso nuevo: un grupo de robots que trabaja sobre una carpeta. Se le asigna solo un puerto libre y su propia sesión de tmux.</p>
+    <div class="f"><label for="nf-name">Nombre</label><input type="text" id="nf-name" required pattern="[a-z0-9][a-z0-9\-]{0,29}" maxlength="30" placeholder="finance" autocomplete="off" spellcheck="false"><small>Minúsculas, números y guiones. Será su sesión tmux: <span id="nf-sess">office-…</span></small></div>
+    <div class="f"><label for="nf-ws">Carpeta de trabajo</label><input type="text" id="nf-ws" required placeholder="~/dropicode-Diagrams/dropi-finance" autocomplete="off" spellcheck="false"><small>Ruta completa o con ~. Ahí se abren las consolas de claude y de ahí salen las skills.</small></div>
+    <div class="f"><label for="nf-max">Robots a la vez</label><input type="number" id="nf-max" min="1" max="20" value="3"><small>Todos gastan de la misma cuota. Se puede cambiar después desde la oficina.</small></div>
     <label class="chk"><input type="checkbox" id="nf-start" checked> Iniciarla al crearla</label>
     <div class="err" id="nf-err" hidden></div>
-    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancelar</button><button class="btn primary" type="submit" id="nf-go">Crear oficina</button></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancelar</button><button class="btn primary" type="submit" id="nf-go">Construir piso</button></div>
   </form>
 </dialog>
+
+<!-- eliminar oficina -->
+<dialog id="dl" aria-labelledby="dl-t">
+  <form id="dl-form" method="dialog" novalidate>
+    <h2 id="dl-t">Eliminar oficina</h2>
+    <ul class="del-list" id="dl-list"></ul>
+    <div class="f"><label for="dl-name">Escribe <b id="dl-hint"></b> para confirmar</label><input type="text" id="dl-name" autocomplete="off" spellcheck="false"></div>
+    <div class="err" id="dl-err" hidden></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancelar</button><button class="btn danger solid" type="submit" id="dl-go" disabled>Demoler piso</button></div>
+  </form>
+</dialog>
+
+<script src="/robot-art.js"></script>
 <script>
+(() => {
+const $ = id => document.getElementById(id);
 const HUES = [174, 38, 352, 250, 98, 205, 300, 18];
 const hue = n => { let h = 0; for (const ch of n) h = (h * 31 + ch.codePointAt(0)) >>> 0; return HUES[h % HUES.length]; };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const home = p => String(p || '—').replace(/^\/Users\/[^/]+/, '~');
+const STATE = {working: 'trabajando', walking: 'llegando', delegating: 'con subagentes', input: 'te necesita', done: 'listo', idle: 'en espera'};
 const errs = {};
-function card(o) {
-  const need = o.running && o.need > 0;
+let offices = [], busy = false, fresh = null;
+
+/* ---------- cielo según la hora ---------- */
+function sky() {
+  const h = new Date().getHours();
+  document.body.className = h >= 19 || h < 6 ? 't-night' : h < 8 ? 't-dawn' : h < 17 ? 't-day' : 't-dusk';
+}
+sky(); setInterval(sky, 60e3);
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 5000); }
+
+/* ---------- pisos ---------- */
+const robotArt = (r) => robotSVG(ROBOT_COLORS[(r.color || 0) % 8], lookOf(r.name, r.room ? {type: 'room', sala: r.room === 'sala'} : null));
+function windows(o) {
+  if (!o.running) {
+    // A oscuras; los robots que siguen vivos en tmux se ven como siluetas.
+    const orph = (o.orphanList || []).map(x => ({...(o.robotList.find(r => r.name === x.name) || {name: x.name}), busy: x.busy}));
+    const n = Math.max(8, orph.length);
+    return Array.from({length: n}, (_, i) => {
+      const r = orph[i];
+      return r ? `<span class="win orph ${r.busy ? 'busy' : ''}" data-tip="${esc(r.name)}|${r.busy ? 'trabajando sin supervisión' : 'vivo en tmux, sin supervisión'}">${robotArt(r)}</span>` : '<span class="win"></span>';
+    }).join('');
+  }
+  const order = {input: 0, working: 1, delegating: 1, walking: 1, done: 2, idle: 3};
+  const list = [...o.robotList].sort((a, b) => (order[a.state] ?? 4) - (order[b.state] ?? 4));
+  const n = Math.max(8, list.length);
+  return Array.from({length: n}, (_, i) => {
+    const r = list[i];
+    if (!r) return '<span class="win" data-tip="|puesto libre"></span>';
+    const tag = r.state === 'input' ? '<i class="tag ask">?</i>' : r.state === 'done' ? (r.critical ? `<i class="tag crit">⚠${r.critical}</i>` : '<i class="tag done">LISTO</i>') : '';
+    return `<span class="win r s-${esc(r.state)}" data-tip="${esc(r.name)}|${esc(STATE[r.state] || r.state)}">${tag}${robotArt(r)}</span>`;
+  }).join('');
+}
+function floorInner(o, idx) {
   const orph = !o.running && o.orphans > 0;
-  return `<article class="of ${o.running ? '' : 'off'} ${need ? 'need' : ''} ${orph ? 'orph' : ''}" style="--oh:${hue(o.title)}">
-    <div class="of-h"><span class="badge">${esc(o.title.trim()[0]?.toUpperCase() || 'O')}</span>
-      <div class="of-t"><b>${esc(o.title)}</b><small>${esc(o.name)} · :${o.port}</small></div>
-      <span class="st ${o.running ? 'on' : ''}">${o.running ? 'corriendo' : 'detenida'}</span></div>
+  const st = o.running ? '<span class="st on">corriendo</span>' : orph ? `<span class="st orp">${o.orphans} sin supervisión</span>` : '<span class="st">detenida</span>';
+  return `<div class="plq"><span class="no">PISO ${idx + 1} · :${o.port}</span><b>${esc(o.title)}</b>${st}${o.running && o.need ? `<span class="needb">✋ ${o.need} te necesita${o.need === 1 ? '' : 'n'}</span>` : ''}</div>
+    <div class="wins">${windows(o)}</div>`;
+}
+function render() {
+  const box = $('floors');
+  // Pisos de abajo hacia arriba por fecha de creación: el más nuevo queda arriba.
+  const list = [...offices].sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || a.name.localeCompare(b.name));
+  const seen = new Set(), els = [];
+  list.forEach((o, i) => {
+    seen.add(o.name);
+    let el = box.querySelector(`[data-floor="${CSS.escape(o.name)}"]`);
+    if (!el) {
+      el = document.createElement('div');
+      el.dataset.floor = o.name; el.tabIndex = 0; el.setAttribute('role', 'button');
+      if (fresh === o.name) { el.classList.add('build'); fresh = null; setTimeout(() => el.classList.remove('build'), 1700); }
+    }
+    el.style.setProperty('--oh', hue(o.title));
+    el.className = ['floor', o.running ? 'on' : 'off', o.running && o.need ? 'need' : '', !o.running && o.orphans ? 'orph' : '', el.classList.contains('build') ? 'build' : ''].filter(Boolean).join(' ');
+    el.setAttribute('aria-label', `Piso ${i + 1}: ${o.title}, ${o.running ? 'corriendo' : 'detenida'}${o.need ? `, ${o.need} te necesitan` : ''}. Abrir detalles`);
+    const html = floorInner(o, i);
+    if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+    els.push(el);
+  });
+  // El más nuevo arriba. Solo se mueve el que esté fuera de lugar: reinsertar un nodo reinicia sus animaciones.
+  els.reverse().forEach((el, k) => { if (box.children[k] !== el) box.insertBefore(el, box.children[k] || null); });
+  box.querySelectorAll('[data-floor]').forEach(el => { if (!seen.has(el.dataset.floor)) el.remove(); });
+  let empty = box.querySelector('.empty-lot');
+  if (!list.length && !empty) box.insertAdjacentHTML('beforeend', '<div class="empty-lot"><b>Terreno listo para construir</b>Crea la primera oficina con la puerta de abajo.</div>');
+  if (list.length && empty) empty.remove();
+
+  const on = offices.filter(o => o.running);
+  const need = on.reduce((n, o) => n + o.need, 0);
+  document.title = (need ? `(${need}) ` : '') + 'Edificio de Oficinas';
+  $('chips').innerHTML = `<span class="chip"><b>${on.length}</b>/${offices.length} oficinas abiertas</span><span class="chip"><b>${on.reduce((n, o) => n + o.working, 0)}</b> robots trabajando</span>`
+    + (need ? `<span class="chip need"><b>${need}</b> te necesita${need === 1 ? '' : 'n'}</span>` : '');
+  $('mail').textContent = on.reduce((n, o) => n + o.inbox, 0);
+  $('antenna').classList.toggle('alert', need > 0);
+  moveCar(list);
+  if ($('fp').open) renderPanel();
+}
+// El ascensor sube al piso más alto que te necesita; si nadie, espera en planta baja.
+function moveCar(list) {
+  const car = $('car'), shaft = car.parentElement;
+  const target = [...list].reverse().find(o => o.running && o.need);
+  const el = target && $('floors').querySelector(`[data-floor="${CSS.escape(target.name)}"]`);
+  const top = el ? el.offsetTop + (el.offsetHeight - car.offsetHeight) / 2 : shaft.offsetHeight - car.offsetHeight - 8;
+  car.style.top = Math.max(4, top) + 'px';
+  car.classList.toggle('alert', !!el);
+  car.querySelector('b').textContent = el ? `P${list.indexOf(target) + 1} ✋` : 'PB';
+}
+addEventListener('resize', () => moveCar([...offices].sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))));
+
+async function load() {
+  if (busy) return;
+  try {
+    offices = (await (await fetch('/api/offices')).json()).offices;
+    render();
+  } catch { $('chips').innerHTML = '<span class="chip need">sin conexión con el edificio</span>'; }
+}
+
+/* tooltip de ventanas */
+document.addEventListener('mouseover', e => {
+  const w = e.target.closest('.win[data-tip]'), tip = $('tip');
+  if (!w) return void (tip.hidden = true);
+  const [name, what] = w.dataset.tip.split('|');
+  const r = w.getBoundingClientRect();
+  tip.innerHTML = name ? `<b>${esc(name)}</b> · ${esc(what)}` : esc(what);
+  tip.style.left = r.left + r.width / 2 + 'px'; tip.style.top = r.top + 'px'; tip.hidden = false;
+});
+
+/* ---------- panel de un piso ---------- */
+let current = null;
+function renderPanel() {
+  const o = offices.find(x => x.name === current);
+  if (!o) return $('fp').close();
+  const orph = !o.running && o.orphans > 0;
+  $('fp').style.setProperty('--oh', hue(o.title));
+  $('fp-body').innerHTML = `<div class="dh"><span class="badge">${esc(o.title.trim()[0]?.toUpperCase() || 'O')}</span><div class="t"><h2 id="fp-t">${esc(o.title)}</h2><small>${esc(o.name)} · puerto ${o.port} · ${o.running ? 'corriendo' : 'detenida'}</small></div><button class="x" type="button" data-close aria-label="Cerrar">✕</button></div>
     <div class="nums">
       <div class="n"><b>${o.working}</b><span>trabajando</span></div>
       <div class="n need ${o.need ? 'on' : ''}"><b>${o.need}</b><span>te necesitan</span></div>
       <div class="n done ${o.done ? 'on' : ''}"><b>${o.done}</b><span>listos</span></div>
       <div class="n inbox ${o.inbox ? 'on' : ''}"><b>${o.inbox}</b><span>bandeja</span></div>
     </div>
-    <div class="meta"><span title="${esc(o.workspace)}">carpeta · ${esc(home(o.workspace))}</span><span>tmux · ${esc(o.session)}</span></div>
-    ${orph ? `<div class="warn"><b>⚠ ${o.orphans} robot${o.orphans === 1 ? '' : 's'} sin supervisión.</b> La oficina está detenida pero ${o.orphans === 1 ? 'sigue vivo' : 'siguen vivos'} en tmux${o.orphansBusy ? `, ${o.orphansBusy} trabajando y gastando cuota sin que lo veas` : ''}. Inicia la oficina para reconectarlos o despídelos.</div>` : ''}
-    <div class="acts">${o.running
-      ? `<a class="btn primary" href="${esc(o.url)}" target="_blank" rel="noopener">Abrir</a><button class="btn" data-act="stop" data-name="${esc(o.name)}" title="Apaga la oficina; sus robots siguen en tmux y se reconectan al iniciarla">Detener</button><button class="btn ghost" data-act="stop" data-despedir="1" data-name="${esc(o.name)}" title="Da de baja a todos sus robots (sus documentos pasan a la bandeja) y apaga la oficina">Cerrar y despedir</button>`
-      : `<button class="btn primary" data-act="start" data-name="${esc(o.name)}">${orph ? 'Iniciar y reconectar' : 'Iniciar'}</button>${orph ? `<button class="btn danger" data-act="stop" data-despedir="1" data-name="${esc(o.name)}">Despedir robots</button>` : ''}`}</div>
+    <div class="meta"><span title="${esc(o.workspace)}">carpeta · ${esc(home(o.workspace))}</span><span>tmux · ${esc(o.session)}</span><span title="${esc(o.data)}">datos · ${esc(home(o.data))}${o.adopted ? ' (adoptados)' : ''}</span></div>
+    ${orph ? `<div class="warn"><b>⚠ ${o.orphans} robot${o.orphans === 1 ? '' : 's'} sin supervisión.</b> La oficina está detenida pero ${o.orphans === 1 ? 'sigue vivo' : 'siguen vivos'} en tmux${o.orphansBusy ? `, ${o.orphansBusy} trabajando y gastando cuota sin que lo veas` : ''}.</div>` : ''}
     ${errs[o.name] ? `<div class="err">${esc(errs[o.name])}</div>` : ''}
-  </article>`;
+    <div class="acts">${o.running
+      ? `<a class="btn primary" href="${esc(o.url)}" target="_blank" rel="noopener">Abrir oficina</a><button class="btn" data-act="stop" title="Apaga la oficina; sus robots siguen en tmux y se reconectan al iniciarla">Detener</button><button class="btn danger" data-act="stop" data-despedir="1" title="Da de baja a todos sus robots (sus documentos pasan a la bandeja) y apaga la oficina">Cerrar y despedir</button>`
+      : `<button class="btn primary" data-act="start">${orph ? 'Iniciar y reconectar' : 'Iniciar'}</button>${orph ? '<button class="btn danger" data-act="stop" data-despedir="1">Despedir robots</button>' : ''}`}</div>
+    <div class="zone"><small>Despide a sus robots y manda la oficina a la Papelera.</small><button class="btn danger" data-del>Eliminar oficina</button></div>`;
 }
-async function load() {
-  try {
-    const {offices} = await (await fetch('/api/offices')).json();
-    const on = offices.filter(o => o.running);
-    const need = on.reduce((n, o) => n + o.need, 0);
-    document.title = (need ? `(${need}) ` : '') + 'Edificio de Oficinas';
-    document.getElementById('sum').textContent = `${on.length}/${offices.length} corriendo · ${on.reduce((n, o) => n + o.working, 0)} robots trabajando`;
-    document.getElementById('grid').innerHTML = offices.map(card).join('')
-      + '<button class="of add" type="button" data-new><span aria-hidden="true">+</span><b>Nueva oficina</b>otra carpeta, su propio puerto y tmux</button>';
-  } catch { document.getElementById('sum').textContent = 'sin conexión con el edificio'; }
-}
-document.getElementById('grid').addEventListener('click', async e => {
+$('floors').addEventListener('click', e => {
+  const f = e.target.closest('[data-floor]'); if (!f || busy) return;
+  current = f.dataset.floor; renderPanel(); $('fp').showModal();
+});
+$('floors').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-floor]')) { e.preventDefault(); e.target.click(); } });
+$('fp').addEventListener('click', async e => {
+  if (e.target === $('fp') || e.target.closest('[data-close]')) return $('fp').close();
+  if (e.target.closest('[data-del]')) return openDelete(current);
   const b = e.target.closest('[data-act]'); if (!b) return;
   const desp = b.dataset.despedir === '1';
-  if (desp && !confirm(`¿Despedir a todos los robots de «${b.dataset.name}» y cerrar la oficina?\n\nSus documentos pendientes pasan a la bandeja, pero los robots que estén trabajando se cortan y no se pueden recuperar.`)) return;
+  if (desp && !confirm(`¿Despedir a todos los robots de «${current}» y cerrar la oficina?\n\nSus documentos pendientes pasan a la bandeja, pero los robots que estén trabajando se cortan y no se pueden recuperar.`)) return;
   b.disabled = true; b.textContent = b.dataset.act === 'start' ? 'Iniciando…' : desp ? 'Despidiendo…' : 'Deteniendo…';
   try {
-    const r = await fetch(`/api/offices/${b.dataset.name}/${b.dataset.act}${desp ? '?despedir=1' : ''}`, {method: 'POST'});
+    const r = await fetch(`/api/offices/${current}/${b.dataset.act}${desp ? '?despedir=1' : ''}`, {method: 'POST'});
     const j = await r.json();
-    errs[b.dataset.name] = r.ok && !/no arrancó|ocupado|no se detuvo/.test(j.output || '') ? '' : (j.output || j.error || 'Falló');
-  } catch (err) { errs[b.dataset.name] = err.message; }
+    errs[current] = r.ok && !/no arrancó|ocupado|no se detuvo/.test(j.output || '') ? '' : (j.output || j.error || 'Falló');
+  } catch (err) { errs[current] = err.message; }
   load();
 });
-// ---- nueva oficina ----
-const nf = document.getElementById('nf'), nfErr = document.getElementById('nf-err');
+
+/* ---------- nueva oficina ---------- */
+const nf = $('nf'), nfErr = $('nf-err');
 document.addEventListener('click', e => {
-  if (e.target.closest('[data-new]')) { nfErr.hidden = true; nf.showModal(); document.getElementById('nf-name').focus(); }
-  if (e.target.closest('[data-close]')) nf.close();
+  if (e.target.closest('[data-new]')) { nfErr.hidden = true; nf.showModal(); $('nf-name').focus(); }
 });
-document.getElementById('nf-name').addEventListener('input', e => {
+nf.addEventListener('click', e => { if (e.target === nf || e.target.closest('[data-close]')) nf.close(); });
+$('nf-name').addEventListener('input', e => {
   e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-  document.getElementById('nf-sess').textContent = 'office-' + (e.target.value || '…');
+  $('nf-sess').textContent = 'office-' + (e.target.value || '…');
 });
-document.getElementById('nf-form').addEventListener('submit', async e => {
+$('nf-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const name = document.getElementById('nf-name'), ws = document.getElementById('nf-ws');
+  const name = $('nf-name'), ws = $('nf-ws');
   const bad = !name.checkValidity() ? 'El nombre va en minúsculas, números o guiones (máx. 30) y empieza con letra o número.' : !ws.value.trim() ? 'Indica la carpeta de trabajo.' : '';
   if (bad) { nfErr.textContent = bad; nfErr.hidden = false; return; }
-  const go = document.getElementById('nf-go');
-  go.disabled = true; go.textContent = 'Creando…'; nfErr.hidden = true;
+  const go = $('nf-go');
+  go.disabled = true; go.textContent = 'Construyendo…'; nfErr.hidden = true;
   try {
     const r = await fetch('/api/offices', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
-      name: name.value, workspace: ws.value, max: Number(document.getElementById('nf-max').value) || 3, start: document.getElementById('nf-start').checked
+      name: name.value, workspace: ws.value, max: Number($('nf-max').value) || 3, start: $('nf-start').checked
     })});
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'No se pudo crear la oficina');
     if (/no arrancó|ocupado/.test(j.output || '')) errs[name.value] = j.output;
-    nf.close(); document.getElementById('nf-form').reset(); document.getElementById('nf-sess').textContent = 'office-…';
-    load();
+    fresh = name.value; // el piso nuevo entra con andamios
+    nf.close(); $('nf-form').reset(); $('nf-sess').textContent = 'office-…';
+    await load();
+    $('floors').querySelector(`[data-floor="${CSS.escape(fresh || '')}"]`)?.scrollIntoView({block: 'center', behavior: 'smooth'});
   } catch (err) { nfErr.textContent = err.message; nfErr.hidden = false; }
-  finally { go.disabled = false; go.textContent = 'Crear oficina'; }
+  finally { go.disabled = false; go.textContent = 'Construir piso'; }
 });
 
+/* ---------- eliminar oficina (demolición) ---------- */
+const dl = $('dl');
+function openDelete(name) {
+  const o = offices.find(x => x.name === name); if (!o) return;
+  $('fp').close();
+  $('dl-hint').textContent = name;
+  $('dl-list').innerHTML = `<li>Se despiden <b>todos sus robots</b>${o.robots || o.orphans ? ` (${Math.max(o.robots, o.orphans)})` : ''}; los que estén trabajando se cortan. Sus documentos pendientes pasan antes a la bandeja.</li>
+    <li>La oficina (registro, estado, bandeja y log) va a la <b>Papelera</b>: se puede recuperar de ahí.</li>
+    ${o.adopted ? `<li>Sus datos adoptados en <b>${esc(home(o.data))}</b> no se tocan.</li>` : ''}
+    <li>Los documentos que escribieron los robots en <b>${esc(home(o.workspace))}</b> no se tocan.</li>`;
+  $('dl-name').value = ''; $('dl-go').disabled = true; $('dl-err').hidden = true;
+  dl.dataset.name = name; dl.showModal(); $('dl-name').focus();
+}
+dl.addEventListener('click', e => { if (e.target === dl || e.target.closest('[data-close]')) dl.close(); });
+$('dl-name').addEventListener('input', e => { $('dl-go').disabled = e.target.value.trim() !== dl.dataset.name; });
+$('dl-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = dl.dataset.name;
+  if ($('dl-name').value.trim() !== name) return;
+  const go = $('dl-go'); go.disabled = true; go.textContent = 'Despidiendo robots…';
+  busy = true; // que el refresco no repinte el edificio a mitad de la demolición
+  try {
+    const r = await fetch(`/api/offices/${name}/delete`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({confirm: name})});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || j.output || 'No se pudo eliminar');
+    dl.close();
+    await demolish(name);
+    toast(`«${name}» eliminada. Su carpeta quedó en la Papelera.`);
+  } catch (err) { $('dl-err').textContent = err.message; $('dl-err').hidden = false; }
+  finally { busy = false; go.textContent = 'Demoler piso'; load(); }
+});
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function demolish(name) {
+  const el = $('floors').querySelector(`[data-floor="${CSS.escape(name)}"]`);
+  if (!el) return;
+  el.scrollIntoView({block: 'center', behavior: 'smooth'});
+  await sleep(450);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  el.insertAdjacentHTML('beforeend', '<i class="crack"></i>');
+  el.classList.add('demolish');
+  if (!reduce) setTimeout(() => burst(el.getBoundingClientRect()), 600);
+  await sleep(reduce ? 50 : 1450);
+  // Los pisos de arriba bajan a ocupar el hueco (FLIP: medir, quitar, animar desde donde estaban).
+  const above = [...$('floors').children].filter(f => f !== el && f.dataset.floor);
+  const before = new Map(above.map(f => [f, f.getBoundingClientRect().top]));
+  el.remove();
+  above.forEach(f => {
+    const dy = before.get(f) - f.getBoundingClientRect().top;
+    if (!dy || reduce) return;
+    f.animate([{transform: `translateY(${dy}px)`}, {transform: 'translateY(6px)', offset: .8}, {transform: 'none'}], {duration: 700, easing: 'cubic-bezier(.5,0,.6,1)'});
+  });
+  offices = offices.filter(o => o.name !== name);
+  await sleep(reduce ? 0 : 750);
+}
+function burst(r) {
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 26; i++) {
+    const d = document.createElement('i');
+    d.className = 'dust';
+    d.style.cssText = `left:${r.left + Math.random() * r.width}px;top:${r.top + r.height * (.4 + Math.random() * .6)}px;--s:${10 + Math.random() * 22}px;--dx:${(Math.random() - .5) * 160}px;--dy:${-20 - Math.random() * 70}px;animation-delay:${Math.random() * .25}s`;
+    frag.appendChild(d);
+  }
+  for (let i = 0; i < 16; i++) {
+    const d = document.createElement('i');
+    d.className = 'debris';
+    d.style.cssText = `left:${r.left + Math.random() * r.width}px;top:${r.top + r.height * .5}px;--s:${4 + Math.random() * 8}px;--dx:${(Math.random() - .5) * 220}px;--dy:${60 + Math.random() * 120}px;--r:${(Math.random() - .5) * 720}deg`;
+    frag.appendChild(d);
+  }
+  document.body.appendChild(frag);
+  setTimeout(() => document.querySelectorAll('.dust,.debris').forEach(x => x.remove()), 1800);
+}
+
 load(); setInterval(load, 5000);
+})();
 </script>
 </body>
 </html>

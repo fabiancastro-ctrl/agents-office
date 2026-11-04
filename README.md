@@ -31,14 +31,14 @@ Una **oficina** es un grupo de robots que trabajan sobre una **carpeta de trabaj
 
 Hay dos formas, equivalentes (el botón usa por dentro el mismo `office create`, con las mismas validaciones):
 
-**Desde el edificio** (`office lobby` y abrir http://127.0.0.1:4700): botón **Nueva oficina** (arriba a la derecha o la tarjeta punteada al final). Pide:
+**Desde el edificio** (`office lobby` y abrir http://127.0.0.1:4700): botón **Nueva oficina** arriba a la derecha, o la puerta de la planta baja. Pide:
 
 - *Nombre*: minúsculas, números y guiones (`finance`, `soporte`…). Será también su sesión tmux: `office-<nombre>`.
 - *Carpeta de trabajo*: ruta completa o con `~`. Tiene que existir.
 - *Robots a la vez*: tope de robots trabajando simultáneamente (default 3; se cambia después desde la oficina).
 - *Iniciarla al crearla*: si se desmarca, queda registrada y detenida, con su botón **Iniciar**.
 
-Si algo falla (nombre repetido o inválido, carpeta que no existe) el error aparece dentro del formulario y no se crea nada.
+Si algo falla (nombre repetido o inválido, carpeta que no existe) el error aparece dentro del formulario y no se crea nada. Si sale bien, el piso nuevo se construye arriba del edificio (con andamios).
 
 **Desde la consola**:
 
@@ -50,6 +50,36 @@ office open finance                                                   # la abre 
 
 `create` acepta además `--port 4790`, `--session office-fin` y `--max 4`. En los dos casos el nombre visible de la oficina (el que sale en su página y en el edificio) se cambia con un clic en el encabezado de la oficina.
 
+## El edificio
+
+`office lobby` levanta la página del edificio en http://127.0.0.1:4700. Es una fachada que se lee de un vistazo:
+
+- **Cada piso es una oficina**, del más antiguo (abajo) al más nuevo (arriba), con su letrero: número de piso, puerto, nombre y estado.
+- **Cada ventana es un puesto**: iluminada con el robot adentro si trabaja (violeta si está con subagentes), parpadeando en rojo con «?» si te necesita, con cartel LISTO (o «⚠N» si un review trae críticos) si terminó, y con la luz encendida pero vacía si el puesto está libre. Pasar el mouse por una ventana dice qué robot es y qué hace.
+- **Un piso detenido queda a oscuras.** Si le quedan robots vivos en tmux, se ven como siluetas ámbar (parpadean si están trabajando) y el letrero dice «N sin supervisión».
+- **El ascensor** sube al piso más alto donde alguien te necesita, y la antena de la azotea parpadea en rojo; si nadie te necesita, el ascensor espera en planta baja.
+- **La planta baja** tiene la recepción, la puerta para crear oficinas y el buzón con el total de documentos nuevos de todas las bandejas.
+- **El cielo** cambia con la hora (día, atardecer, noche con luna y faroles encendidos).
+- **Clic en un piso** abre su panel: números, carpeta, sesión tmux y datos, y los botones Abrir oficina, Detener, Cerrar y despedir, Iniciar (y reconectar), Despedir robots y Eliminar oficina.
+
+El edificio lee los archivos de cada oficina y mira tmux: no gasta cuota. Solo acepta acciones desde su propia página.
+
+## Eliminar oficinas
+
+Desde el edificio: clic en el piso → **Eliminar oficina** → escribir el nombre para confirmar → **Demoler piso**. El piso se agrieta, se derrumba y los de arriba bajan a ocupar el hueco. Desde la consola:
+
+```sh
+office rm finance          # pregunta: escribe el nombre para confirmar
+office rm finance --yes    # sin preguntar
+```
+
+Qué pasa al eliminar:
+
+- Se **despiden todos sus robots** por la oficina (sus documentos pendientes pasan antes a la bandeja); los que estén trabajando se cortan. Si la oficina estaba detenida con robots vivos en tmux, se inicia un momento para despedirlos en orden. Después se cierra su sesión de tmux.
+- La carpeta de la oficina en `~/.agent-office/oficinas/<nombre>` (registro, estado, bandeja, rutinas, salas, log) **va a la Papelera de macOS** como `agent-office-<nombre>-<fecha>`: nada se borra para siempre, se recupera arrastrándola de vuelta.
+- Si la oficina fue **adoptada** con `--data` (como `legacy`), sus datos se quedan donde estaban; solo se quita del edificio.
+- Los documentos que escribieron los robots en la **carpeta de trabajo** no se tocan nunca.
+
 ## Uso diario
 
 ```sh
@@ -58,13 +88,13 @@ office lobby                    # página del edificio en http://127.0.0.1:4700 
 office start nr | --all         # arrancar una o todas
 office stop nr | --all          # pausar: apaga la oficina; los robots siguen vivos en tmux
 office stop nr --despedir       # cerrar de verdad: da de baja a todos sus robots y apaga la oficina
+office rm nr                    # eliminar: despide, apaga y manda la oficina a la Papelera
 office restart nr               # tras actualizar el código del daemon
 office logs nr                  # últimas líneas del daemon (office logs nr -f para seguirlo)
 office ctl nr libre "resume el README"           # encargos desde la terminal (ver daemon/ctl.mjs)
 tmux attach -t office-nr                         # ver las consolas de los robots (Ctrl-b d sale sin cerrarlas)
 ```
 
-- **El edificio** muestra cada oficina con sus robots trabajando, los que te necesitan, los listos y la bandeja, con botones Abrir, Iniciar y Detener, y el botón Nueva oficina. Lee los archivos de cada oficina: no gasta cuota. Solo acepta acciones desde su propia página (otra web abierta en tu navegador no puede crear ni encender oficinas).
 - **Detener no despide a nadie (pausa)**: cada robot es una consola de `claude` en tmux, no un proceso de la oficina, así que sigue vivo y se reconecta solo (estado, escritorio y conversación) al arrancar la oficina otra vez. Sirve para reiniciar tras actualizar el código sin perder trabajo. Ojo: un robot que estaba trabajando **sigue trabajando y gastando cuota** aunque no lo veas; uno terminado o esperando no gasta nada.
 - **Cerrar de verdad**: `office stop nr --despedir` (o **Cerrar y despedir** en el edificio) da de baja a cada robot por la oficina, que primero entrega sus documentos pendientes a la bandeja, y cierra la sesión de tmux. Si la oficina estaba detenida, la inicia un momento para eso. No se puede deshacer: un robot que estaba trabajando se corta.
 - **Robots sin supervisión**: si una oficina está detenida y le quedan robots vivos en tmux, `office ls` lo avisa (y cuántos están trabajando) y el edificio marca la tarjeta en ámbar con **Iniciar y reconectar** o **Despedir robots**.
@@ -154,7 +184,8 @@ Validó, sin interfaz gráfica, que se puede manejar el `claude` de la suscripci
 
 | Archivo | Qué hace |
 |---|---|
-| `bin/office` | El edificio: crea, arranca, detiene y lista oficinas; sirve la página del edificio (`edificio/index.html`) con su API (`GET/POST /api/offices`, `POST /api/offices/<nombre>/start|stop`). |
+| `bin/office` | El edificio: crea, arranca, detiene, elimina y lista oficinas; sirve la página del edificio (`edificio/index.html`) con su API (`GET/POST /api/offices`, `POST /api/offices/<nombre>/start|stop|delete`). |
+| `web/robot-art.js` | Dibujo de los robots (antena, visor, accesorios), compartido por la oficina y el edificio. |
 | `office-settings.json` (en los datos) | Hooks que se cargan **solo** en los robots (`claude --settings …`). Tus sesiones normales no los ven. Lo genera el daemon. |
 | `hooks/office-hook.sh` | Reenvía el JSON del hook al daemon. Sale sin hacer nada si no existe `OFFICE_ROBOT` o si el daemon no responde. |
 | `daemon/daemon.mjs` | Una oficina: lanza robots en su sesión tmux, sirve la página, sigue transcripts, suma tokens y (opcional) retiene permisos. Sin dependencias. |

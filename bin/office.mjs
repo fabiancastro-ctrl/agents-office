@@ -9,6 +9,7 @@
 //   office stop <nombre…> | --all               lo detiene (los robots siguen vivos en tmux)
 //         [--despedir]                          …y antes da de baja a todos sus robots
 //   office restart <nombre…> | --all
+//   office rm <nombre> [--yes]                  elimina la oficina: despide sus robots y la manda a la Papelera
 //   office logs <nombre> [-f]                   salida del daemon
 //   office open <nombre>                        abre la oficina en el navegador
 //   office ctl <nombre> <comando…>              daemon/ctl.mjs contra esa oficina
@@ -60,7 +61,7 @@ function load(name) {
   const cfg = readJson(path.join(dir, 'office.json'));
   if (!cfg) return null;
   const data = path.resolve(cfg.data ? expandHome(cfg.data) : dir);
-  return { ...cfg, name, dir, data, log: path.join(dir, 'daemon.log') };
+  return { ...cfg, name, dir, data, dataExternal: !!cfg.data, log: path.join(dir, 'daemon.log') };
 }
 function all() {
   let names = [];
@@ -96,8 +97,10 @@ function summary(o) {
   const lock = running(o);
   // Detenida pero con robots vivos en tmux: siguen trabajando (y gastando cuota) sin que nadie los vea.
   const orphans = lock ? [] : liveRobots(o);
+  const robotList = robots.map(r => ({ name: r.name, color: r.color || 0, state: r.state, critical: r.critical || 0, room: r.place?.type === 'room' ? (r.place.sala ? 'sala' : 'rutina') : '' }));
   return {
-    name: o.name, title: cfg.name || o.name, port: o.port, session: o.session, data: o.data, workspace: cfg.workspace || null,
+    name: o.name, title: cfg.name || o.name, createdAt: o.createdAt || null, adopted: !!o.dataExternal, maxRobots: state.maxRobots || o.maxRobots || 3, robotList,
+    orphanList: orphans, port: o.port, session: o.session, data: o.data, workspace: cfg.workspace || null,
     running: !!lock, pid: lock?.pid || null, url: `http://127.0.0.1:${o.port}`,
     robots: robots.length, working: count(['working', 'walking', 'delegating']), need: count(['input']), done: count(['done']),
     // Igual que la bandeja de la oficina: los archivos de carpetas temporales no cuentan como nuevos.
@@ -209,6 +212,29 @@ async function dismissAll(o) {
   }
 }
 
+// Eliminar no borra nada para siempre: la carpeta de la oficina (registro, estado, bandeja, log) va a la
+// Papelera de macOS, de donde se recupera. Una oficina adoptada con --data deja sus datos donde estaban.
+// Los documentos que escribieron los robots en la carpeta de trabajo nunca se tocan.
+async function rm(o, yes) {
+  if (!yes) {
+    if (!process.stdin.isTTY) die(`Para eliminar «${o.name}» sin preguntar, agrega --yes.`);
+    const rl = (await import('node:readline/promises')).createInterface({ input: process.stdin, output: process.stdout });
+    const ans = (await rl.question(`Se despiden todos los robots de «${o.name}» y la oficina va a la Papelera.\nEscribe su nombre para confirmar: `)).trim();
+    rl.close();
+    if (ans !== o.name) die('No coincide: no se eliminó nada.');
+  }
+  if (running(o) || liveRobots(o).length) await stop(o, true);
+  const trash = fs.existsSync(path.join(os.homedir(), '.Trash')) ? path.join(os.homedir(), '.Trash') : path.join(HOME, 'papelera');
+  fs.mkdirSync(trash, { recursive: true });
+  const dest = path.join(trash, `agent-office-${o.name}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`);
+  try { fs.renameSync(o.dir, dest); } catch (e) {
+    if (e.code !== 'EXDEV') throw e;
+    fs.cpSync(o.dir, dest, { recursive: true }); fs.rmSync(o.dir, { recursive: true }); // otro disco: copiar y quitar
+  }
+  console.log(`${o.name}: eliminada. Su carpeta quedó en la Papelera: ${dest}`);
+  if (o.dataExternal) console.log(`  Sus datos adoptados siguen en ${o.data} (no se tocaron).`);
+}
+
 function ls() {
   const list = all().map(summary);
   if (!list.length) return console.log(`No hay oficinas en ${OFFICES}. Crea una con: office create <nombre> --workspace <carpeta>`);
@@ -264,7 +290,17 @@ function lobbyServe(port) {
         return send(res, 200, { output, office: summary(load(name)) });
       }
       if (req.method === 'GET' && url.pathname === '/') return send(res, 200, fs.readFileSync(page, 'utf8'), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && url.pathname === '/robot-art.js') return send(res, 200, fs.readFileSync(path.join(ROOT, 'web', 'robot-art.js'), 'utf8'), 'text/javascript; charset=utf-8');
       if (req.method === 'GET' && url.pathname === '/api/offices') return send(res, 200, { offices: all().map(summary) });
+      const del = url.pathname.match(/^\/api\/offices\/([a-z0-9-]+)\/delete$/);
+      if (req.method === 'POST' && del) {
+        if (!sameOrigin(req)) return send(res, 403, { error: 'Origen no permitido' });
+        const b = await readBody(req);
+        if (b.confirm !== del[1]) return send(res, 400, { error: 'Escribe el nombre exacto de la oficina para confirmar.' });
+        if (!load(del[1])) return send(res, 404, { error: 'No existe esa oficina' });
+        const r = self('rm', del[1], '--yes');
+        return send(res, r.status === 0 ? 200 : 500, { output: (r.stdout + r.stderr).trim() });
+      }
       const m = url.pathname.match(/^\/api\/offices\/([a-z0-9-]+)\/(start|stop)$/);
       if (req.method === 'POST' && m) {
         if (!sameOrigin(req)) return send(res, 403, { error: 'Origen no permitido' });
@@ -298,7 +334,7 @@ async function lobby(sub) {
 
 /* ---------- main ---------- */
 const [cmd, ...args] = process.argv.slice(2);
-const BOOL_FLAGS = new Set(['despedir']);
+const BOOL_FLAGS = new Set(['despedir', 'yes']);
 const flags = {};
 const pos = [];
 for (let i = 0; i < args.length; i++) {
@@ -314,6 +350,7 @@ switch (cmd) {
   case 'create': await create(pos[0], flags); break;
   case 'start': for (const o of targets(pos)) await start(o); break;
   case 'stop': for (const o of targets(pos)) await stop(o, !!flags.despedir); break;
+  case 'rm': await rm(mustLoad(pos[0]), !!flags.yes); break;
   case 'restart': for (const o of targets(pos)) { await stop(o); await start(o); } break;
   case 'logs': {
     const o = mustLoad(pos[0]);
