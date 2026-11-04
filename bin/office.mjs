@@ -37,6 +37,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const die = msg => { console.error(msg); process.exit(1); };
 const expandHome = p => String(p || '').trim().replace(/^~(?=$|\/)/, os.homedir());
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
+const isTempDoc = p => /^(\/private)?\/(tmp|var\/folders)\//.test(String(p)) || /\/scratchpad\//.test(String(p));
 const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
 
 /* ---------- registro ---------- */
@@ -83,7 +84,8 @@ function summary(o) {
     name: o.name, title: cfg.name || o.name, port: o.port, session: o.session, data: o.data, workspace: cfg.workspace || null,
     running: !!lock, pid: lock?.pid || null, url: `http://127.0.0.1:${o.port}`,
     robots: robots.length, working: count(['working', 'walking', 'delegating']), need: count(['input']), done: count(['done']),
-    inbox: (state.inbox || []).filter(i => i.status !== 'visto').length
+    // Igual que la bandeja de la oficina: los archivos de carpetas temporales no cuentan como nuevos.
+    inbox: (state.inbox || []).filter(i => i.status !== 'visto' && !isTempDoc(i.path)).length
   };
 }
 
