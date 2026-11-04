@@ -45,6 +45,7 @@ const APPROVAL_TIMEOUT_MS = 9 * 60 * 1000;
 const PERMISSION_MODES = new Set(['default', 'acceptEdits', 'plan', 'auto']);
 const NAMES = ['rex', 'nova', 'bolt', 'atlas', 'pixel', 'kiro', 'lumo', 'zeta', 'orbi', 'juno', 'milo', 'vega', 'ciro', 'indi', 'brio'];
 const ROUTINE_TICK_MS = 15000;
+const TIMELINE_MAX = 600;
 const ATTACH_DIR = path.join(RUNS, 'adjuntos');
 const ATTACH_MAX_BYTES = 20 * 1024 * 1024;
 const ATTACH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -115,7 +116,7 @@ function view(r, withLog = false) {
     state: r.state, place: r.place, subs: r.subs, pendingSubs: r.pendingSubs,
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: r.critical || 0,
-    permissionMode: r.permissionMode, startedAt: r.startedAt
+    permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null
   };
   if (withLog) v.log = r.log.slice(-150);
   return v;
@@ -355,7 +356,7 @@ function saveState() {
       robots: [...robots.values()].map(r => ({
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
-        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: r.critical || 0
+        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: r.critical || 0, timeline: r.timeline, lastEventAt: r.lastEventAt
       }))
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
@@ -385,6 +386,7 @@ async function restore() {
     if (r.state === 'input') r.inputAt ||= now();
     r.transcript ||= path.join(os.homedir(), '.claude/projects', WORKSPACE.replace(/\//g, '-'), `${r.sessionId}.jsonl`);
     if (['walking', 'delegating'].includes(r.state)) r.state = 'working';
+    r.timeline = Array.isArray(s.timeline) && s.timeline.length ? s.timeline : [{ at: s.startedAt || now(), s: r.state }];
     robots.set(r.name, r);
     pumpTranscript(r);
     r.restoring = false;
@@ -404,6 +406,9 @@ function setState(r, state) {
   if (r.state === state) return;
   r.state = state;
   r.inputAt = state === 'input' ? now() : null; // desde cuándo espera tu respuesta (la web cuenta el tiempo)
+  // Historial de estados para la línea de tiempo de la oficina (acotado: un robot largo no crece sin fin).
+  (r.timeline ||= []).push({ at: now(), s: state });
+  if (r.timeline.length > TIMELINE_MAX) r.timeline.splice(0, r.timeline.length - TIMELINE_MAX);
   emit(r);
 }
 
@@ -616,6 +621,7 @@ async function onHook(name, body) {
   if (body.hook_event_name === 'SessionStart') registerSession({ robot: name, ...body });
   const r = robots.get(name);
   if (!r) return null; // robot que la oficina no lanzo: no se toca
+  r.lastEventAt = now(); // la UI marca «sin actividad» a un robot ocupado que lleva mucho sin eventos
   if (body.session_id) r.sessionId = body.session_id;
   if (body.transcript_path && r.transcript !== body.transcript_path) {
     r.transcript = body.transcript_path;
@@ -803,7 +809,7 @@ async function launch({ kind, skill, args, text, permissionMode, name, origin, l
     name, kind, skill, label, prompt, color: colorSeq++ % 8, place, permissionMode: permissionMode || '', leaveWhenDone: !!leaveWhenDone,
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
     sessionId, transcript: null, offset: 0, partial: '', msgUsage: new Map(), startedAt: now(),
-    alive: true, state: 'walking', subs: [], pendingSubs: 0, bubble: '', activity: '',
+    alive: true, state: 'walking', timeline: [{ at: now(), s: 'walking' }], subs: [], pendingSubs: 0, bubble: '', activity: '',
     needsPermission: false, hold: null, docs: [], log: []
   };
   robots.set(name, r);

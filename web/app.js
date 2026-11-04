@@ -5,6 +5,14 @@ const MAP = $('#map'), PANEL = $('#panel');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const COLORS = ['#5fcbb9','#f3b74f','#ef8f7a','#7cb6f0','#b9d06a','#d99ad6','#9fd3f0','#f0c38f'];
 const STATE_LABEL = {idle: 'en espera', walking: 'llegando', working: 'trabajando', delegating: 'con subagentes', input: 'te necesita', done: 'terminó'};
+// Una sola etiqueta por estado para tarjeta, ventana y tarjeta flotante.
+// Un robot de tarea libre que terminó sigue vivo esperando tu siguiente orden; uno de skill espera que lo despidas.
+const stateLabel = d => d.state === 'done' ? (d.kind === 'libre' ? 'esperando orden' : 'terminó') : STATE_LABEL[d.state] || d.state;
+// Resúmenes de una línea (burbuja, tarjeta): sin símbolos de Markdown. La conversación completa sí se formatea.
+const plainMd = s => String(s ?? '')
+  .replace(/```[\w-]*\n?/g, '').replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+  .replace(/(\*\*|__)(.+?)\1/g, '$2').replace(/(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/g, '$1$2')
+  .replace(/`+/g, '').replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, '').replace(/\s*\n+\s*/g, ' ').replace(/\*\*/g, '').trim();
 const CY = 35.5, CX = 77;
 // Coordenadas: x en % del ancho; y en "unidades" donde el mapa base (2 filas de escritorios) mide 100.
 // Cada fila extra suma ROW_H unidades: el mapa crece hacia abajo y py() convierte unidades a % de su altura.
@@ -365,17 +373,44 @@ function shownTool(a) {
   return want;
 }
 
+// Burbujas que se pisan: la de más a la derecha sube un piso (hasta 3). Se recalcula al mostrar/ocultar
+// una burbuja y cada 700 ms mientras haya 2 o más visibles, porque los robots caminan.
+let bubbleRaf = 0;
+function declutterBubbles() {
+  if (bubbleRaf) return;
+  bubbleRaf = requestAnimationFrame(() => {
+    bubbleRaf = 0;
+    const list = [...MAP.querySelectorAll('.bubble:not([hidden])')];
+    list.forEach(b => b.style.removeProperty('--by'));
+    if (list.length < 2) return;
+    const boxes = list.map(b => ({b, r: b.getBoundingClientRect()})).sort((x, y) => x.r.left - y.r.left);
+    const placed = [];
+    for (const {b, r} of boxes) {
+      let up = 0;
+      for (let floor = 0; floor < 3; floor++) {
+        const top = r.top - up, bottom = r.bottom - up;
+        if (!placed.some(p => r.left < p.right + 2 && r.right > p.left - 2 && top < p.bottom + 2 && bottom > p.top - 2)) break;
+        up += r.height + 4;
+      }
+      if (up) b.style.setProperty('--by', up + 'px');
+      placed.push({left: r.left, right: r.right, top: r.top - up, bottom: r.bottom - up});
+    }
+  });
+}
+setInterval(() => { if (MAP.querySelectorAll('.bubble:not([hidden])').length > 1) declutterBubbles(); }, 700);
+
 function paint(a) {
   const d = a.data;
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
-  a.el.className = ['robot', `st-${shownState}`, shownTool(a), d.critical > 0 && d.state === 'done' ? 'crit' : '', ...keep, st.selected === d.name ? 'sel' : ''].filter(Boolean).join(' ');
+  a.el.className = ['robot', `st-${shownState}`, shownTool(a), d.critical > 0 && d.state === 'done' ? 'crit' : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
   a.sign.textContent = d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
-  const text = d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : d.bubble;
+  const text = d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
   if (text && text !== a.lastBubble) {
     a.lastBubble = text;
-    a.bubble.textContent = text; a.bubble.hidden = false;
-    clearTimeout(a.bt); a.bt = setTimeout(() => { a.bubble.hidden = true; }, d.state === 'input' ? 12000 : 5000);
+    a.bubble.textContent = text; a.bubble.title = text; a.bubble.hidden = false;
+    clearTimeout(a.bt); a.bt = setTimeout(() => { a.bubble.hidden = true; declutterBubbles(); }, d.state === 'input' ? 12000 : 5000);
+    declutterBubbles();
   }
   const busy = d.state === 'working' || d.state === 'delegating';
   const desk = deskFor(d.place);
@@ -479,7 +514,8 @@ function onDeliver(name, items) {
     if (st.robots.has(name)) await walkTo(a, restPos(a));
   });
 }
-const unseen = () => st.inbox.filter(i => i.status !== 'visto').length;
+const inboxShown = () => st.inboxTemp ? st.inbox : st.inbox.filter(i => !isTempDoc(i.path));
+const unseen = () => inboxShown().filter(i => i.status !== 'visto').length;
 function renderInboxBadge() {
   const n = unseen();
   $('#inbox-n').textContent = n;
@@ -544,6 +580,7 @@ function connect() {
       layout();
       PANEL.dataset.view = ''; // tras reconectar, repintado completo (el log pudo cambiar)
       renderRoutineChips(); renderSalaChips(); renderMeta(); renderPanel();
+      notif.known = null; st.ready = true; // el siguiente checkAlerts toma esto como punto de partida
     } else if (m.type === 'robot') upsert(m.robot);
     else if (m.type === 'setup') onSetupSaved(m);
     else if (m.type === 'config') { st.config = m.config; renderMeta(); if (st.selected === '@new') schedulePanel(); }
@@ -686,11 +723,276 @@ function renderMeta() {
   $('#cap-down').disabled = max <= 1;
   $('#cap-up').disabled = max >= (st.config.maxRobotsLimit || 20);
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done').length;
-  $('#meta').textContent = `${active}/${max} trabajando · ${n} en la oficina · ${st.routines.length} rutinas · ${unseen()} nuevos en bandeja`;
+  $('#meta').textContent = '';
   const done = n - active;
   $('#btn-dismiss').hidden = !done;
   if (!$('#btn-dismiss').classList.contains('armed')) $('#btn-dismiss').textContent = `Despedir terminados (${done})`;
+  scheduleCards();
 }
+
+/* ---------- métricas y tarjetas por robot ---------- */
+// El mapa es la vista "viva"; las tarjetas son la vista de gestión: ordenadas por urgencia (primero los que te
+// necesitan), una línea por robot trabajando y los terminados plegados, para que con muchos robots no sature.
+const CARDS = $('#cards'), KPIS = $('#kpis');
+const GROUP_OF = {input: 'need', working: 'work', walking: 'work', delegating: 'work', idle: 'work', done: 'done'};
+const fmtDur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
+const tokOf = d => (d.usage?.out || 0) + (d.usage?.in || 0) + (d.usage?.cacheWrite || 0);
+const runningSubs = d => d.subs.filter(s => s.status !== 'done').length;
+const prefGet = (k, def) => { try { return localStorage.getItem('office.' + k) ?? def; } catch { return def; } };
+const prefSet = (k, v) => { try { localStorage.setItem('office.' + k, v); } catch { /* sin almacenamiento */ } };
+const cardUi = {hl: null, reply: {}};
+let cardsRaf = 0;
+function scheduleCards() { if (!cardsRaf) cardsRaf = requestAnimationFrame(() => { cardsRaf = 0; renderKpis(); renderCards(); renderTimeline(); checkAlerts(); }); }
+
+/* ---------- robots sin actividad y avisos ---------- */
+// Un robot ocupado sin eventos (herramientas, subagentes, mensajes) durante STUCK_MS puede estar colgado o en
+// un comando muy largo: no lo damos por trabado, solo lo señalamos para que le eches un ojo.
+const STUCK_MS = 10 * 60e3;
+const lastEventMs = d => Date.parse(d.lastEventAt || '') || Date.parse(d.timeline?.[d.timeline.length - 1]?.at || '') || Date.parse(d.startedAt || '') || 0;
+const idleMs = d => { const t = lastEventMs(d); return t ? Date.now() - t : 0; };
+const isStuck = d => (d.state === 'working' || d.state === 'delegating') && !d.needsPermission && !d.hold && idleMs(d) > STUCK_MS;
+setInterval(scheduleCards, 30000); // «sin actividad» cambia con el reloj, no con eventos
+
+// Avisos: contador en el título de la pestaña (siempre) y, si los activas, sonido y notificación del sistema.
+st.inboxTemp = prefGet('inboxTemp', '0') === '1';
+const notif = {on: prefGet('notify', '0') === '1', known: null, ctx: null, base: document.title};
+const alertOf = d => d.state === 'input' ? (d.needsPermission || d.hold ? 'perm' : 'ask') : isStuck(d) ? 'stuck' : '';
+const ALERT_TXT = {perm: 'pide permiso', ask: 'tiene una pregunta para ti', stuck: 'lleva más de 10 min sin actividad'};
+function updateTitle(n) { document.title = (n ? `(${n}) ` : '') + notif.base; }
+function checkAlerts() {
+  const cur = new Map();
+  for (const a of st.robots.values()) { const k = alertOf(a.data); if (k) cur.set(a.data.name, k); }
+  updateTitle(cur.size);
+  if (!st.ready) return; // el primer estado (al cargar o reconectar) no avisa: ya estaba así
+  if (notif.known) for (const [name, k] of cur) if (notif.known.get(name) !== k) fireAlert(name, k);
+  notif.known = cur;
+}
+function beep() {
+  try {
+    const ctx = notif.ctx ||= new (window.AudioContext || window.webkitAudioContext)();
+    [880, 1175].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + i * 0.16;
+      o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      o.start(t); o.stop(t + 0.15);
+    });
+  } catch { /* sin audio */ }
+}
+function fireAlert(name, k) {
+  if (!notif.on) return;
+  beep();
+  if (!('Notification' in window) || Notification.permission !== 'granted' || (!document.hidden && document.hasFocus())) return;
+  try {
+    const n = new Notification(`${name} ${ALERT_TXT[k]}`, {body: notif.base, tag: 'office-' + name, icon: $('#favicon').href});
+    n.onclick = () => { window.focus(); select(name); n.close(); };
+  } catch { /* el navegador no deja */ }
+}
+function syncNotifyBtn() {
+  const b = $('#btn-notify');
+  b.setAttribute('aria-pressed', String(notif.on));
+  b.textContent = notif.on ? 'Avisos: sí' : 'Avisos: no';
+}
+$('#btn-notify').addEventListener('click', async () => {
+  notif.on = !notif.on; prefSet('notify', notif.on ? '1' : '0'); syncNotifyBtn();
+  if (!notif.on) return toast('Avisos apagados. El título de la pestaña sigue mostrando cuántos robots te necesitan.');
+  beep(); // de paso, el clic desbloquea el audio del navegador
+  if ('Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch { /* ignorado */ } }
+  toast('Notification' in window && Notification.permission === 'granted'
+    ? 'Avisos activos: sonido y notificación cuando un robot te necesite o se quede sin actividad.'
+    : 'Avisos activos solo con sonido: el navegador no permite notificaciones para esta página.');
+});
+syncNotifyBtn();
+
+function renderKpis() {
+  const ds = [...st.robots.values()].map(a => a.data);
+  const count = g => ds.filter(d => GROUP_OF[d.state] === g).length;
+  const need = count('need'), work = count('work'), done = count('done');
+  const subs = ds.reduce((k, d) => k + runningSubs(d), 0);
+  const live = ds.reduce((k, d) => k + tokOf(d), 0);
+  const week = st.weeks[0];
+  const weekTok = week ? week.out + week.in + week.cacheWrite : 0;
+  const lim = st.claude?.limits?.[0];
+  const max = st.config.maxRobots || 3;
+  const k = (cls, n, label, extra = '', act = '') => `<button type="button" class="kpi ${cls}"${act ? ` data-kpi="${act}"` : ''}>${extra}<b>${n}</b><span>${label}</span></button>`;
+  const html =
+    k(`k-work${work ? ' on' : ''}`, `${work}<small>/${max}</small>`, 'trabajando', `<i class="kbar" style="--p:${Math.min(100, work / max * 100)}%"></i>`, 'work') +
+    k(`k-need${need ? ' on' : ''}`, need, need === 1 ? 'te necesita' : 'te necesitan', '', 'need') +
+    k(`k-subs${subs ? ' on' : ''}`, subs, 'subagentes activos', '', 'work') +
+    k(`k-done${done ? ' on' : ''}`, done, done === 1 ? 'listo' : 'listos', '', 'done') +
+    k(`k-inbox${unseen() ? ' on' : ''}`, unseen(), 'nuevos en bandeja', '', 'inbox') +
+    k('k-tok', fmtTok(live), 'tokens en curso', '', 'usage') +
+    k('k-tok', week ? fmtTok(weekTok) : '–', 'tokens esta semana', '', 'usage') +
+    (lim ? k(`k-lim${lim.pct >= 90 ? ' hot' : lim.pct >= 70 ? ' warm' : ''}`, `${lim.pct}<small>%</small>`, esc(lim.title).toLowerCase(), `<i class="kbar" style="--p:${Math.min(100, lim.pct)}%"></i>`, 'usage') : '');
+  if (KPIS._html !== html) { KPIS._html = html; KPIS.innerHTML = html; }
+}
+
+function cardHtml(a) {
+  const d = a.data, g = GROUP_OF[d.state] || 'work';
+  const subs = runningSubs(d), docs = d.docs.length, tok = tokOf(d);
+  const pill = d.state === 'input' && d.inputAt
+    ? `<span class="pill p-input">espera <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></span>`
+    : `<span class="pill p-${d.state}">${d.state === 'done' && d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : esc(stateLabel(d))}</span>`;
+  const perm = d.hold || d.needsPermission;
+  const line = d.state === 'input'
+    ? (perm ? `Pide permiso: ${d.hold ? d.hold.tool : (d.activity || 'una herramienta')}` : (plainMd(d.bubble) || 'Tiene una pregunta para ti'))
+    : d.state === 'done' ? (plainMd(d.bubble) || 'Terminó su turno') : (d.activity || (d.state === 'walking' ? 'Llegando a su escritorio' : 'Pensando…'));
+  let actions = '';
+  if (d.hold) actions = `<button class="btn primary sm" data-card-act="hold-allow">Aprobar</button><button class="btn danger sm" data-card-act="hold-deny">Denegar</button><button class="btn sm" data-card-act="open">Ver</button>`;
+  else if (d.needsPermission) actions = `<button class="btn primary sm" data-card-act="perm-approve">Aprobar</button><button class="btn danger sm" data-card-act="perm-reject">Rechazar</button><button class="btn sm" data-card-act="open">Ver consola</button>`;
+  else if (d.state === 'input') actions = `<form class="rc-reply" data-card-reply><input id="reply-${esc(d.name)}" placeholder="Responder a ${esc(d.name)}…" autocomplete="off"><button class="btn primary sm">Enviar</button></form>`;
+  else if (d.state === 'done') actions = `<button class="btn sm" data-card-act="open">Ver</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
+  const stuck = isStuck(d);
+  const cls = ['rc', `g-${g}`, `s-${d.state}`, stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
+  return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % 8]}">
+    <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</span>
+      <div class="rc-t"><b>${esc(d.name)}</b><small title="${esc(d.label)}">${esc(d.label)}</small></div>${pill}</div>
+    <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
+    <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
+      ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">⏸ sin actividad ${fmtDur(idleMs(d))}</span>` : ''}
+      <span title="Tokens de esta sesión">◆ ${fmtTok(tok)}</span>${subs ? `<span class="rc-subs" title="Subagentes trabajando">⑂ ${subs}</span>` : ''}${docs ? `<span title="Documentos escritos">▤ ${docs}</span>` : ''}</div>
+    ${actions ? `<div class="rc-acts">${actions}</div>` : ''}
+  </article>`;
+}
+
+function renderCards() {
+  const all = [...st.robots.values()];
+  const by = {need: [], work: [], done: []};
+  for (const a of all) by[GROUP_OF[a.data.state] || 'work'].push(a);
+  const t = (a, k) => Date.parse(a.data[k] || 0) || 0;
+  by.need.sort((x, y) => t(x, 'inputAt') - t(y, 'inputAt')); // el que más lleva esperando, primero
+  by.work.sort((x, y) => t(x, 'startedAt') - t(y, 'startedAt'));
+  by.done.sort((x, y) => t(y, 'startedAt') - t(x, 'startedAt'));
+  // Plegados por defecto; si no hay nadie más en la oficina, abiertos (y lo que elijas se recuerda).
+  const doneOpen = prefGet('doneOpen', by.need.length + by.work.length ? '0' : '1') === '1';
+  const sec = (key, title, list, hint) => list.length ? `<section class="rc-sec sec-${key}" id="sec-${key}"><h4>${title} <small>${list.length}</small></h4>${list.map(cardHtml).join('')}</section>` : (hint ? `<section class="rc-sec sec-${key}" id="sec-${key}"><h4>${title}</h4><p class="rc-empty">${hint}</p></section>` : '');
+  const html = !all.length
+    ? `<div class="rc-zero"><b>La oficina está vacía</b><p>Lanza un encargo o haz clic en un robot de la sala de descanso.</p><button class="btn primary" data-card-act="new">Nuevo encargo</button></div>`
+    : sec('need', '✋ Te necesitan', by.need, 'Nadie te espera.') + sec('work', '⚙ Trabajando', by.work, '') +
+      (by.done.length ? `<details class="rc-sec sec-done" id="sec-done"${doneOpen ? ' open' : ''}><summary><h4>✓ Listos <small>${by.done.length}</small></h4></summary>${by.done.map(cardHtml).join('')}</details>` : '');
+  if (CARDS._html === html) return;
+  CARDS._html = html;
+  const tpl = document.createElement('template'); tpl.innerHTML = html;
+  morph(CARDS, tpl.content);
+  const det = $('#sec-done', CARDS); if (det) det.open = doneOpen;
+}
+
+// Mapa ⇄ tarjetas: pasar el mouse por uno resalta al otro.
+function highlight(name) {
+  if (cardUi.hl === name) return;
+  for (const n of [cardUi.hl, name]) {
+    if (!n) continue;
+    st.robots.get(n)?.el.classList.toggle('hl', n === name);
+    document.getElementById('card-' + n)?.classList.toggle('hl', n === name);
+    document.getElementById('tl-' + n)?.classList.toggle('hl', n === name);
+  }
+  cardUi.hl = name;
+}
+CARDS.addEventListener('mouseover', e => { const c = e.target.closest('[data-card]'); if (c) highlight(c.dataset.card); });
+CARDS.addEventListener('mouseleave', () => highlight(null));
+MAP.addEventListener('mouseover', e => { const r = e.target.closest('.robot:not(.on-break)'); highlight(r ? r.dataset.name : null); });
+CARDS.addEventListener('toggle', e => { if (e.target.id === 'sec-done') prefSet('doneOpen', e.target.open ? '1' : '0'); }, true);
+CARDS.addEventListener('submit', async e => {
+  const f = e.target.closest('[data-card-reply]'); if (!f) return;
+  e.preventDefault();
+  const name = f.closest('[data-card]').dataset.card, inp = f.querySelector('input'), text = inp.value.trim();
+  if (!text) return inp.focus();
+  f.querySelector('button').disabled = true;
+  try { await api('POST', `/api/robots/${name}/say`, {text}); inp.value = ''; toast(`Respuesta enviada a ${name}`); }
+  catch { /* toast ya mostrado */ }
+  finally { f.querySelector('button').disabled = false; }
+});
+CARDS.addEventListener('click', async e => {
+  if (e.target.closest('input, form')) return;
+  const b = e.target.closest('[data-card-act]');
+  if (b?.dataset.cardAct === 'new') return select('@new');
+  const card = e.target.closest('[data-card]'); if (!card) return;
+  const name = card.dataset.card, a = st.robots.get(name);
+  if (!b) return select(name);
+  try {
+    switch (b.dataset.cardAct) {
+      case 'open': return select(name);
+      case 'docs': return a?.data.docs.length && showDoc(a.data.docs[a.data.docs.length - 1].path);
+      case 'perm-approve': return await api('POST', `/api/robots/${name}/permission`, {decision: 'approve'});
+      case 'perm-reject': return await api('POST', `/api/robots/${name}/permission`, {decision: 'reject'});
+      case 'hold-allow': return a?.data.hold && await api('POST', `/api/decision/${a.data.hold.id}`, {decision: 'allow'});
+      case 'hold-deny': return a?.data.hold && await api('POST', `/api/decision/${a.data.hold.id}`, {decision: 'deny'});
+      case 'kill':
+        if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Seguro?'; setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Despedir'; }, 3000); return; }
+        b.disabled = true; return await api('DELETE', `/api/robots/${name}`);
+    }
+  } catch { /* toast ya mostrado */ }
+});
+CARDS.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-card]')) select(e.target.dataset.card); });
+KPIS.addEventListener('click', e => {
+  const k = e.target.closest('[data-kpi]'); if (!k) return;
+  const act = k.dataset.kpi;
+  if (act === 'inbox') return select('@inbox');
+  if (act === 'usage') return $('#btn-usage').click();
+  if (act === 'done') { const det = $('#sec-done', CARDS); if (det) { det.open = true; prefSet('doneOpen', '1'); } }
+  const sec = $('#sec-' + act, CARDS);
+  if (sec) { sec.scrollIntoView({behavior: 'smooth', block: 'nearest'}); sec.classList.remove('flash'); void sec.offsetWidth; sec.classList.add('flash'); }
+});
+/* ---------- vista 2.5D (opcional) ---------- */
+// El mismo plano inclinado en perspectiva: el piso se acuesta, las paredes se levantan y los robots quedan de pie
+// mirando a la cámara. Es solo CSS (clase .iso en el contenedor). Por defecto 2D; cada quien elige con el botón.
+function setView(iso) {
+  $('.map-wrap').classList.toggle('iso', iso);
+  $('#btn-view').setAttribute('aria-pressed', String(iso));
+  $('#btn-view').textContent = iso ? 'Vista 2D' : 'Vista 2.5D';
+  prefSet('mapView', iso ? 'iso' : '2d');
+}
+$('#btn-view').addEventListener('click', () => setView(!$('.map-wrap').classList.contains('iso')));
+setView(prefGet('mapView', '2d') === 'iso');
+
+/* ---------- línea de tiempo ---------- */
+// Una franja por robot: el color dice en qué estado estuvo cada tramo (el daemon guarda el historial) y las
+// marcas ▤ dicen cuándo escribió un documento. Así se ve el ritmo de cada tarea sin abrirla.
+const TL = $('#tl-body');
+const TL_CLASS = {walking: 'working', working: 'working', delegating: 'delegating', input: 'input', done: 'done', idle: 'idle'};
+const TL_STEPS = [5, 10, 15, 30, 60, 120, 180, 240].map(m => m * 60e3);
+const hhmm = t => new Date(t).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'});
+function tlWindow(nowMs, list) {
+  const r = prefGet('tlRange', 'auto');
+  if (r !== 'auto') return Number(r) * 3600e3;
+  const first = Math.min(nowMs, ...list.map(a => Date.parse(a.data.startedAt) || nowMs));
+  return Math.min(12 * 3600e3, Math.max(20 * 60e3, (nowMs - first) * 1.06));
+}
+function renderTimeline() {
+  const nowMs = Date.now();
+  const list = [...st.robots.values()].sort((x, y) => (Date.parse(x.data.startedAt) || 0) - (Date.parse(y.data.startedAt) || 0));
+  const span = tlWindow(nowMs, list), t0 = nowMs - span;
+  const pct = t => ((t - t0) / span * 100).toFixed(3);
+  $('#tl-range').querySelectorAll('[data-tl]').forEach(b => b.classList.toggle('on', b.dataset.tl === prefGet('tlRange', 'auto')));
+  if (!list.length) { TL.innerHTML = '<p class="tl-empty">Sin robots en la oficina. Cuando lances encargos, aquí verás el ritmo de cada uno.</p>'; return; }
+  const step = TL_STEPS.find(s => span / s <= 7) || TL_STEPS[TL_STEPS.length - 1];
+  let ticks = '';
+  for (let t = Math.ceil(t0 / step) * step; t < nowMs - step * 0.25; t += step) ticks += `<span class="tl-tick" style="left:${pct(t)}%">${hhmm(t)}</span>`;
+  const rows = list.map(a => {
+    const d = a.data;
+    const tl = d.timeline?.length ? d.timeline : [{at: d.startedAt, s: d.state}];
+    let segs = '';
+    tl.forEach((e, i) => {
+      const s = Math.max(Date.parse(e.at), t0), end = i + 1 < tl.length ? Date.parse(tl[i + 1].at) : nowMs;
+      if (end <= t0 || end <= s) return;
+      const cls = TL_CLASS[e.s] || 'idle';
+      segs += `<i class="tl-seg ts-${cls}" style="left:${pct(s)}%;width:${Math.max(0.15, (end - s) / span * 100).toFixed(3)}%" title="${esc(STATE_LABEL[e.s] || e.s)} · ${hhmm(Date.parse(e.at))}–${i + 1 < tl.length ? hhmm(end) : 'ahora'} (${fmtDur(end - Date.parse(e.at))})"></i>`;
+    });
+    const docs = d.docs.filter(x => Date.parse(x.at) >= t0).map(x => `<b class="tl-doc" style="left:${pct(Date.parse(x.at))}%" title="${esc(x.path.split('/').pop())} · ${hhmm(Date.parse(x.at))}">▤</b>`).join('');
+    const cls = ['tl-row', `g-${GROUP_OF[d.state] || 'work'}`, cardUi.hl === d.name ? 'hl' : '', st.selected === d.name ? 'sel' : ''].filter(Boolean).join(' ');
+    return `<div class="${cls}" id="tl-${esc(d.name)}" data-card="${esc(d.name)}"><span class="tl-name" style="--c:${COLORS[d.color % 8]}">${esc(d.name)}</span><div class="tl-track">${segs}${docs}</div></div>`;
+  }).join('');
+  TL.innerHTML = `<div class="tl-axis"><span class="tl-name"></span><div class="tl-track">${ticks}<span class="tl-tick now" style="left:100%">ahora</span></div></div>${rows}`;
+}
+TL.addEventListener('mouseover', e => { const r = e.target.closest('[data-card]'); highlight(r ? r.dataset.card : null); });
+TL.addEventListener('mouseleave', () => highlight(null));
+TL.addEventListener('click', e => { const r = e.target.closest('[data-card]'); if (r) select(r.dataset.card); });
+$('#tl-range').addEventListener('click', e => { const b = e.target.closest('[data-tl]'); if (b) { prefSet('tlRange', b.dataset.tl); renderTimeline(); } });
+setInterval(renderTimeline, 15000);
+// El mapa se achica lo justo para que la línea de tiempo quepa en pantalla sin hacer scroll (ver --tl-h en style.css).
+new ResizeObserver(([e]) => document.documentElement.style.setProperty('--tl-h', Math.ceil(e.borderBoxSize?.[0]?.blockSize ?? e.target.offsetHeight) + 'px')).observe($('#tl'));
+
+// El tiempo de cada tarjeta avanza solo; los tokens de la semana y la cuota se refrescan cada 5 min.
+setInterval(() => document.querySelectorAll('#cards [data-start]').forEach(el => { if (el.dataset.start) el.textContent = fmtDur(Date.now() - Date.parse(el.dataset.start)); }), 20000);
 
 /* ---------- adjuntos ---------- */
 // Clave 'job' = formulario de nuevo encargo; cualquier otra = nombre del robot (chat).
@@ -766,6 +1068,7 @@ async function loadWeeks() {
   try { st.weeks = (await (await fetch('/api/usage')).json()).weeks || []; } catch { return; }
   const cur = st.weeks[0];
   $('#week-chip').textContent = cur ? `semana · ${tokLine(cur)}` : 'semana · sin uso';
+  scheduleCards();
   if (st.selected === '@usage') schedulePanel();
 }
 async function loadClaudeStatus(refresh) {
@@ -778,6 +1081,7 @@ async function loadClaudeStatus(refresh) {
     st.claude = data;
   } catch (e) { st.claudeError = e.message || 'No se pudo leer /usage.'; }
   st.claudeLoading = false;
+  scheduleCards();
   if (st.selected === '@usage') renderPanel();
 }
 
@@ -913,8 +1217,8 @@ function leaveBreak(x) {
   queue(x, async () => { await walkTo(x, door()); x.el.remove(); });
 }
 function sayOnBreak(x, text) {
-  x.bubble.textContent = text; x.bubble.hidden = false;
-  clearTimeout(x.bt); x.bt = setTimeout(() => { x.bubble.hidden = true; }, 3800);
+  x.bubble.textContent = text; x.bubble.hidden = false; declutterBubbles();
+  clearTimeout(x.bt); x.bt = setTimeout(() => { x.bubble.hidden = true; declutterBubbles(); }, 3800);
 }
 function tickBreak() {
   const bots = [...brk.bots.values()], target = breakTarget();
@@ -963,6 +1267,7 @@ function select(sel) {
   $('#dlg-close').hidden = needsSetup();
   for (const a of st.robots.values()) a.el.classList.toggle('sel', a.data.name === sel);
   document.querySelectorAll('.room').forEach(r => r.classList.toggle('sel', sel === '@' + r.dataset.room));
+  scheduleCards();
   renderPanel();
 }
 
@@ -988,9 +1293,25 @@ function morph(from, to) {
 }
 
 const KIND_LABEL = {user: 'Tú', agent: 'Robot', tool: 'Herramienta', sub: 'Subagente', sys: 'Oficina', doc: 'Documento'};
+// Lo que dicen los robots (y tú) viene en Markdown: se muestra con formato (marked + DOMPurify, servidos localmente).
+// Herramientas, avisos de la oficina y documentos siguen en texto plano. Se cachea porque el panel se repinta seguido.
+const MD_KINDS = new Set(['agent', 'user', 'sub']);
+const mdCache = new Map();
+function mdHtml(text) {
+  let h = mdCache.get(text);
+  if (h != null) return h;
+  try {
+    h = DOMPurify.sanitize(marked.parse(String(text), {gfm: true, breaks: true}), {ADD_ATTR: ['target']})
+      .replace(/<a /g, '<a target="_blank" rel="noopener" ');
+  } catch { h = esc(text); }
+  if (mdCache.size > 600) mdCache.delete(mdCache.keys().next().value);
+  mdCache.set(text, h);
+  return h;
+}
 function logRow(l) {
   const t = new Date(l.at).toTimeString().slice(0, 5);
-  return `<div class="lg ${l.kind}"><span class="w">${esc(l.who || KIND_LABEL[l.kind] || l.kind)} · ${t}</span><span class="x">${esc(l.text)}</span></div>`;
+  const md = MD_KINDS.has(l.kind) && window.marked && window.DOMPurify;
+  return `<div class="lg ${l.kind}"><span class="w">${esc(l.who || KIND_LABEL[l.kind] || l.kind)} · ${t}</span>${md ? `<div class="x md-chat">${mdHtml(l.text)}</div>` : `<span class="x">${esc(l.text)}</span>`}</div>`;
 }
 function appendLog(entry) {
   const lg = $('#log', PANEL); if (!lg) return;
@@ -1010,7 +1331,7 @@ function robotPanel(a) {
   if (d.hold) alert = `<div class="alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission) alert = `<div class="alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
-    <div class="ph"><div class="ph-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3><div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${d.state === 'done' ? (d.kind === 'libre' ? 'esperando orden' : 'terminó · esperando baja') : STATE_LABEL[d.state] || d.state}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
+    <div class="ph"><div class="ph-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3><div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
     ${alert}
     <div class="rp-grid">
       <div class="rp-col">
@@ -1066,7 +1387,14 @@ function newPanel() {
 }
 
 const fileName = p => String(p).split('/').pop();
-const shortPath = p => String(p).replace(/^.*\/dropicode-Diagrams\//, '');
+// Ruta relativa a la carpeta de trabajo de esta oficina; fuera de ella, con ~ en vez de /Users/<tú>.
+const shortPath = p => {
+  const s = String(p), ws = st.setup?.workspace;
+  if (ws && s.startsWith(ws.replace(/\/$/, '') + '/')) return s.slice(ws.replace(/\/$/, '').length + 1);
+  return s.replace(/^.*\/scratchpad\//, '…/scratchpad/').replace(/^\/Users\/[^/]+(?=\/)/, '~');
+};
+// Archivos de carpetas temporales (borradores, láminas de un deck, scratchpads): ruido en la bandeja salvo que los pidas.
+const isTempDoc = p => /^(\/private)?\/(tmp|var\/folders)\//.test(String(p)) || /\/scratchpad\//.test(String(p));
 
 // Documentos de un robot: en su escritorio (sin entregar) o ya en tu bandeja.
 function docsBlock(d) {
@@ -1080,15 +1408,15 @@ function docsBlock(d) {
 
 function inboxPanel() {
   const filter = st.inboxFilter || 'nuevos';
-  const items = filter === 'nuevos' ? st.inbox.filter(i => i.status !== 'visto') : st.inbox;
+  const shown = inboxShown(), temps = st.inbox.length - shown.length;
+  const items = filter === 'nuevos' ? shown.filter(i => i.status !== 'visto') : shown;
   const n = unseen();
-  const rows = items.map(i => {
+  const row = i => {
     const isNew = i.status !== 'visto';
     return `<div class="inbox-item ${isNew ? 'new' : ''}">
       <div class="meta-i" data-docpath="${esc(i.path)}" data-docid="${esc(i.id)}" role="button" tabindex="0">
-        <b>${esc(fileName(i.path))}</b>${i.critical > 0 ? ` <span class="tagx crit">⚠ ${i.critical} crítico${i.critical === 1 ? '' : 's'}</span>` : ''}${i.updated ? ' <span class="tagx">actualizado</span>' : ''}
-        <div>${esc(i.robot)} · ${esc(i.label)} · ${new Date(i.at).toLocaleString('es', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})}</div>
-        <div class="pathx">${esc(shortPath(i.path))}</div>
+        <b>${esc(fileName(i.path))}</b>${i.critical > 0 ? ` <span class="tagx crit">⚠ ${i.critical} crítico${i.critical === 1 ? '' : 's'}</span>` : ''}${i.updated ? ' <span class="tagx">actualizado</span>' : ''}${isTempDoc(i.path) ? ' <span class="tagx tmp">temporal</span>' : ''}
+        <div class="pathx" title="${esc(i.path)}">${esc(shortPath(i.path))} · ${new Date(i.at).toLocaleString('es', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})}</div>
       </div>
       <div class="row">
         <button class="btn sm" data-inbox="open" data-id="${esc(i.id)}">Ver</button>
@@ -1097,17 +1425,31 @@ function inboxPanel() {
         <button class="btn sm danger" data-inbox="archive" data-id="${esc(i.id)}">Archivar</button>
       </div>
     </div>`;
+  };
+  // Agrupado por robot (el que entregó más reciente primero): cada robot es una tarea distinta.
+  const groups = new Map();
+  for (const i of items) { if (!groups.has(i.robot)) groups.set(i.robot, []); groups.get(i.robot).push(i); }
+  const rows = [...groups].map(([robot, list]) => {
+    const live = st.robots.get(robot);
+    const nNew = list.filter(i => i.status !== 'visto').length;
+    return `<section class="ib-g">
+      <div class="ib-gh">${live ? `<span class="ib-av">${robotSVG(COLORS[live.data.color % 8], lookOf(robot, live.data.place))}</span>` : ''}<b>${esc(robot)}</b><span class="ib-lbl" title="${esc(list[0].label)}">${esc(list[0].label)}</span><small>${list.length} doc${list.length === 1 ? '' : 's'}${nNew && filter !== 'nuevos' ? ` · ${nNew} nuevo${nNew === 1 ? '' : 's'}` : ''}${live ? '' : ' · ya se fue'}</small></div>
+      ${list.map(row).join('')}
+    </section>`;
   }).join('');
-  return `<div class="dlg-head"><h3>Tu bandeja</h3><p>Documentos que te entregaron los robots. Abrir uno lo marca como visto; archivar lo saca de la lista sin borrar el archivo.</p></div>
+  return `<div class="dlg-head"><h3>Tu bandeja</h3><p>Documentos que te entregaron los robots, agrupados por robot. Abrir uno lo marca como visto; archivar lo saca de la lista sin borrar el archivo.</p></div>
     <div class="dlg-sec">
       <div class="row between">
         <div class="seg small" role="radiogroup" aria-label="Filtro">
           <label><input type="radio" name="inboxf" value="nuevos" ${filter === 'nuevos' ? 'checked' : ''}>Nuevos (${n})</label>
-          <label><input type="radio" name="inboxf" value="todos" ${filter === 'todos' ? 'checked' : ''}>Todos (${st.inbox.length})</label>
+          <label><input type="radio" name="inboxf" value="todos" ${filter === 'todos' ? 'checked' : ''}>Todos (${shown.length})</label>
         </div>
-        <button class="btn sm" data-inbox="seen-all" ${n ? '' : 'disabled'}>Marcar todos como vistos</button>
+        <div class="row">
+          ${temps || st.inboxTemp ? `<button class="btn sm" data-inbox="temp" title="Archivos en carpetas temporales (/tmp, scratchpads): borradores, láminas de un deck…">${st.inboxTemp ? 'Ocultar temporales' : `Mostrar temporales (${temps})`}</button>` : ''}
+          <button class="btn sm" data-inbox="seen-all" ${n ? '' : 'disabled'}>Marcar todos como vistos</button>
+        </div>
       </div>
-      <div class="list">${rows || `<p>${filter === 'nuevos' ? 'No tienes documentos nuevos.' : 'La bandeja está vacía.'}</p>`}</div>
+      <div class="list">${rows || `<p>${filter === 'nuevos' ? 'No tienes documentos nuevos.' : 'La bandeja está vacía.'}${temps && !st.inboxTemp ? ` Hay ${temps} archivo${temps === 1 ? '' : 's'} temporal${temps === 1 ? '' : 'es'} oculto${temps === 1 ? '' : 's'}.` : ''}</p>`}</div>
     </div>`;
 }
 
@@ -1282,14 +1624,14 @@ function hoverActivity(d) {
     return `Esperando ${running.length} subagente${running.length === 1 ? '' : 's'}${running[0]?.activity ? ' · ' + running[0].activity : ''}`;
   }
   if (d.activity) return d.activity;
-  return d.bubble || STATE_LABEL[d.state] || '';
+  return plainMd(d.bubble) || STATE_LABEL[d.state] || '';
 }
 
 function renderHover() {
   const a = st.robots.get(hover.name);
   if (!a) return hideHover();
   const d = a.data;
-  const label = d.state === 'done' ? (d.kind === 'libre' ? 'esperando orden' : 'terminó · esperando baja') : STATE_LABEL[d.state] || d.state;
+  const label = stateLabel(d);
   hover.el.innerHTML = `<div class="hc-top"><b>${esc(d.name)}</b><span class="pill p-${d.state}">${esc(label)}</span></div>
     <div class="hc-act">${esc(hoverActivity(d).slice(0, 120))}</div>
     ${d.state === 'input' && d.inputAt ? `<div class="hc-wait">Esperando tu respuesta hace <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></div>` : ''}
@@ -1471,6 +1813,10 @@ PANEL.addEventListener('click', async e => {
     return;
   }
   const ib = e.target.closest('[data-inbox]');
+  if (ib?.dataset.inbox === 'temp') {
+    st.inboxTemp = !st.inboxTemp; prefSet('inboxTemp', st.inboxTemp ? '1' : '0');
+    renderInboxBadge(); renderMeta(); return renderPanel();
+  }
   if (ib) {
     const id = ib.dataset.id, item = st.inbox.find(x => x.id === id);
     try {
@@ -1531,7 +1877,8 @@ function renderOfficeName() {
   btn.classList.toggle('empty', !name);
   const hue = name ? officeHue(name) : 174;
   btn.style.setProperty('--oh', hue);
-  document.title = name ? `${name} · Oficina de Agentes` : 'Oficina de Agentes';
+  notif.base = name ? `${name} · Oficina de Agentes` : 'Oficina de Agentes';
+  updateTitle(notif.known?.size || 0);
   const letter = esc((name || 'O').trim()[0].toUpperCase());
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="hsl(${hue} 60% 48%)"/><text x="16" y="22.5" font-family="Arial,sans-serif" font-size="19" font-weight="700" text-anchor="middle" fill="#fff">${letter}</text></svg>`;
   $('#favicon').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
