@@ -30,8 +30,13 @@ if (!/^[A-Za-z0-9_-]{1,40}$/.test(SESSION)) {
   console.error(`OFFICE_SESSION inválido: «${SESSION}». Usa solo letras, números, guion o guion bajo (sin puntos ni dos puntos).`);
   process.exit(1);
 }
-const SETTINGS = path.join(ROOT, 'office-settings.json');
-const RUNS = path.join(ROOT, 'runs');
+// Carpeta de datos de ESTA oficina (estado, bandeja, rutinas, salas, eventos, adjuntos). El código es uno solo
+// y cada oficina del edificio trae la suya: `office start <nombre>` la pasa en OFFICE_DATA. Sin ella, runs/ junto al código.
+const RUNS = path.resolve(process.env.OFFICE_DATA || path.join(ROOT, 'runs'));
+const LEGACY_RUNS = RUNS === path.join(ROOT, 'runs');
+// Hooks de los robots: se generan en la carpeta de datos con la ruta real de hooks/office-hook.sh,
+// así el código se puede mover o clonar sin editar rutas a mano.
+const SETTINGS = path.join(RUNS, 'office-settings.json');
 // Tope de robots trabajando a la vez: todos gastan de la misma cuota de la suscripcion.
 // Se ajusta desde la oficina (− / +) y se guarda en office-state.json.
 let maxRobots = Number(process.env.OFFICE_MAX_ROBOTS || 3);
@@ -51,6 +56,15 @@ const ATTACH_MAX_BYTES = 20 * 1024 * 1024;
 const ATTACH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 fs.mkdirSync(RUNS, { recursive: true });
+{
+  const hook = { type: 'command', command: path.join(ROOT, 'hooks', 'office-hook.sh') };
+  const ev = (timeout, matcher) => [{ ...(matcher ? { matcher } : {}), hooks: [{ ...hook, timeout }] }];
+  const settings = { hooks: {
+    SessionStart: ev(10), UserPromptSubmit: ev(10), PreToolUse: ev(600, '*'), PostToolUse: ev(10, '*'),
+    SubagentStop: ev(10), Notification: ev(10), Stop: ev(10)
+  } };
+  fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + '\n');
+}
 // Una copia de la carpeta = una oficina: dos daemons sobre el mismo runs/ se pisarían el estado y la bandeja.
 const LOCK_FILE = path.join(RUNS, 'daemon.lock');
 try {
@@ -58,8 +72,8 @@ try {
   let alive = false;
   try { process.kill(lock.pid, 0); alive = lock.pid !== process.pid; } catch { /* proceso muerto: candado viejo */ }
   if (alive) {
-    console.error(`Esta copia de la oficina ya está corriendo (pid ${lock.pid}, puerto ${lock.port}).`);
-    console.error('Para otra oficina en otro workspace, copia la carpeta agent-office y arráncala con su propio OFFICE_PORT y OFFICE_SESSION.');
+    console.error(`Esta oficina ya está corriendo (pid ${lock.pid}, puerto ${lock.port}, datos en ${RUNS}).`);
+    console.error('Para otra oficina usa el edificio: bin/office create <nombre> --workspace <carpeta> y bin/office start <nombre>.');
     process.exit(1);
   }
 } catch { /* sin candado */ }
@@ -298,7 +312,7 @@ function initialWorkspace() {
   if (process.env.OFFICE_WORKSPACE) return path.resolve(expandHome(process.env.OFFICE_WORKSPACE));
   try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')).workspace || null; } catch { /* sin config */ }
   // Instalaciones de antes de esta opción: ya tenían estado y usaban la carpeta de dos niveles arriba.
-  if (fs.existsSync(path.join(RUNS, 'office-state.json'))) return saveWorkspace(path.resolve(ROOT, '../..'));
+  if (LEGACY_RUNS && fs.existsSync(path.join(RUNS, 'office-state.json'))) return saveWorkspace(path.resolve(ROOT, '../..'));
   return null;
 }
 function readConfig() {
@@ -1413,5 +1427,6 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`Sesión de tmux de los robots: ${SESSION} (tmux attach -t ${SESSION})`);
   console.log(`Tope de robots simultáneos: ${maxRobots}`);
   console.log(`Aprobaciones retenidas por el daemon: ${APPROVAL ? 'activas' : 'apagadas (OFFICE_APPROVAL=1)'}`);
+  console.log(`Datos de la oficina: ${RUNS}`);
   console.log(`Eventos crudos: ${EVENTS_FILE}\n`);
 });

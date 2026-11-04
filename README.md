@@ -2,19 +2,32 @@
 
 Oficina local donde cada robot es una consola tmux corriendo `claude` con tu suscripción. Sin dependencias ni build: solo Node y tmux.
 
-## Arrancar (MVP)
+## Edificio: varias oficinas con un solo código
+
+Esta carpeta es el **código** (uno solo). Cada **oficina** es una carpeta de datos con su carpeta de trabajo, su puerto y su sesión de tmux, así una oficina con mucho trabajo no se mezcla con otra.
 
 ```sh
-cd "TRANSVERSAL/agent-office"
-node daemon/daemon.mjs
-# abrir http://127.0.0.1:4777
+bin/office create nr --workspace ~/nr-fabi          # registra la oficina (elige puerto y sesión libres)
+bin/office start nr                                 # arranca su daemon en segundo plano
+bin/office ls                                       # todas las oficinas: estado, URL, robots, bandeja
+bin/office open nr                                  # la abre en el navegador
+bin/office lobby                                    # página del edificio en http://127.0.0.1:4700
+bin/office stop nr | restart nr | logs nr [-f]      # --all en vez del nombre para todas
+bin/office ctl nr libre "resume el README"          # daemon/ctl.mjs contra esa oficina
 ```
 
-La primera vez la página pide la **carpeta de trabajo** (donde se abren los robots y de donde salen las skills del proyecto) y la guarda en `runs/config.json`; se cambia desde el chip «carpeta · …» con la oficina vacía.
+- Registro y datos: `~/.agent-office/oficinas/<nombre>/` (`office.json` con puerto y sesión, `daemon.log`, y el estado de la oficina). `AGENT_OFFICE_HOME` cambia `~/.agent-office`.
+- `--data <carpeta>` adopta una oficina que ya existía sin mover sus datos (por ejemplo, un `runs/` viejo).
+- `--port`, `--session` y `--max` (tope de robots) son opcionales.
+- Detener una oficina no cierra sus robots: siguen en tmux y se reconectan al arrancarla otra vez.
+- Los hooks de los robots (`office-settings.json`) se generan en la carpeta de datos al arrancar, con la ruta real de `hooks/office-hook.sh`: el código se puede clonar en cualquier carpeta.
+- El edificio lee el estado de cada oficina de sus archivos (no gasta cuota) y puede iniciarlas o detenerlas.
 
-Variables opcionales: `OFFICE_WORKSPACE` (fija la carpeta de trabajo y omite esa pregunta), `OFFICE_MAX_ROBOTS` (tope simultáneo, default 3), `OFFICE_APPROVAL=1` (el daemon retiene Bash/Write/Edit hasta aprobar en la oficina), `OFFICE_PORT`, `OFFICE_SESSION` (sesión de tmux de los robots, default `office`).
+Sin el edificio también funciona como antes: `node daemon/daemon.mjs` usa `runs/` junto al código. Variables: `OFFICE_DATA` (carpeta de datos), `OFFICE_WORKSPACE` (fija la carpeta de trabajo), `OFFICE_MAX_ROBOTS` (default 3), `OFFICE_APPROVAL=1` (el daemon retiene Bash/Write/Edit hasta aprobar), `OFFICE_PORT`, `OFFICE_SESSION`. El daemon no arranca si su carpeta de datos ya tiene un daemon vivo (candado `daemon.lock`), ni si la sesión de tmux pertenece a otra oficina viva (opción `@office_port` de la sesión).
 
-Varias oficinas en el mismo equipo: una copia de la carpeta por oficina, cada una con su `OFFICE_PORT` y su `OFFICE_SESSION`. El daemon no arranca si su copia ya corre (candado `runs/daemon.lock`), ni si la sesión de tmux pertenece a otra oficina viva (opción `@office_port` de la sesión).
+La primera vez, si la oficina no tiene carpeta de trabajo, la página la pide y la guarda en `config.json` de sus datos; se cambia desde el chip «carpeta · …» con la oficina vacía.
+
+En lo que sigue, `runs/` significa la carpeta de datos de la oficina.
 
 Qué hace el MVP:
 
@@ -51,7 +64,8 @@ Validó, sin interfaz gráfica, que se puede manejar el `claude` de la suscripci
 
 | Archivo | Qué hace |
 |---|---|
-| `office-settings.json` | Hooks que se cargan **solo** en los robots (`claude --settings …`). Tus sesiones normales no los ven. |
+| `bin/office` | El edificio: crea, arranca, detiene y lista oficinas; sirve la página del edificio (`edificio/index.html`). |
+| `office-settings.json` (en los datos) | Hooks que se cargan **solo** en los robots (`claude --settings …`). Tus sesiones normales no los ven. Lo genera el daemon. |
 | `hooks/office-hook.sh` | Reenvía el JSON del hook al daemon. Sale sin hacer nada si no existe `OFFICE_ROBOT` o si el daemon no responde. |
 | `daemon/daemon.mjs` | Lanza robots en la sesión tmux `office`, imprime eventos, sigue transcripts, suma tokens y (opcional) retiene permisos. Sin dependencias. |
 | `daemon/ctl.mjs` | Control desde la terminal: `launch`, `say`, `approve`, `deny`, `kill`, `state`. |

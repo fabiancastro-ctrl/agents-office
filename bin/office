@@ -1,0 +1,3 @@
+#!/bin/sh
+# Edificio de oficinas: ver bin/office.mjs
+exec node "$(cd "$(dirname "$0")" && pwd -P)/office.mjs" "$@"

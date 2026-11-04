@@ -2,3 +2,4 @@ runs/
 runs.bak*/
 .DS_Store
 node_modules/
+office-settings.json

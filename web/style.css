@@ -16,6 +16,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 [hidden]{display:none!important}
+/* Pixelify Sans dibuja «fi» como una ligadura que parece una A («OAcina»): sin ligaduras en toda la página */
+html{font-variant-ligatures:none}
 
 .top{position:sticky;top:0;z-index:9;background:var(--bg);display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px;padding-block:14px;border-bottom:1px solid var(--line)}
 .brand{font-family:var(--display);font-size:22px;display:flex;align-items:center;gap:10px}
