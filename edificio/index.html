@@ -26,7 +26,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .top p{margin:0;color:var(--muted)}
 .top .sum{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
 .grid{max-width:1200px;margin:18px auto 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.of{--oh:174;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px 14px;display:grid;gap:10px;overflow:hidden}
+.of{--oh:174;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px 14px;display:grid;gap:10px;align-content:start;overflow:hidden}
 .of::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:hsl(var(--oh) 60% 55%)}
 .of.off{opacity:.72}
 .of.need{border-color:color-mix(in srgb,var(--rose) 60%,var(--line))}
@@ -55,6 +55,11 @@ button{font:inherit;color:inherit;cursor:pointer}
 .empty code,.help code{font-family:var(--mono);background:var(--panel-2);padding:1px 5px;border-radius:4px;color:var(--ink)}
 .help{max-width:1200px;margin:22px auto 0;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:12px}
 .err{color:var(--rose);font-family:var(--mono);font-size:11px;white-space:pre-wrap}
+.warn{font-size:12.5px;line-height:1.4;color:#ffe3b0;background:color-mix(in srgb,var(--amber) 12%,var(--panel-2));border:1px solid color-mix(in srgb,var(--amber) 45%,var(--line));border-radius:8px;padding:7px 10px}
+.warn b{color:var(--amber)}
+.of.orph{opacity:1;border-color:color-mix(in srgb,var(--amber) 55%,var(--line))}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted);padding-inline:6px}
+.btn.ghost:hover{color:var(--rose);border-color:rgba(239,127,138,.45)}
 @media (prefers-reduced-motion:no-preference){.of.need .n.need{animation:pulse 1.4s ease-in-out infinite}}
 @keyframes pulse{50%{background:color-mix(in srgb,var(--rose) 18%,var(--panel-2))}}
 .top .btn{margin-left:12px}
@@ -101,7 +106,8 @@ const home = p => String(p || '—').replace(/^\/Users\/[^/]+/, '~');
 const errs = {};
 function card(o) {
   const need = o.running && o.need > 0;
-  return `<article class="of ${o.running ? '' : 'off'} ${need ? 'need' : ''}" style="--oh:${hue(o.title)}">
+  const orph = !o.running && o.orphans > 0;
+  return `<article class="of ${o.running ? '' : 'off'} ${need ? 'need' : ''} ${orph ? 'orph' : ''}" style="--oh:${hue(o.title)}">
     <div class="of-h"><span class="badge">${esc(o.title.trim()[0]?.toUpperCase() || 'O')}</span>
       <div class="of-t"><b>${esc(o.title)}</b><small>${esc(o.name)} · :${o.port}</small></div>
       <span class="st ${o.running ? 'on' : ''}">${o.running ? 'corriendo' : 'detenida'}</span></div>
@@ -112,9 +118,10 @@ function card(o) {
       <div class="n inbox ${o.inbox ? 'on' : ''}"><b>${o.inbox}</b><span>bandeja</span></div>
     </div>
     <div class="meta"><span title="${esc(o.workspace)}">carpeta · ${esc(home(o.workspace))}</span><span>tmux · ${esc(o.session)}</span></div>
+    ${orph ? `<div class="warn"><b>⚠ ${o.orphans} robot${o.orphans === 1 ? '' : 's'} sin supervisión.</b> La oficina está detenida pero ${o.orphans === 1 ? 'sigue vivo' : 'siguen vivos'} en tmux${o.orphansBusy ? `, ${o.orphansBusy} trabajando y gastando cuota sin que lo veas` : ''}. Inicia la oficina para reconectarlos o despídelos.</div>` : ''}
     <div class="acts">${o.running
-      ? `<a class="btn primary" href="${esc(o.url)}" target="_blank" rel="noopener">Abrir</a><button class="btn danger" data-act="stop" data-name="${esc(o.name)}">Detener</button>`
-      : `<button class="btn primary" data-act="start" data-name="${esc(o.name)}">Iniciar</button>`}</div>
+      ? `<a class="btn primary" href="${esc(o.url)}" target="_blank" rel="noopener">Abrir</a><button class="btn" data-act="stop" data-name="${esc(o.name)}" title="Apaga la oficina; sus robots siguen en tmux y se reconectan al iniciarla">Detener</button><button class="btn ghost" data-act="stop" data-despedir="1" data-name="${esc(o.name)}" title="Da de baja a todos sus robots (sus documentos pasan a la bandeja) y apaga la oficina">Cerrar y despedir</button>`
+      : `<button class="btn primary" data-act="start" data-name="${esc(o.name)}">${orph ? 'Iniciar y reconectar' : 'Iniciar'}</button>${orph ? `<button class="btn danger" data-act="stop" data-despedir="1" data-name="${esc(o.name)}">Despedir robots</button>` : ''}`}</div>
     ${errs[o.name] ? `<div class="err">${esc(errs[o.name])}</div>` : ''}
   </article>`;
 }
@@ -131,9 +138,11 @@ async function load() {
 }
 document.getElementById('grid').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
-  b.disabled = true; b.textContent = b.dataset.act === 'start' ? 'Iniciando…' : 'Deteniendo…';
+  const desp = b.dataset.despedir === '1';
+  if (desp && !confirm(`¿Despedir a todos los robots de «${b.dataset.name}» y cerrar la oficina?\n\nSus documentos pendientes pasan a la bandeja, pero los robots que estén trabajando se cortan y no se pueden recuperar.`)) return;
+  b.disabled = true; b.textContent = b.dataset.act === 'start' ? 'Iniciando…' : desp ? 'Despidiendo…' : 'Deteniendo…';
   try {
-    const r = await fetch(`/api/offices/${b.dataset.name}/${b.dataset.act}`, {method: 'POST'});
+    const r = await fetch(`/api/offices/${b.dataset.name}/${b.dataset.act}${desp ? '?despedir=1' : ''}`, {method: 'POST'});
     const j = await r.json();
     errs[b.dataset.name] = r.ok && !/no arrancó|ocupado|no se detuvo/.test(j.output || '') ? '' : (j.output || j.error || 'Falló');
   } catch (err) { errs[b.dataset.name] = err.message; }

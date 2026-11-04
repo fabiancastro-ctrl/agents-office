@@ -7,6 +7,7 @@
 //         [--port N] [--session S] [--data <dir>] [--max N]
 //   office start <nombre…> | --all              arranca el daemon en segundo plano
 //   office stop <nombre…> | --all               lo detiene (los robots siguen vivos en tmux)
+//         [--despedir]                          …y antes da de baja a todos sus robots
 //   office restart <nombre…> | --all
 //   office logs <nombre> [-f]                   salida del daemon
 //   office open <nombre>                        abre la oficina en el navegador
@@ -39,6 +40,19 @@ const expandHome = p => String(p || '').trim().replace(/^~(?=$|\/)/, os.homedir(
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const isTempDoc = p => /^(\/private)?\/(tmp|var\/folders)\//.test(String(p)) || /\/scratchpad\//.test(String(p));
 const alive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+
+/* ---------- tmux ---------- */
+const tmux = (...a) => spawnSync('tmux', a, { encoding: 'utf8' });
+// Ventanas de robots vivas en la sesión de la oficina (sin «lobby» ni «_status»). Solo si la sesión es de
+// esta oficina: el daemon marca la suya con @office_port.
+function liveRobots(o) {
+  if (tmux('has-session', '-t', o.session).status !== 0) return [];
+  const owner = tmux('show-options', '-t', o.session, '-v', '@office_port');
+  if (owner.status === 0 && owner.stdout.trim() && Number(owner.stdout.trim()) !== o.port) return [];
+  const names = tmux('list-windows', '-t', o.session, '-F', '#{window_name}').stdout.split('\n').filter(n => n && n !== 'lobby' && n !== '_status');
+  // Claude Code muestra «esc to interrupt» mientras trabaja: es la forma de saberlo sin el daemon.
+  return names.map(name => ({ name, busy: /esc to interrupt/i.test(tmux('capture-pane', '-p', '-t', `${o.session}:${name}`).stdout || '') }));
+}
 
 /* ---------- registro ---------- */
 function load(name) {
@@ -80,12 +94,15 @@ function summary(o) {
   const robots = state.robots || [];
   const count = s => robots.filter(r => s.includes(r.state)).length;
   const lock = running(o);
+  // Detenida pero con robots vivos en tmux: siguen trabajando (y gastando cuota) sin que nadie los vea.
+  const orphans = lock ? [] : liveRobots(o);
   return {
     name: o.name, title: cfg.name || o.name, port: o.port, session: o.session, data: o.data, workspace: cfg.workspace || null,
     running: !!lock, pid: lock?.pid || null, url: `http://127.0.0.1:${o.port}`,
     robots: robots.length, working: count(['working', 'walking', 'delegating']), need: count(['input']), done: count(['done']),
     // Igual que la bandeja de la oficina: los archivos de carpetas temporales no cuentan como nuevos.
-    inbox: (state.inbox || []).filter(i => i.status !== 'visto' && !isTempDoc(i.path)).length
+    inbox: (state.inbox || []).filter(i => i.status !== 'visto' && !isTempDoc(i.path)).length,
+    orphans: orphans.length, orphansBusy: orphans.filter(r => r.busy).length
   };
 }
 
@@ -153,23 +170,58 @@ async function start(o) {
   process.exitCode = 1;
 }
 
-async function stop(o) {
+async function stop(o, despedir = false) {
+  if (despedir) await dismissAll(o);
   const lock = running(o);
-  if (!lock) return console.log(`${o.name}: no está corriendo.`);
-  process.kill(lock.pid, 'SIGTERM');
-  for (let i = 0; i < 40 && alive(lock.pid); i++) await sleep(125);
-  console.log(alive(lock.pid) ? `${o.name}: no se detuvo (pid ${lock.pid}).` : `${o.name}: detenida. Sus robots siguen en tmux (tmux attach -t ${o.session}).`);
+  if (!lock) {
+    if (!despedir) console.log(`${o.name}: no está corriendo.`);
+  } else {
+    process.kill(lock.pid, 'SIGTERM');
+    for (let i = 0; i < 40 && alive(lock.pid); i++) await sleep(125);
+    if (alive(lock.pid)) return console.log(`${o.name}: no se detuvo (pid ${lock.pid}).`);
+    const left = liveRobots(o).length;
+    console.log(`${o.name}: detenida.${left ? ` Sus ${left} robot${left === 1 ? '' : 's'} siguen en tmux y se reconectan al iniciarla (para despedirlos: office stop ${o.name} --despedir).` : ''}`);
+  }
+  // Cerrar de verdad: también la sesión de tmux (consola de /usage incluida), si es de esta oficina.
+  if (despedir && tmux('has-session', '-t', o.session).status === 0) {
+    const owner = tmux('show-options', '-t', o.session, '-v', '@office_port').stdout.trim();
+    if (!owner || Number(owner) === o.port) { tmux('kill-session', '-t', o.session); console.log(`${o.name}: sesión tmux ${o.session} cerrada.`); }
+  }
+}
+
+// Da de baja a todos los robots por la API del daemon, que entrega sus documentos pendientes a la bandeja
+// antes de cerrar cada ventana. Si la oficina está detenida, la arranca un momento para eso.
+async function dismissAll(o) {
+  const live = liveRobots(o);
+  if (!live.length) return console.log(`${o.name}: no tiene robots vivos.`);
+  if (!running(o)) {
+    console.log(`${o.name}: la inicio un momento para despedir a sus robots con la entrega de sus documentos…`);
+    await start(o);
+  }
+  for (const r of live) {
+    let ok = false;
+    if (running(o)) {
+      try { ok = (await fetch(`http://127.0.0.1:${o.port}/api/robots/${encodeURIComponent(r.name)}`, { method: 'DELETE' })).ok; } catch { /* daemon caído */ }
+    }
+    // Ventana que el daemon no conoce (o daemon caído): se cierra directo.
+    if (!ok) ok = tmux('kill-window', '-t', `${o.session}:${r.name}`).status === 0;
+    console.log(`  ${r.name}: ${ok ? 'despedido' : 'no se pudo despedir'}${r.busy ? ' (estaba trabajando)' : ''}`);
+  }
 }
 
 function ls() {
   const list = all().map(summary);
   if (!list.length) return console.log(`No hay oficinas en ${OFFICES}. Crea una con: office create <nombre> --workspace <carpeta>`);
   const rows = [['OFICINA', 'ESTADO', 'URL', 'TMUX', 'ROBOTS', 'TE NECESITAN', 'BANDEJA', 'CARPETA DE TRABAJO']].concat(list.map(s => [
-    s.name, s.running ? `corriendo` : 'detenida', s.url, s.session, String(s.robots), String(s.need), String(s.inbox),
+    s.name, s.running ? 'corriendo' : s.orphans ? `detenida · ${s.orphans} vivo${s.orphans === 1 ? '' : 's'} en tmux` : 'detenida', s.url, s.session, String(s.robots), String(s.need), String(s.inbox),
     (s.workspace || '—').replace(os.homedir(), '~')
   ]));
   const w = rows[0].map((_, i) => Math.max(...rows.map(r => r[i].length)));
   for (const r of rows) console.log(r.map((c, i) => c.padEnd(w[i])).join('  ').trimEnd());
+  for (const s of list.filter(x => x.orphans)) {
+    console.log(`\n⚠ ${s.name} está detenida pero tiene ${s.orphans} robot${s.orphans === 1 ? '' : 's'} vivo${s.orphans === 1 ? '' : 's'} en tmux${s.orphansBusy ? `, ${s.orphansBusy} trabajando (gastando cuota sin que lo veas)` : ''}.`);
+    console.log(`  Reconéctalos: office start ${s.name}   ·   o despídelos: office stop ${s.name} --despedir`);
+  }
   const lobby = readJson(LOBBY_FILE);
   if (lobby && alive(lobby.pid)) console.log(`\nEdificio: http://127.0.0.1:${lobby.port}`);
 }
@@ -218,7 +270,7 @@ function lobbyServe(port) {
         if (!sameOrigin(req)) return send(res, 403, { error: 'Origen no permitido' });
         const o = load(m[1]);
         if (!o) return send(res, 404, { error: 'No existe esa oficina' });
-        const r = self(m[2], o.name);
+        const r = self(m[2], o.name, ...(m[2] === 'stop' && url.searchParams.get('despedir') === '1' ? ['--despedir'] : []));
         return send(res, r.status === 0 ? 200 : 500, { output: (r.stdout + r.stderr).trim(), office: summary(o) });
       }
       send(res, 404, { error: 'Ruta desconocida' });
@@ -246,11 +298,14 @@ async function lobby(sub) {
 
 /* ---------- main ---------- */
 const [cmd, ...args] = process.argv.slice(2);
+const BOOL_FLAGS = new Set(['despedir']);
 const flags = {};
 const pos = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
-  if (a.startsWith('--') && a !== '--all') flags[a.slice(2)] = args[i + 1]?.startsWith('--') ? true : args[++i];
+  if (a === '--all') pos.push(a);
+  else if (BOOL_FLAGS.has(a.slice(2))) flags[a.slice(2)] = true;
+  else if (a.startsWith('--')) flags[a.slice(2)] = args[i + 1] === undefined || args[i + 1].startsWith('--') ? true : args[++i];
   else pos.push(a);
 }
 
@@ -258,7 +313,7 @@ switch (cmd) {
   case 'ls': case 'status': case undefined: ls(); break;
   case 'create': await create(pos[0], flags); break;
   case 'start': for (const o of targets(pos)) await start(o); break;
-  case 'stop': for (const o of targets(pos)) await stop(o); break;
+  case 'stop': for (const o of targets(pos)) await stop(o, !!flags.despedir); break;
   case 'restart': for (const o of targets(pos)) { await stop(o); await start(o); } break;
   case 'logs': {
     const o = mustLoad(pos[0]);

@@ -56,7 +56,8 @@ office open finance                                                   # la abre 
 office ls                       # todas las oficinas: estado, URL, sesión tmux, robots, te necesitan, bandeja
 office lobby                    # página del edificio en http://127.0.0.1:4700 (office lobby stop la apaga)
 office start nr | --all         # arrancar una o todas
-office stop nr | --all          # detener (los robots siguen vivos en tmux)
+office stop nr | --all          # pausar: apaga la oficina; los robots siguen vivos en tmux
+office stop nr --despedir       # cerrar de verdad: da de baja a todos sus robots y apaga la oficina
 office restart nr               # tras actualizar el código del daemon
 office logs nr                  # últimas líneas del daemon (office logs nr -f para seguirlo)
 office ctl nr libre "resume el README"           # encargos desde la terminal (ver daemon/ctl.mjs)
@@ -64,7 +65,10 @@ tmux attach -t office-nr                         # ver las consolas de los robot
 ```
 
 - **El edificio** muestra cada oficina con sus robots trabajando, los que te necesitan, los listos y la bandeja, con botones Abrir, Iniciar y Detener, y el botón Nueva oficina. Lee los archivos de cada oficina: no gasta cuota. Solo acepta acciones desde su propia página (otra web abierta en tu navegador no puede crear ni encender oficinas).
-- **Detener no despide a nadie**: los robots siguen en tmux y se reconectan solos al arrancar la oficina otra vez.
+- **Detener no despide a nadie (pausa)**: cada robot es una consola de `claude` en tmux, no un proceso de la oficina, así que sigue vivo y se reconecta solo (estado, escritorio y conversación) al arrancar la oficina otra vez. Sirve para reiniciar tras actualizar el código sin perder trabajo. Ojo: un robot que estaba trabajando **sigue trabajando y gastando cuota** aunque no lo veas; uno terminado o esperando no gasta nada.
+- **Cerrar de verdad**: `office stop nr --despedir` (o **Cerrar y despedir** en el edificio) da de baja a cada robot por la oficina, que primero entrega sus documentos pendientes a la bandeja, y cierra la sesión de tmux. Si la oficina estaba detenida, la inicia un momento para eso. No se puede deshacer: un robot que estaba trabajando se corta.
+- **Robots sin supervisión**: si una oficina está detenida y le quedan robots vivos en tmux, `office ls` lo avisa (y cuántos están trabajando) y el edificio marca la tarjeta en ámbar con **Iniciar y reconectar** o **Despedir robots**.
+- **Reiniciar el Mac** cierra tmux y con él a todos los robots: esos no se recuperan.
 - **Avisos**: en la oficina, el botón *Avisos* activa sonido y notificación del sistema cuando un robot te necesita o lleva 10 min sin actividad. El título de la pestaña siempre muestra cuántos te necesitan.
 - **Después de reiniciar el Mac** los daemons no arrancan solos: `office start --all` (y `office lobby`).
 
@@ -105,6 +109,7 @@ La carpeta de trabajo se toma del `config.json` de esos datos. Desde ahí, la co
 - **«La sesión de tmux … ya la usa otra oficina»**: dos oficinas no pueden compartir sesión tmux; usa otra `--session`.
 - **La oficina no arranca**: `office logs <nombre>` muestra el error.
 - **Un robot no se mueve en la página**: revisa que el daemon esté corriendo (`office ls`) y su consola (`tmux attach -t <sesión>`).
+- **«detenida · N vivos en tmux»** en `office ls`: la oficina está apagada pero sus robots no. `office start <nombre>` los reconecta; `office stop <nombre> --despedir` los da de baja.
 
 ## Modo manual (sin el edificio)
 
