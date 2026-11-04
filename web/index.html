@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oficina de Agentes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" id="favicon" href="data:,">
+</head>
+<body>
+<header class="top">
+  <div class="brand">Oficina de Agentes <button class="office-name" id="office-name" type="button" title="Nombre de esta oficina, para distinguirla de otras en el navegador. Clic para cambiarlo.">ponle nombre</button><span class="tag" id="conn">conectando…</span></div>
+  <div class="meta"><span id="meta"></span><button class="weekchip" id="ws-chip" title="Carpeta de trabajo de los robots. Clic para verla o cambiarla."></button><button class="weekchip" id="week-chip" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button></div>
+</header>
+
+<div class="toolbar">
+  <button class="btn primary" id="btn-new">Nuevo encargo</button>
+  <button class="btn" id="btn-routine">Rutinas</button>
+  <button class="btn" id="btn-inbox">Bandeja</button>
+  <button class="btn" id="btn-usage">Uso y estado Claude</button>
+  <button class="btn" id="btn-dismiss" hidden></button>
+  <div class="stepper" title="Robots trabajando a la vez. Todos gastan de la misma cuota de tu suscripción.">
+    <span>Robots a la vez</span>
+    <button class="btn sm" id="cap-down" aria-label="Bajar tope de robots">−</button>
+    <b id="cap-n">3</b>
+    <button class="btn sm" id="cap-up" aria-label="Subir tope de robots">+</button>
+  </div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--teal)"></i>trabajando</span>
+    <span><i class="dot" style="background:var(--violet)"></i>con subagentes</span>
+    <span><i class="dot" style="background:var(--rose)"></i>te necesita</span>
+    <span><i class="dot" style="background:var(--amber)"></i>terminó</span>
+    <span><i class="dot" style="background:var(--sky)"></i>caminando</span>
+  </div>
+</div>
+
+<div class="office">
+  <div class="map-wrap">
+    <div class="map" id="map">
+      <div class="room r-break" data-room="break" style="left:2%;top:3%;width:52%;height:30%" title="Robots en descanso: haz clic en uno para darle un encargo">
+        <div class="room-h"><span>Sala de descanso</span><small id="break-n"></small></div>
+      </div>
+      <div class="deco sofa"></div><div class="deco sofa s2"></div><div class="deco btable"></div><div class="deco bcoffee"></div>
+      <div class="deco pingpong"><i class="ball"></i></div>
+      <div class="room r-cron" data-room="cron" style="left:56%;top:3%;width:20%;height:30%">
+        <div class="room-h"><span>Rutinas</span><small id="rt-count">0 activas</small></div>
+        <div class="rt-chips" id="rt-chips"></div>
+      </div>
+      <div class="room r-war" data-room="war" style="left:78%;top:3%;width:20%;height:59%">
+        <div class="room-h"><span>Salas de épica</span><small id="sala-count">0 salas</small></div>
+        <div class="rt-chips" id="sala-chips"></div>
+      </div>
+      <div class="room r-open" id="room-open" style="left:2%;top:38%;width:74%;height:59%">
+        <div class="room-h"><span>Escritorios</span><small>cada robot = una consola tmux con claude</small></div>
+      </div>
+      <div class="room r-coord" id="room-coord" data-room="inbox" style="left:78%;top:66%;width:20%;height:31%">
+        <div class="room-h"><span>Tu escritorio</span><small>coordinador</small></div>
+      </div>
+      <div class="inbox" id="inbox" data-room="inbox"><b id="inbox-n">0</b></div>
+      <div class="alarm" id="alarm" data-room="inbox" hidden title="Hay un review con hallazgos críticos sin ver en tu bandeja"><i></i></div>
+      <div class="me" id="me"></div>
+      <div class="door"></div>
+      <div class="win"></div><div class="win"></div><div class="win"></div>
+      <div class="deco plant p1"></div><div class="deco coffee"></div><div class="deco plant p2"></div>
+      <div class="toast" id="toast" hidden></div>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="dialog" hidden>
+  <div class="dlg-card" id="dlg-card" role="dialog" aria-modal="true">
+    <button class="dlg-close" id="dlg-close" aria-label="Cerrar">✕</button>
+    <div class="panel" id="panel" aria-live="polite"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="mh"><b id="modal-title"></b><div class="row"><button id="modal-fmt" hidden>Texto plano</button><button id="modal-reveal">Mostrar en Finder</button><button id="modal-close">Cerrar</button></div></div>
+    <pre id="modal-body"></pre>
+    <div id="modal-md" class="md" hidden></div>
+  </div>
+</div>
+
+<datalist id="skills-list"></datalist>
+<script src="/vendor/marked.min.js"></script>
+<script src="/vendor/purify.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
