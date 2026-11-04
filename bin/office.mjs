@@ -187,18 +187,38 @@ function lobbyServe(port) {
     res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' });
     res.end(typeof body === 'string' ? body : JSON.stringify(body));
   };
+  // Solo desde la propia página del edificio: otra web abierta en tu navegador no puede crear ni encender oficinas.
+  const sameOrigin = req => !req.headers.origin || req.headers.origin === `http://127.0.0.1:${port}` || req.headers.origin === `http://localhost:${port}`;
+  const self = (...a) => spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...a], { encoding: 'utf8', env: process.env });
+  const readBody = req => new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', c => { raw += c; if (raw.length > 1e5) reject(new Error('Cuerpo demasiado grande')); });
+    req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new Error('JSON inválido')); } });
+  });
   http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     try {
+      if (req.method === 'POST' && url.pathname === '/api/offices') {
+        if (!sameOrigin(req)) return send(res, 403, { error: 'Origen no permitido' });
+        // Misma validación que la consola: se delega en «office create» (nombre, carpeta, puerto y sesión libres).
+        const b = await readBody(req);
+        const name = String(b.name || '').trim().toLowerCase();
+        const args = ['create', name, '--workspace', String(b.workspace || '').trim()];
+        if (b.max) args.push('--max', String(Number(b.max) || 3));
+        const c = self(...args);
+        if (c.status !== 0) return send(res, 400, { error: (c.stderr || c.stdout).trim() || 'No se pudo crear la oficina' });
+        let output = c.stdout.trim();
+        if (b.start !== false) { const st = self('start', name); output += '\n' + (st.stdout + st.stderr).trim(); }
+        return send(res, 200, { output, office: summary(load(name)) });
+      }
       if (req.method === 'GET' && url.pathname === '/') return send(res, 200, fs.readFileSync(page, 'utf8'), 'text/html; charset=utf-8');
       if (req.method === 'GET' && url.pathname === '/api/offices') return send(res, 200, { offices: all().map(summary) });
       const m = url.pathname.match(/^\/api\/offices\/([a-z0-9-]+)\/(start|stop)$/);
       if (req.method === 'POST' && m) {
-        // Solo desde la propia página del edificio: otra web abierta en tu navegador no puede encender oficinas.
-        if (req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}` && req.headers.origin !== `http://localhost:${port}`) return send(res, 403, { error: 'Origen no permitido' });
+        if (!sameOrigin(req)) return send(res, 403, { error: 'Origen no permitido' });
         const o = load(m[1]);
         if (!o) return send(res, 404, { error: 'No existe esa oficina' });
-        const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), m[2], o.name], { encoding: 'utf8', env: process.env });
+        const r = self(m[2], o.name);
         return send(res, r.status === 0 ? 200 : 500, { output: (r.stdout + r.stderr).trim(), office: summary(o) });
       }
       send(res, 404, { error: 'Ruta desconocida' });

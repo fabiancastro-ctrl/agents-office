@@ -23,19 +23,32 @@ Para escribir `office` desde cualquier carpeta, agrega un alias a `~/.zshrc` y a
 echo 'alias office="$HOME/nr-fabi/agent-office/bin/office"' >> ~/.zshrc
 ```
 
-En el resto de esta guía, `office` es ese alias (sin alias: `bin/office` desde esta carpeta).
+En el resto de esta guía, `office` es ese alias. **Sin alias** funciona igual: entra a esta carpeta y usa `bin/office` (`cd ~/nr-fabi/agent-office && bin/office ls`), o la ruta completa `~/nr-fabi/agent-office/bin/office` desde cualquier carpeta.
 
-## Primera oficina
+## Crear oficinas
 
 Una **oficina** es un grupo de robots que trabajan sobre una **carpeta de trabajo** (donde se abren las consolas de `claude` y de donde salen las skills del proyecto). Cada oficina tiene su puerto, su sesión de tmux y su carpeta de datos, así una oficina con mucho trabajo no se mezcla con otra. El código es uno solo para todas.
 
+Hay dos formas, equivalentes (el botón usa por dentro el mismo `office create`, con las mismas validaciones):
+
+**Desde el edificio** (`office lobby` y abrir http://127.0.0.1:4700): botón **Nueva oficina** (arriba a la derecha o la tarjeta punteada al final). Pide:
+
+- *Nombre*: minúsculas, números y guiones (`finance`, `soporte`…). Será también su sesión tmux: `office-<nombre>`.
+- *Carpeta de trabajo*: ruta completa o con `~`. Tiene que existir.
+- *Robots a la vez*: tope de robots trabajando simultáneamente (default 3; se cambia después desde la oficina).
+- *Iniciarla al crearla*: si se desmarca, queda registrada y detenida, con su botón **Iniciar**.
+
+Si algo falla (nombre repetido o inválido, carpeta que no existe) el error aparece dentro del formulario y no se crea nada.
+
+**Desde la consola**:
+
 ```sh
-office create nr --workspace ~/nr-fabi    # registra la oficina; elige un puerto y una sesión tmux libres
-office start nr                           # arranca su daemon en segundo plano
-office open nr                            # la abre en el navegador (o entra a la URL que imprime start)
+office create finance --workspace ~/dropicode-Diagrams/dropi-finance   # registra: elige puerto y sesión tmux libres
+office start finance                                                  # arranca su daemon en segundo plano
+office open finance                                                   # la abre en el navegador
 ```
 
-`create` acepta además `--port 4778`, `--session office-nr` y `--max 6` (robots trabajando a la vez; también se cambia desde la página). El nombre de la oficina que ves en la página se cambia con un clic en el encabezado.
+`create` acepta además `--port 4790`, `--session office-fin` y `--max 4`. En los dos casos el nombre visible de la oficina (el que sale en su página y en el edificio) se cambia con un clic en el encabezado de la oficina.
 
 ## Uso diario
 
@@ -50,7 +63,7 @@ office ctl nr libre "resume el README"           # encargos desde la terminal (v
 tmux attach -t office-nr                         # ver las consolas de los robots (Ctrl-b d sale sin cerrarlas)
 ```
 
-- **El edificio** muestra cada oficina con sus robots trabajando, los que te necesitan, los listos y la bandeja, con botones Abrir, Iniciar y Detener. Lee los archivos de cada oficina: no gasta cuota.
+- **El edificio** muestra cada oficina con sus robots trabajando, los que te necesitan, los listos y la bandeja, con botones Abrir, Iniciar y Detener, y el botón Nueva oficina. Lee los archivos de cada oficina: no gasta cuota. Solo acepta acciones desde su propia página (otra web abierta en tu navegador no puede crear ni encender oficinas).
 - **Detener no despide a nadie**: los robots siguen en tmux y se reconectan solos al arrancar la oficina otra vez.
 - **Avisos**: en la oficina, el botón *Avisos* activa sonido y notificación del sistema cuando un robot te necesita o lleva 10 min sin actividad. El título de la pestaña siempre muestra cuántos te necesitan.
 - **Después de reiniciar el Mac** los daemons no arrancan solos: `office start --all` (y `office lobby`).
@@ -136,7 +149,7 @@ Validó, sin interfaz gráfica, que se puede manejar el `claude` de la suscripci
 
 | Archivo | Qué hace |
 |---|---|
-| `bin/office` | El edificio: crea, arranca, detiene y lista oficinas; sirve la página del edificio (`edificio/index.html`). |
+| `bin/office` | El edificio: crea, arranca, detiene y lista oficinas; sirve la página del edificio (`edificio/index.html`) con su API (`GET/POST /api/offices`, `POST /api/offices/<nombre>/start|stop`). |
 | `office-settings.json` (en los datos) | Hooks que se cargan **solo** en los robots (`claude --settings …`). Tus sesiones normales no los ven. Lo genera el daemon. |
 | `hooks/office-hook.sh` | Reenvía el JSON del hook al daemon. Sale sin hacer nada si no existe `OFFICE_ROBOT` o si el daemon no responde. |
 | `daemon/daemon.mjs` | Una oficina: lanza robots en su sesión tmux, sirve la página, sigue transcripts, suma tokens y (opcional) retiene permisos. Sin dependencias. |

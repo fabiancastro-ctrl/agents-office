@@ -57,12 +57,42 @@ button{font:inherit;color:inherit;cursor:pointer}
 .err{color:var(--rose);font-family:var(--mono);font-size:11px;white-space:pre-wrap}
 @media (prefers-reduced-motion:no-preference){.of.need .n.need{animation:pulse 1.4s ease-in-out infinite}}
 @keyframes pulse{50%{background:color-mix(in srgb,var(--rose) 18%,var(--panel-2))}}
+.top .btn{margin-left:12px}
+.of.add{place-items:center;align-content:center;min-height:200px;border-style:dashed;background:transparent;color:var(--muted);cursor:pointer;font:inherit;text-align:center}
+.of.add::before{display:none}
+.of.add:hover{border-color:var(--amber);color:var(--ink)}
+.of.add b{font-family:var(--display);font-size:17px;display:block}
+.of.add span{font-size:28px;line-height:1}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:20px 22px;width:min(520px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(5,8,12,.7)}
+dialog h2{font-family:var(--display);font-size:20px;margin:0 0 4px}
+dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
+.f{display:grid;gap:4px;margin-bottom:12px}
+.f label{font-size:12px;color:var(--muted)}
+.f input[type=text],.f input[type=number]{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;color:var(--ink);font-family:var(--mono);font-size:13px;width:100%}
+.f input:focus{outline:none;border-color:var(--amber)}
+.f small{font-size:11.5px;color:var(--muted)}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px}
+.dlg-acts{display:flex;justify-content:flex-end;gap:8px}
+#nf-err{margin-bottom:12px}
 </style>
 </head>
 <body>
-<header class="top"><h1>Edificio de Oficinas</h1><p>Cada oficina: su carpeta de trabajo, su puerto y su sesión de tmux.</p><span class="sum" id="sum"></span></header>
+<header class="top"><h1>Edificio de Oficinas</h1><p>Cada oficina: su carpeta de trabajo, su puerto y su sesión de tmux.</p><span class="sum" id="sum"></span><button class="btn primary" type="button" data-new>Nueva oficina</button></header>
 <main class="grid" id="grid" aria-live="polite"></main>
-<p class="help">Crear una oficina: <code>bin/office create &lt;nombre&gt; --workspace &lt;carpeta&gt;</code> · listar: <code>bin/office ls</code> · registros: <code>bin/office logs &lt;nombre&gt;</code></p>
+<p class="help">Desde la consola: crear <code>bin/office create &lt;nombre&gt; --workspace &lt;carpeta&gt;</code> · listar <code>bin/office ls</code> · registros <code>bin/office logs &lt;nombre&gt;</code></p>
+<dialog id="nf" aria-labelledby="nf-t">
+  <form id="nf-form" method="dialog" novalidate>
+    <h2 id="nf-t">Nueva oficina</h2>
+    <p>Un grupo de robots que trabaja sobre una carpeta. Se le asigna solo un puerto libre y su propia sesión de tmux.</p>
+    <div class="f"><label for="nf-name">Nombre</label><input type="text" id="nf-name" name="name" required pattern="[a-z0-9][a-z0-9\-]{0,29}" maxlength="30" placeholder="finance" autocomplete="off" spellcheck="false"><small>Minúsculas, números y guiones. Será su sesión tmux: <span id="nf-sess">office-…</span></small></div>
+    <div class="f"><label for="nf-ws">Carpeta de trabajo</label><input type="text" id="nf-ws" name="workspace" required placeholder="~/dropicode-Diagrams/dropi-finance" autocomplete="off" spellcheck="false"><small>Ruta completa o con ~. Ahí se abren las consolas de claude y de ahí salen las skills.</small></div>
+    <div class="f"><label for="nf-max">Robots a la vez</label><input type="number" id="nf-max" name="max" min="1" max="20" value="3"><small>Todos gastan de la misma cuota. Se puede cambiar después desde la oficina.</small></div>
+    <label class="chk"><input type="checkbox" id="nf-start" checked> Iniciarla al crearla</label>
+    <div class="err" id="nf-err" hidden></div>
+    <div class="dlg-acts"><button class="btn" type="button" data-close>Cancelar</button><button class="btn primary" type="submit" id="nf-go">Crear oficina</button></div>
+  </form>
+</dialog>
 <script>
 const HUES = [174, 38, 352, 250, 98, 205, 300, 18];
 const hue = n => { let h = 0; for (const ch of n) h = (h * 31 + ch.codePointAt(0)) >>> 0; return HUES[h % HUES.length]; };
@@ -95,8 +125,8 @@ async function load() {
     const need = on.reduce((n, o) => n + o.need, 0);
     document.title = (need ? `(${need}) ` : '') + 'Edificio de Oficinas';
     document.getElementById('sum').textContent = `${on.length}/${offices.length} corriendo · ${on.reduce((n, o) => n + o.working, 0)} robots trabajando`;
-    document.getElementById('grid').innerHTML = offices.length ? offices.map(card).join('')
-      : '<p class="empty">Todavía no hay oficinas. Crea una con <code>bin/office create &lt;nombre&gt; --workspace &lt;carpeta&gt;</code>.</p>';
+    document.getElementById('grid').innerHTML = offices.map(card).join('')
+      + '<button class="of add" type="button" data-new><span aria-hidden="true">+</span><b>Nueva oficina</b>otra carpeta, su propio puerto y tmux</button>';
   } catch { document.getElementById('sum').textContent = 'sin conexión con el edificio'; }
 }
 document.getElementById('grid').addEventListener('click', async e => {
@@ -109,6 +139,36 @@ document.getElementById('grid').addEventListener('click', async e => {
   } catch (err) { errs[b.dataset.name] = err.message; }
   load();
 });
+// ---- nueva oficina ----
+const nf = document.getElementById('nf'), nfErr = document.getElementById('nf-err');
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-new]')) { nfErr.hidden = true; nf.showModal(); document.getElementById('nf-name').focus(); }
+  if (e.target.closest('[data-close]')) nf.close();
+});
+document.getElementById('nf-name').addEventListener('input', e => {
+  e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  document.getElementById('nf-sess').textContent = 'office-' + (e.target.value || '…');
+});
+document.getElementById('nf-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = document.getElementById('nf-name'), ws = document.getElementById('nf-ws');
+  const bad = !name.checkValidity() ? 'El nombre va en minúsculas, números o guiones (máx. 30) y empieza con letra o número.' : !ws.value.trim() ? 'Indica la carpeta de trabajo.' : '';
+  if (bad) { nfErr.textContent = bad; nfErr.hidden = false; return; }
+  const go = document.getElementById('nf-go');
+  go.disabled = true; go.textContent = 'Creando…'; nfErr.hidden = true;
+  try {
+    const r = await fetch('/api/offices', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
+      name: name.value, workspace: ws.value, max: Number(document.getElementById('nf-max').value) || 3, start: document.getElementById('nf-start').checked
+    })});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'No se pudo crear la oficina');
+    if (/no arrancó|ocupado/.test(j.output || '')) errs[name.value] = j.output;
+    nf.close(); document.getElementById('nf-form').reset(); document.getElementById('nf-sess').textContent = 'office-…';
+    load();
+  } catch (err) { nfErr.textContent = err.message; nfErr.hidden = false; }
+  finally { go.disabled = false; go.textContent = 'Crear oficina'; }
+});
+
 load(); setInterval(load, 5000);
 </script>
 </body>
