@@ -180,7 +180,7 @@ async function stop(o, despedir = false) {
     for (let i = 0; i < 40 && alive(lock.pid); i++) await sleep(125);
     if (alive(lock.pid)) return console.log(`${o.name}: no se detuvo (pid ${lock.pid}).`);
     const left = liveRobots(o).length;
-    console.log(`${o.name}: detenida.${left ? ` Sus ${left} robot${left === 1 ? '' : 's'} siguen en tmux y se reconectan al iniciarla (para despedirlos: office stop ${o.name} --despedir).` : ''}`);
+    console.log(`${o.name}: detenida.${left ? ` ${left === 1 ? 'Su robot sigue' : `Sus ${left} robots siguen`} en tmux y se reconecta${left === 1 ? '' : 'n'} al iniciarla (para despedir${left === 1 ? 'lo' : 'los'}: office stop ${o.name} --despedir).` : ''}`);
   }
   // Cerrar de verdad: también la sesión de tmux (consola de /usage incluida), si es de esta oficina.
   if (despedir && tmux('has-session', '-t', o.session).status === 0) {

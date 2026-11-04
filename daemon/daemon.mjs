@@ -1218,7 +1218,7 @@ function send(res, code, obj) {
   res.end(obj == null ? '' : JSON.stringify(obj));
 }
 
-const STATIC = { '/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css', '/vendor/marked.min.js': 'vendor/marked.min.js', '/vendor/purify.min.js': 'vendor/purify.min.js' };
+const STATIC = { '/': 'index.html', '/app.js': 'app.js', '/robot-art.js': 'robot-art.js', '/style.css': 'style.css', '/vendor/marked.min.js': 'vendor/marked.min.js', '/vendor/purify.min.js': 'vendor/purify.min.js' };
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function robotOr404(res, name) {
