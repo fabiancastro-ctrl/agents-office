@@ -102,6 +102,8 @@ body.t-day .cloud{background:rgba(255,255,255,.55)}
 .win::after{content:"";position:absolute;inset:0;background:linear-gradient(125deg,transparent 40%,rgba(255,255,255,.07) 41%,rgba(255,255,255,.07) 52%,transparent 53%);pointer-events:none} /* reflejo */
 .win svg{position:absolute;left:50%;bottom:-4px;width:72%;transform:translateX(-50%)}
 .win .p{display:none} /* utilería de la oficina (hojas, ondas…): aquí no */
+.win .f{display:none} /* caras: feliz al terminar, «?» cuando te pregunta */
+.win.s-done .f-happy,.win.s-input .f-ask{display:inline} .win.s-done .eye,.win.s-input .eye{opacity:0}
 .win .tag{position:absolute;top:3px;left:50%;transform:translateX(-50%);font:700 8.5px/1 var(--mono);padding:2px 3px;border-radius:2px;white-space:nowrap;z-index:1}
 .on .win{background:linear-gradient(#3a3424,#2a2619)} /* luz encendida, puesto vacío */
 .on .win.r{background:radial-gradient(circle at 50% 70%,#ffe2a0,#e9b864 60%,#b9863e)}

@@ -13,7 +13,7 @@
 <body>
 <header class="top">
   <div class="brand">Oficina de Agentes <button class="office-name" id="office-name" type="button" title="Nombre de esta oficina, para distinguirla de otras en el navegador. Clic para cambiarlo.">ponle nombre</button><span class="tag" id="conn">conectando…</span></div>
-  <div class="meta"><span id="meta"></span><button class="weekchip" id="ws-chip" title="Carpeta de trabajo de los robots. Clic para verla o cambiarla."></button><button class="weekchip" id="week-chip" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button></div>
+  <div class="meta"><span id="meta"></span><button class="weekchip" id="btn-theme" type="button" title="Alterna tema claro y oscuro (el mapa sigue de noche)">tema claro</button><button class="weekchip" id="ws-chip" title="Carpeta de trabajo de los robots. Clic para verla o cambiarla."></button><button class="weekchip" id="week-chip" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button></div>
 </header>
 
 <div class="toolbar">
@@ -21,6 +21,7 @@
   <button class="btn" id="btn-routine">Rutinas</button>
   <button class="btn" id="btn-inbox">Bandeja</button>
   <button class="btn" id="btn-usage">Uso y estado Claude</button>
+  <button class="btn" id="btn-compact" aria-pressed="false" title="Esconde el mapa y deja métricas, tarjetas (en columnas) y línea de tiempo: para el portátil o media pantalla">Vista compacta</button>
   <button class="btn" id="btn-view" aria-pressed="false" title="Alterna entre el plano 2D y la vista en perspectiva 2.5D">Vista 2.5D</button>
   <button class="btn" id="btn-notify" aria-pressed="false" title="Sonido y notificación del sistema cuando un robot te necesita o se queda sin actividad. El título de la pestaña siempre muestra cuántos te necesitan.">Avisos: no</button>
   <button class="btn" id="btn-dismiss" hidden></button>
@@ -33,6 +34,7 @@
 </div>
 
 <div class="kpis" id="kpis" aria-label="Métricas de la oficina"></div>
+<nav class="minimap" id="minimap" aria-label="Mapa resumido de la oficina"></nav>
 
 <div class="office">
  <div class="main-col">

@@ -35,6 +35,11 @@ const PROPS_HAND = `<g class="p p-glass"><line x1="33.5" y1="38" x2="34.5" y2="4
     <g class="p p-pencil"><path d="M33.5 37.5l-3.5 6" stroke="#f3b74f" stroke-width="2" stroke-linecap="round"/><path d="M30 43.5l-.7 1.4" stroke="#2a2418" stroke-width="1.3"/></g>
     <g class="p p-baton"><line x1="33.5" y1="38" x2="33.5" y2="46" stroke="#e8edf4" stroke-width="1.2" stroke-linecap="round"/><circle cx="33.5" cy="46" r="1" fill="#f3b74f"/></g>
     <g class="p p-mug"><rect x="31" y="37" width="5" height="5" rx="1" fill="#e8edf4"/><path d="M36 38.2h1.1a1.4 1.4 0 010 2.8H36" stroke="#e8edf4" stroke-width=".9" fill="none"/><path d="M32.2 35.5q.6-1 0-2M34.4 35.5q.6-1 0-2" stroke="#97a5ba" stroke-width=".6" fill="none"/></g>`;
+// Expresiones (las muestra la hoja de estilos según el estado): concentrado, feliz, pregunta y sudor.
+const FACES = `<g class="f f-focus" stroke="#0f141c" stroke-width="1.4" stroke-linecap="round"><path d="M12.6 10.6l4.2 1.1M27.4 10.6l-4.2 1.1"/></g>
+  <g class="f f-happy" stroke="#bdf7ee" stroke-width="1.5" fill="none" stroke-linecap="round"><path d="M13.6 17q1.9-2.6 3.8 0M22.6 17q1.9-2.6 3.8 0"/></g>
+  <g class="f f-ask" font-family="Arial,sans-serif" font-weight="700" font-size="6.2" fill="#ffd27a" text-anchor="middle"><text x="15.5" y="18.3">?</text><text x="24.5" y="18.3">?</text></g>
+  <g class="f f-sweat"><path d="M32.6 9.5q2.2 3.3 0 4.6q-2.2-1.3 0-4.6z" fill="#9fd3f0" stroke="#5c8fb3" stroke-width=".5"/></g>`;
 function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
   const u = look.uniform;
   return `<svg viewBox="0 0 40 48" aria-hidden="true">
@@ -46,8 +51,13 @@ function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
     ${look.acc === 3 ? BOWTIE : ''}
     ${PROPS_BODY}
     <g class="arm-r"><rect x="31" y="27" width="5" height="11" rx="2.5" fill="${color}"/>${PROPS_HAND}</g>
-    <g class="head">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}"/>${VISORS[look.visor]}${HEAD_ACC[look.acc]}</g>
+    <g class="head">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}"/>${VISORS[look.visor]}${FACES}${HEAD_ACC[look.acc]}</g>
   </svg>`;
+}
+
+// Solo la cabeza (antena, visor y accesorio): avatar pequeño para el chat.
+function robotHead(color, look = {ant: 0, visor: 0, acc: 0}) {
+  return `<svg class="rhead" viewBox="5 -1 30 27" aria-hidden="true">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}"/>${VISORS[look.visor]}${HEAD_ACC[look.acc]}</svg>`;
 }
 
 // Título sugerido para un robot sin título: sale del encargo con reglas simples (sin preguntarle a Claude).

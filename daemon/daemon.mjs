@@ -79,6 +79,7 @@ try {
 } catch { /* sin candado */ }
 fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, port: PORT, session: SESSION }));
 process.on('exit', () => {
+  try { flushConvs(); } catch { /* el daemon se va igual */ }
   try { if (JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8')).pid === process.pid) fs.unlinkSync(LOCK_FILE); } catch { /* ya no está */ }
 });
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => process.exit(0));
@@ -402,7 +403,9 @@ async function restore() {
     if (['walking', 'delegating'].includes(r.state)) r.state = 'working';
     r.timeline = Array.isArray(s.timeline) && s.timeline.length ? s.timeline : [{ at: s.startedAt || now(), s: r.state }];
     robots.set(r.name, r);
-    pumpTranscript(r);
+    loadConv(r);
+    pumpTranscript(r); // desde el inicio para el uso de tokens; al log solo entra lo posterior a lo guardado
+    r.muteUntil = 0;
     r.restoring = false;
     log(r, 'sys', 'Reconectado tras reiniciar la oficina');
     console_(r.name, 'reconectado', r.label);
@@ -420,10 +423,40 @@ function taskNote(p) {
 }
 
 function log(r, kind, text) {
+  if (r.muteUntil && r.linePos <= r.muteUntil) return;
   const entry = { kind, text: String(text ?? ''), at: now() };
   r.log.push(entry);
   if (r.log.length > 400) r.log.splice(0, r.log.length - 400);
+  saveConv(r);
   broadcast({ type: 'log', name: r.name, entry });
+}
+
+// Conversación de cada robot en disco (conversaciones/<robot>.json): al reiniciar la oficina se recupera entera
+// (herramientas, avisos, tus respuestas) en vez de reconstruir solo lo que dijo desde el transcript.
+// `offset` marca hasta dónde del transcript ya está en el log: lo que llegó con la oficina apagada se suma después.
+const CONV_DIR = path.join(RUNS, 'conversaciones');
+const convDirty = new Set();
+let convTimer = null;
+const convFile = name => path.join(CONV_DIR, `${name}.json`);
+function saveConv(r) { convDirty.add(r.name); if (!convTimer) convTimer = setTimeout(flushConvs, 2000); }
+function flushConvs() {
+  clearTimeout(convTimer); convTimer = null;
+  if (!convDirty.size) return;
+  try { fs.mkdirSync(CONV_DIR, { recursive: true }); } catch { return; }
+  for (const name of convDirty) {
+    const r = robots.get(name);
+    if (!r) continue;
+    try { fs.writeFileSync(convFile(name), JSON.stringify({ sessionId: r.sessionId, offset: Math.max(r.offset - Buffer.byteLength(r.partial || ''), r.muteUntil || 0), log: r.log })); } catch { /* disco lleno o sin permisos: se reintenta con el próximo mensaje */ }
+  }
+  convDirty.clear();
+}
+function loadConv(r) {
+  try {
+    const c = JSON.parse(fs.readFileSync(convFile(r.name), 'utf8'));
+    if (c.sessionId && c.sessionId !== r.sessionId) return;
+    if (Array.isArray(c.log)) r.log = c.log.slice(-400);
+    if (Number.isInteger(c.offset)) r.muteUntil = c.offset;
+  } catch { /* sin conversación guardada: se reconstruye desde el transcript */ }
 }
 
 function setState(r, state) {
@@ -572,6 +605,8 @@ async function removeRobot(r, reason) {
   const u = usage(r);
   console_(r.name, 'salio', `${reason} · tokens out=${u.out} cache_read=${u.cacheRead}`);
   robots.delete(r.name);
+  convDirty.delete(r.name);
+  try { fs.unlinkSync(convFile(r.name)); } catch { /* no tenía */ }
   broadcast({ type: 'left', name: r.name });
   saveState();
 }
@@ -587,10 +622,13 @@ function pumpTranscript(r) {
   const buf = Buffer.alloc(size - r.offset);
   fs.readSync(fd, buf, 0, buf.length, r.offset);
   fs.closeSync(fd);
+  let pos = r.offset - Buffer.byteLength(r.partial);
   r.offset = size;
   const lines = (r.partial + buf.toString('utf8')).split('\n');
   r.partial = lines.pop();
   for (const line of lines) {
+    pos += Buffer.byteLength(line) + 1;
+    r.linePos = pos; // log() no repite lo que ya estaba en la conversación guardada
     if (!line.trim()) continue;
     let e;
     try { e = JSON.parse(line); } catch { continue; }

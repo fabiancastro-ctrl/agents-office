@@ -357,11 +357,21 @@ function declutterBubbles() {
 }
 setInterval(() => { if (MAP.querySelectorAll('.bubble:not([hidden])').length > 1) declutterBubbles(); }, 700);
 
+// Urgencia de un robot que te espera: 1 recién (ámbar), 2 desde 5 min (naranja), 3 desde 15 min (rojo).
+const URG_MS = [5 * 60e3, 15 * 60e3];
+function urgency(d) {
+  if (d.state !== 'input') return 0;
+  const w = Date.now() - (Date.parse(d.inputAt || '') || Date.now());
+  return w >= URG_MS[1] ? 3 : w >= URG_MS[0] ? 2 : 1;
+}
+setInterval(() => { for (const a of st.robots.values()) if (a.data.state === 'input' || isStuck(a.data)) paint(a); }, 30000);
+
 function paint(a) {
   const d = a.data;
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
-  a.el.className = ['robot', `st-${shownState}`, shownTool(a), d.critical > 0 && d.state === 'done' ? 'crit' : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
+  const tool = shownTool(a), urg = urgency(d);
+  a.el.className = ['robot', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
   a.sign.textContent = d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
   const text = d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
   if (text && text !== a.lastBubble) {
@@ -376,6 +386,7 @@ function paint(a) {
   if (desk) {
     desk.el.classList.toggle('on', busy);
     desk.el.classList.toggle('deleg', d.state === 'delegating');
+    desk.el.dataset.tool = busy ? tool : '';
     desk.paper.hidden = !pend;
     desk.paper.dataset.count = pend > 1 ? pend : '';
   }
@@ -701,7 +712,23 @@ const prefGet = (k, def) => { try { return localStorage.getItem('office.' + k) ?
 const prefSet = (k, v) => { try { localStorage.setItem('office.' + k, v); } catch { /* sin almacenamiento */ } };
 const cardUi = {hl: null, reply: {}};
 let cardsRaf = 0;
-function scheduleCards() { if (!cardsRaf) cardsRaf = requestAnimationFrame(() => { cardsRaf = 0; renderKpis(); renderCards(); renderTimeline(); checkAlerts(); }); }
+// Mini mapa (solo en vista compacta): una tira con los escritorios y quién está en cada uno, con el color de su
+// estado; los robots de rutinas y salas van aparte. Clic abre el robot.
+function renderMini() {
+  const box = $('#minimap');
+  if (!document.body.classList.contains('compact')) { if (box.innerHTML) box.innerHTML = ''; return; }
+  const at = new Map(), rooms = [];
+  for (const a of st.robots.values()) { const p = a.data.place; if (p?.type === 'desk') at.set(p.idx, a.data); else if (p?.type === 'room') rooms.push(a.data); }
+  const cell = (d, i) => d
+    ? `<button type="button" class="mm-c mm-${d.state}${urgency(d) ? ` urg-${urgency(d)}` : ''}${st.selected === d.name ? ' sel' : ''}" data-mini="${esc(d.name)}" style="--c:${COLORS[d.color % 8]}" title="${esc(`${d.name} · ${stateLabel(d)}${titleOf(d) ? ' · ' + titleOf(d) : ''}`)}">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place))}<span>${esc(d.name)}</span></button>`
+    : `<span class="mm-c mm-free" title="Escritorio ${String(i + 1).padStart(2, '0')} libre"><i>${String(i + 1).padStart(2, '0')}</i></span>`;
+  const n = Math.max(deskEls.length, ...[...at.keys()].map(i => i + 1), 1);
+  const html = `<span class="mm-h">Escritorios</span><div class="mm-row">${Array.from({length: n}, (_, i) => cell(at.get(i), i)).join('')}</div>${rooms.length ? `<span class="mm-h">Rutinas y salas</span><div class="mm-row">${rooms.map(d => cell(d)).join('')}</div>` : ''}`;
+  if (box._html !== html) { box._html = html; box.innerHTML = html; }
+}
+$('#minimap').addEventListener('click', e => { const b = e.target.closest('[data-mini]'); if (b) select(b.dataset.mini); });
+
+function scheduleCards() { if (!cardsRaf) cardsRaf = requestAnimationFrame(() => { cardsRaf = 0; renderKpis(); renderCards(); renderTimeline(); renderMini(); checkAlerts(); }); }
 
 /* ---------- robots sin actividad y avisos ---------- */
 // Un robot ocupado sin eventos (herramientas, subagentes, mensajes) durante STUCK_MS puede estar colgado o en
@@ -717,7 +744,15 @@ st.inboxTemp = prefGet('inboxTemp', '0') === '1';
 const notif = {on: prefGet('notify', '0') === '1', known: null, ctx: null, base: document.title};
 const alertOf = d => d.state === 'input' ? (d.needsPermission || d.hold ? 'perm' : 'ask') : isStuck(d) ? 'stuck' : '';
 const ALERT_TXT = {perm: 'pide permiso', ask: 'tiene una pregunta para ti', stuck: 'lleva más de 10 min sin actividad'};
-function updateTitle(n) { document.title = (n ? `(${n}) ` : '') + notif.base; }
+function updateTitle(n) { document.title = (n ? `(${n}) ` : '') + notif.base; drawFavicon(n); }
+// Ícono de la pestaña: la inicial de la oficina y, si alguien te necesita, un círculo rojo con cuántos.
+const fav = {hue: 174, letter: 'O', n: -1};
+function drawFavicon(n = fav.n) {
+  fav.n = n;
+  const badge = n > 0 ? `<circle cx="23" cy="9" r="9" fill="#ef4352" stroke="#fff" stroke-width="2"/><text x="23" y="13.2" font-family="Arial,sans-serif" font-size="${n > 9 ? 10 : 12.5}" font-weight="700" text-anchor="middle" fill="#fff">${n > 9 ? '9+' : n}</text>` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="hsl(${fav.hue} 60% 48%)"/><text x="${n > 0 ? 11 : 16}" y="${n > 0 ? 26 : 22.5}" font-family="Arial,sans-serif" font-size="19" font-weight="700" text-anchor="middle" fill="#fff">${fav.letter}</text>${badge}</svg>`;
+  $('#favicon').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
 function checkAlerts() {
   const cur = new Map();
   for (const a of st.robots.values()) { const k = alertOf(a.data); if (k) cur.set(a.data.name, k); }
@@ -838,8 +873,8 @@ function cardHtml(a) {
   else if (d.needsPermission) actions = `<button class="btn primary sm" data-card-act="perm-approve">Aprobar</button><button class="btn danger sm" data-card-act="perm-reject">Rechazar</button><button class="btn sm" data-card-act="open">Ver consola</button>`;
   else if (d.state === 'input') actions = `<form class="rc-reply" data-card-reply><input id="reply-${esc(d.name)}" placeholder="Responder a ${esc(d.name)}…" autocomplete="off"><button class="btn primary sm">Enviar</button></form>`;
   else if (d.state === 'done') actions = `<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
-  const stuck = isStuck(d);
-  const cls = ['rc', `g-${g}`, `s-${d.state}`, stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
+  const stuck = isStuck(d), urg = urgency(d);
+  const cls = ['rc', `g-${g}`, `s-${d.state}`, urg ? `urg-${urg}` : '', stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
   return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % 8]}">
     <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</span>
       <div class="rc-t"><b>${esc(d.name)}</b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">📌 ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small></div>${pill}</div>
@@ -940,7 +975,29 @@ function setView(iso) {
   prefSet('mapView', iso ? 'iso' : '2d');
 }
 $('#btn-view').addEventListener('click', () => setView(!$('.map-wrap').classList.contains('iso')));
+// Vista compacta: sin mapa; las tarjetas pasan a columnas (te necesitan · trabajando · listos). El aviso
+// flotante (toast) vive dentro del mapa: en compacta se muda al cuerpo de la página para seguir viéndose.
+function setCompact(on) {
+  document.body.classList.toggle('compact', on);
+  $('#btn-compact').setAttribute('aria-pressed', String(on));
+  $('#btn-compact').textContent = on ? 'Ver mapa' : 'Vista compacta';
+  $('#btn-view').hidden = on;
+  const t = $('#toast'); (on ? document.body : MAP).appendChild(t);
+  prefSet('compact', on ? '1' : '0');
+  $('#minimap')._html = null; scheduleCards();
+  if (!on) layout();
+}
+$('#btn-compact').addEventListener('click', () => setCompact(!document.body.classList.contains('compact')));
 setView(prefGet('mapView', '2d') === 'iso');
+setCompact(prefGet('compact', '0') === '1');
+// Tema claro u oscuro (oscuro por defecto). El mapa queda de noche en los dos: es la ilustración de la oficina.
+function setTheme(light) {
+  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  $('#btn-theme').textContent = light ? 'tema oscuro' : 'tema claro';
+  prefSet('theme', light ? 'light' : 'dark');
+}
+$('#btn-theme').addEventListener('click', () => setTheme(document.documentElement.dataset.theme !== 'light'));
+setTheme(prefGet('theme', 'dark') === 'light');
 
 /* ---------- línea de tiempo ---------- */
 // Una franja por robot: el color dice en qué estado estuvo cada tramo (el daemon guarda el historial) y las
@@ -1368,6 +1425,43 @@ function toChat(root) {
   };
   return walk(root).replace(/[ \t]+\n/g, '\n').replace(/\n (?=\S)/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
+// Un bloque ``` sin lenguaje (o markdown/texto) suele ser un mensaje que el robot ya escribió en formato de chat
+// (*negrita*, •): se pega como texto con formato, no como código. Con lenguaje (sh, go…) es código de verdad.
+const isMsgBlock = pre => !/language-(?!markdown|md|text|txt|plaintext)\w/.test(pre.querySelector('code')?.className || '');
+// Formato de chat → HTML: *negrita*, _cursiva_, ~tachado~, `código`, enlaces y saltos de línea.
+const chatToHtml = t => esc(t)
+  .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+  .replace(/(^|[\s(«"¿¡])\*([^*\n]+?)\*(?=[\s).,;:!?»"]|$)/gm, '$1<b>$2</b>')
+  .replace(/(^|[\s(«"¿¡])_([^_\n]+?)_(?=[\s).,;:!?»"]|$)/gm, '$1<i>$2</i>')
+  .replace(/(^|[\s(«"¿¡])~([^~\n]+?)~(?=[\s).,;:!?»"]|$)/gm, '$1<s>$2</s>')
+  .replace(/https?:\/\/[^\s<)»]+/g, u => `<a href="${u}">${u}</a>`)
+  .replace(/\n/g, '<br>');
+// HTML limpio del bloque (sin clases, colores ni el botón): listas, negritas, código y enlaces de verdad.
+function cleanHtml(root) {
+  const KEEP = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'DEL', 'S', 'CODE', 'PRE', 'UL', 'OL', 'LI', 'A', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD']);
+  const out = n => {
+    if (n.nodeType === 3) return esc(n.nodeValue);
+    if (n.nodeType !== 1 || n.classList.contains('cp-btn')) return '';
+    const inner = [...n.childNodes].map(out).join('');
+    if (!KEEP.has(n.tagName)) return inner;
+    if (n.tagName === 'PRE' && isMsgBlock(n)) return `<p>${chatToHtml(mdToChat((n.querySelector('code') || n).textContent.replace(/\n$/, '')))}</p>`;
+    const t = n.tagName.toLowerCase(), href = t === 'a' ? n.getAttribute('href') : '';
+    return t === 'br' ? '<br>' : `<${t}${href ? ` href="${esc(href)}"` : ''}>${inner}</${t}>`;
+  };
+  return [...root.childNodes].map(out).join('').trim();
+}
+// Se copian dos versiones: HTML (Google Chat, Slack, correo: listas y enlaces reales) y texto en formato de
+// chat (WhatsApp y lo demás). Cada app pega la que entiende.
+async function copyBlock(el) {
+  const text = toChat(el);
+  try {
+    if (window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([cleanHtml(el)], {type: 'text/html'}), 'text/plain': new Blob([text], {type: 'text/plain'})})]);
+      return true;
+    }
+  } catch { /* sin permiso para HTML: queda el texto */ }
+  return copyText(text);
+}
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); return true; } catch {
     const ta = Object.assign(document.createElement('textarea'), {value: t}); document.body.appendChild(ta); ta.select();
@@ -1376,10 +1470,13 @@ async function copyText(t) {
 }
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-copy]'); if (!b) return;
-  if (await copyText(toChat(b.parentElement))) { b.textContent = '✓ Copiado'; b.classList.add('ok'); setTimeout(() => { b.textContent = '📋 Copiar'; b.classList.remove('ok'); }, 1500); }
+  if (await copyBlock(b.parentElement)) { b.textContent = '✓ Copiado'; b.classList.add('ok'); setTimeout(() => { b.textContent = '📋 Copiar'; b.classList.remove('ok'); }, 1500); }
   else toast('No se pudo copiar: selecciona el texto y usa ⌘C');
 });
 
+// Avatar del robot en sus globos: su cabeza con su color y accesorio (en salas, el de cada robot que habla).
+const avColor = name => { const d = st.robots.get(name)?.data; return d ? COLORS[d.color % 8] : COLORS[[...String(name)].reduce((h, c) => h + c.charCodeAt(0), 0) % 8]; };
+const avatarOf = name => name ? robotHead(avColor(name), lookOf(name, st.robots.get(name)?.data.place)) : '';
 function logRow(l, robot) {
   if (l.kind === 'tool') return toolRow(l);
   if (l.kind === 'user' && /^\s*<task-notification>/.test(l.text)) l = {...l, kind: 'bg', text: taskNoteWeb(l.text)};
@@ -1390,7 +1487,8 @@ function logRow(l, robot) {
   const who = l.who || (l.kind === 'agent' && robot) || KIND_LABEL[l.kind] || l.kind;
   const pasted = hasPaste(l.text) ? ' <i class="pasted">pegado</i>' : '', text = unwrapPaste(l.text);
   const body = md ? (l.kind === 'agent' ? copyable(mdHtml(text)) : mdHtml(text)) : '';
-  return `<div class="lg ${l.kind}"><span class="w">${esc(who)} · ${t}${pasted}</span>${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
+  const av = l.kind === 'agent' ? avatarOf(l.kind === 'agent' && !l.who ? robot : l.who) : '';
+  return `<div class="lg ${l.kind}${av ? ' has-av' : ''}"${av && l.who ? ` style="--c:${avColor(l.who)}"` : ''}><span class="w">${av}${esc(who)} · ${t}${pasted}</span>${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
 }
 function renderLog(log, robot) {
   const out = []; let run = [];
@@ -2064,10 +2162,8 @@ function renderOfficeName() {
   const hue = name ? officeHue(name) : 174;
   btn.style.setProperty('--oh', hue);
   notif.base = name ? `${name} · Oficina de Agentes` : 'Oficina de Agentes';
+  fav.hue = hue; fav.letter = esc((name || 'O').trim()[0].toUpperCase());
   updateTitle(notif.known?.size || 0);
-  const letter = esc((name || 'O').trim()[0].toUpperCase());
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="hsl(${hue} 60% 48%)"/><text x="16" y="22.5" font-family="Arial,sans-serif" font-size="19" font-weight="700" text-anchor="middle" fill="#fff">${letter}</text></svg>`;
-  $('#favicon').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 $('#office-name').addEventListener('click', () => {
   const btn = $('#office-name');
