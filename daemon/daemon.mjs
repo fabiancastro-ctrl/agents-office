@@ -129,7 +129,7 @@ function view(r, withLog = false) {
     name: r.name, kind: r.kind, skill: r.skill, label: r.label, color: r.color,
     state: r.state, place: r.place, subs: r.subs, pendingSubs: r.pendingSubs,
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
-    hold: r.hold, docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: r.critical || 0,
+    hold: r.hold, docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '',
     permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null
   };
   if (withLog) v.log = r.log.slice(-150);
@@ -370,7 +370,7 @@ function saveState() {
       robots: [...robots.values()].map(r => ({
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
-        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: r.critical || 0, timeline: r.timeline, lastEventAt: r.lastEventAt
+        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', timeline: r.timeline, lastEventAt: r.lastEventAt
       }))
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
@@ -407,6 +407,16 @@ async function restore() {
     log(r, 'sys', 'Reconectado tras reiniciar la oficina');
     console_(r.name, 'reconectado', r.label);
   }
+}
+
+// «Background command "X" completed (exit code 0)» → «✓ Terminó: X». Se muestra como globo «Aviso de su consola».
+function taskNote(p) {
+  const tag = k => (new RegExp(`<${k}>([\\s\\S]*?)</${k}>`).exec(p) || [])[1]?.trim() || '';
+  const sum = tag('summary'), status = tag('status');
+  const what = /"([^"]+)"/.exec(sum)?.[1];
+  const ok = !/fail|error|killed|exit code [1-9]/i.test(sum + ' ' + status);
+  if (what) return `${ok ? '✓ Terminó' : '✗ Falló'}: ${what}${ok ? '' : ` (${status || sum})`}`;
+  return sum || status || 'Tarea en segundo plano sin detalle';
 }
 
 function log(r, kind, text) {
@@ -472,8 +482,6 @@ function deliver(r) {
     id: crypto.randomBytes(4).toString('hex'), path: d.path, robot: r.name, label: r.label, sessionId: r.sessionId,
     at: now(), status: 'nuevo', updated: !!d.updated, critical: countCriticals(d.path)
   }));
-  // La luz roja del robot refleja lo último que entregó: si un review nuevo ya no trae críticos, se apaga.
-  r.critical = items.reduce((n, it) => n + it.critical, 0);
   for (const d of pending) { d.delivered = true; d.updated = false; }
   // Un documento actualizado reemplaza su entrada anterior en la bandeja.
   for (const it of items) {
@@ -500,7 +508,24 @@ function countCriticals(file) {
   return n;
 }
 
-function emitInbox() { broadcast({ type: 'inbox', inbox }); saveState(); }
+// Críticos del robot = los de sus entregas que siguen sin ver en la bandeja (de este robot, no de uno anterior
+// con el mismo nombre). Al abrir el review, marcarlo visto o archivarlo, el cartel ⚠ del robot se quita;
+// si lo vuelve a entregar corregido, cuenta lo nuevo.
+const cleanTitle = t => String(t ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+
+function criticalOf(r) {
+  const since = Date.parse(r.startedAt || '') || 0;
+  return inbox.reduce((n, i) => n + (i.robot === r.name && i.status !== 'visto' && (Date.parse(i.at) || 0) >= since ? i.critical || 0 : 0), 0);
+}
+
+function emitInbox() {
+  broadcast({ type: 'inbox', inbox });
+  for (const r of robots.values()) {
+    const c = criticalOf(r);
+    if (c !== r.critShown) { r.critShown = c; broadcast({ type: 'robot', robot: view(r) }); }
+  }
+  saveState();
+}
 
 // Que cuenta como documento: Write de estos tipos; Edit solo en Markdown (para no contar cada archivo de codigo).
 const DOC_WRITE = /\.(md|markdown|html?|txt|csv|json|ya?ml|pdf|png|jpe?g|gif|svg|drawio|mmd|docx|xlsx|pptx)$/i;
@@ -653,6 +678,8 @@ async function onHook(name, body) {
     case 'UserPromptSubmit': {
       const p = String(body.prompt ?? '');
       if (p.startsWith('<agent-message')) log(r, 'sub', 'Un subagente entregó su resultado');
+      // Claude Code le avisa al robot cuando termina algo que dejó en segundo plano: no lo escribiste tú.
+      else if (/^\s*<task-notification>/.test(p)) log(r, 'bg', taskNote(p));
       else log(r, 'user', p);
       r.needsPermission = false;
       setState(r, 'working');
@@ -786,7 +813,7 @@ async function guardSession() {
   await run('tmux', ['set-option', '-t', SESSION, '@office_port', String(PORT)]).catch(() => {});
 }
 
-async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, leaveWhenDone, attachments, routine, sala: salaId }) {
+async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, title, leaveWhenDone, attachments, routine, sala: salaId }) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
   const active = [...robots.values()].filter(x => x.state !== 'done');
   if (active.length >= maxRobots) throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
@@ -820,7 +847,7 @@ async function launch({ kind, skill, args, text, permissionMode, name, origin, l
   await ensureSession();
   const sessionId = crypto.randomUUID();
   const r = {
-    name, kind, skill, label, prompt, color: colorSeq++ % 8, place, permissionMode: permissionMode || '', leaveWhenDone: !!leaveWhenDone,
+    name, kind, skill, label, title: cleanTitle(title), prompt, color: colorSeq++ % 8, place, permissionMode: permissionMode || '', leaveWhenDone: !!leaveWhenDone,
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
     sessionId, transcript: null, offset: 0, partial: '', msgUsage: new Map(), startedAt: now(),
     alive: true, state: 'walking', timeline: [{ at: now(), s: 'walking' }], subs: [], pendingSubs: 0, bubble: '', activity: '',
@@ -1372,6 +1399,12 @@ const server = http.createServer(async (req, res) => {
         const { decision } = await readBody(req);
         await pressKey(r, decision === 'approve' ? 'approve' : 'reject');
         return send(res, 200, { ok: true });
+      }
+      // Título que le pones tú al robot («Tareas de QA», «Revisando wallet#32 Ramiro»); vacío lo quita.
+      if (req.method === 'POST' && action === 'title') {
+        r.title = cleanTitle((await readBody(req)).title);
+        emit(r);
+        return send(res, 200, { ok: true, title: r.title });
       }
       if (req.method === 'GET' && action === 'pane') return send(res, 200, { text: await pane(r) });
       if (req.method === 'POST' && action === 'console') { await openConsole(r); return send(res, 200, { ok: true }); }

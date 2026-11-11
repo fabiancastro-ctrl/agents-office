@@ -354,7 +354,7 @@ function windows(o) {
     const r = list[i];
     if (!r) return '<span class="win" data-tip="|puesto libre"></span>';
     const tag = r.state === 'input' ? '<i class="tag ask">?</i>' : r.state === 'done' ? (r.critical ? `<i class="tag crit">⚠${r.critical}</i>` : '<i class="tag done">LISTO</i>') : '';
-    return `<span class="win r s-${esc(r.state)}" data-tip="${esc(r.name)}|${esc(STATE[r.state] || r.state)}">${tag}${robotArt(r)}</span>`;
+    return `<span class="win r s-${esc(r.state)}" data-tip="${esc(r.name)}|${esc(STATE[r.state] || r.state)}${r.title ? " · 📌 " + esc(r.title) : ""}">${tag}${robotArt(r)}</span>`;
   }).join('');
 }
 function floorInner(o, idx) {

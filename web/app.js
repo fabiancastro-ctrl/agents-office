@@ -9,7 +9,12 @@ const STATE_LABEL = {idle: 'en espera', walking: 'llegando', working: 'trabajand
 // Un robot de tarea libre que terminó sigue vivo esperando tu siguiente orden; uno de skill espera que lo despidas.
 const stateLabel = d => d.state === 'done' ? (d.kind === 'libre' ? 'esperando orden' : 'terminó') : STATE_LABEL[d.state] || d.state;
 // Resúmenes de una línea (burbuja, tarjeta): sin símbolos de Markdown. La conversación completa sí se formatea.
-const plainMd = s => String(s ?? '')
+// Claude Code envuelve lo que pegas en su consola en <pasted_content id="…">…</pasted_content id="…">. No es HTML
+// válido: el Markdown mostraba el cierre como texto y se comía el formato del primer párrafo. Se quita la envoltura.
+const PASTE_TAG = /<\\?\/?pasted_content(?:\s+id=["']?[\w-]*["']?)?\s*>/gi;
+const hasPaste = s => PASTE_TAG.test(String(s ?? '')) && !(PASTE_TAG.lastIndex = 0);
+const unwrapPaste = s => String(s ?? '').replace(PASTE_TAG, '').replace(/^\s*\n/, '').replace(/\n\s*$/, '');
+const plainMd = s => unwrapPaste(s)
   .replace(/```[\w-]*\n?/g, '').replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
   .replace(/(\*\*|__)(.+?)\1/g, '$2').replace(/(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/g, '$1$2')
   .replace(/`+/g, '').replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, '').replace(/\s*\n+\s*/g, ' ').replace(/\*\*/g, '').trim();
@@ -541,7 +546,7 @@ function connect() {
     else if (m.type === 'routines') { st.routines = m.routines; renderRoutineChips(); renderMeta(); if (st.selected === '@cron') schedulePanel(); }
     else if (m.type === 'log') {
       const a = st.robots.get(m.name);
-      if (a) { a.log.push(m.entry); if (st.selected === m.name) appendLog(m.entry); }
+      if (a) { a.log.push(m.entry); if (st.selected === m.name) appendLog(m.entry, a); }
     } else if (m.type === 'deliver') onDeliver(m.name, m.items);
     else if (m.type === 'inbox') { st.inbox = m.inbox; renderInboxBadge(); renderMeta(); if (st.selected === '@inbox') schedulePanel(); }
     else if (m.type === 'left') onLeft(m.name);
@@ -798,7 +803,7 @@ function cardHtml(a) {
   const cls = ['rc', `g-${g}`, `s-${d.state}`, stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
   return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % 8]}">
     <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</span>
-      <div class="rc-t"><b>${esc(d.name)}</b><small title="${esc(d.label)}">${esc(d.label)}</small></div>${pill}</div>
+      <div class="rc-t"><b>${esc(d.name)}</b>${d.title ? `<span class="rc-title" title="${esc(d.title)}">📌 ${esc(d.title)}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small></div>${pill}</div>
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
     <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
       ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">⏸ sin actividad ${fmtDur(idleMs(d))}</span>` : ''}
@@ -1245,7 +1250,7 @@ function morph(from, to) {
   while (cur) { const next = cur.nextSibling; cur.remove(); cur = next; }
 }
 
-const KIND_LABEL = {user: 'Tú', agent: 'Robot', tool: 'Herramienta', sub: 'Subagente', sys: 'Oficina', doc: 'Documento'};
+const KIND_LABEL = {user: 'Tú', agent: 'Robot', tool: 'Herramienta', sub: 'Subagente', sys: 'Oficina', doc: 'Documento', bg: 'Aviso de su consola'};
 // Lo que dicen los robots (y tú) viene en Markdown: se muestra con formato (marked + DOMPurify, servidos localmente).
 // Herramientas, avisos de la oficina y documentos siguen en texto plano. Se cachea porque el panel se repinta seguido.
 const MD_KINDS = new Set(['agent', 'user', 'sub']);
@@ -1261,17 +1266,101 @@ function mdHtml(text) {
   mdCache.set(text, h);
   return h;
 }
-function logRow(l) {
-  const t = new Date(l.at).toTimeString().slice(0, 5);
-  const md = MD_KINDS.has(l.kind) && window.marked && window.DOMPurify;
-  return `<div class="lg ${l.kind}"><span class="w">${esc(l.who || KIND_LABEL[l.kind] || l.kind)} · ${t}</span>${md ? `<div class="x md-chat">${mdHtml(l.text)}</div>` : `<span class="x">${esc(l.text)}</span>`}</div>`;
+// Herramientas: «agrupadas» (las seguidas en una línea plegable), «todas» (una fila cada una) u «ocultas».
+const TOOL_MODES = [['group', 'Agrupadas'], ['all', 'Todas'], ['hide', 'Ocultas']];
+st.toolMode = TOOL_MODES.some(([k]) => k === prefGet('toolMode', 'group')) ? prefGet('toolMode', 'group') : 'group';
+const openTools = new Set(); // grupos que desplegaste (sobreviven a los repintados del panel)
+const toolSplit = t => { const m = /^([\w.-]+)(?::\s*([\s\S]*))?$/.exec(String(t)); return m ? [m[1], m[2] || ''] : ['', String(t)]; };
+function toolRow(l) {
+  const [n, rest] = toolSplit(l.text);
+  return `<div class="lg tool"><span class="tn">${esc(n || 'Herramienta')}</span><span class="x" title="${esc(l.text)}">${esc(rest)}</span><time>${hhmm(l.at)}</time></div>`;
 }
-function appendLog(entry) {
+function toolGroup(run) {
+  const k = run[0].at + '|' + run[0].text.slice(0, 40);
+  const counts = new Map();
+  for (const l of run) { const n = toolSplit(l.text)[0] || 'otra'; counts.set(n, (counts.get(n) || 0) + 1); }
+  const names = [...counts].map(([n, c]) => c > 1 ? `${n} ×${c}` : n).join(' · ');
+  const a = hhmm(run[0].at), b = hhmm(run[run.length - 1].at);
+  return `<details class="lg tg" data-k="${esc(k)}"${openTools.has(k) ? ' open' : ''}><summary><span class="tg-n">${run.length} herramienta${run.length === 1 ? '' : 's'}</span><span class="tg-l">${esc(names)}</span><time>${a === b ? a : `${a}–${b}`}</time></summary><div class="tg-b">${run.map(toolRow).join('')}</div></details>`;
+}
+const TURN_SEP = '<div class="turn-sep" aria-hidden="true"></div>';
+// Avisos de tareas en segundo plano: Claude Code se los manda al robot como si fueran tuyos. Los viejos (antes
+// del arreglo del daemon) llegaron como «user» con el XML crudo: se convierten aquí al mismo globo.
+function taskNoteWeb(p) {
+  const sum = /<summary>([\s\S]*?)<\/summary>/.exec(p)?.[1]?.trim() || '', status = /<status>([\s\S]*?)<\/status>/.exec(p)?.[1]?.trim() || '';
+  const what = /"([^"]+)"/.exec(sum)?.[1], ok = !/fail|error|killed|exit code [1-9]/i.test(sum + ' ' + status);
+  return what ? `${ok ? '✓ Terminó' : '✗ Falló'}: ${what}${ok ? '' : ` (${status || sum})`}` : sum || status || 'Tarea en segundo plano sin detalle';
+}
+function logRow(l, robot) {
+  if (l.kind === 'tool') return toolRow(l);
+  if (l.kind === 'user' && /^\s*<task-notification>/.test(l.text)) l = {...l, kind: 'bg', text: taskNoteWeb(l.text)};
+  const t = hhmm(l.at);
+  if (l.kind === 'bg') return `<div class="lg bg${/^✗/.test(l.text) ? ' bad' : ''}"><span class="w">Aviso de su consola · tarea en segundo plano · ${t}</span><span class="x">${esc(l.text)}</span></div>`;
+  if (l.kind === 'sys') return `<div class="lg sys"><span class="x">${esc(l.text)}</span><time>${t}</time></div>`;
+  const md = MD_KINDS.has(l.kind) && window.marked && window.DOMPurify;
+  const who = l.who || (l.kind === 'agent' && robot) || KIND_LABEL[l.kind] || l.kind;
+  const pasted = hasPaste(l.text) ? ' <i class="pasted">pegado</i>' : '', text = unwrapPaste(l.text);
+  return `<div class="lg ${l.kind}"><span class="w">${esc(who)} · ${t}${pasted}</span>${md ? `<div class="x md-chat">${mdHtml(text)}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
+}
+function renderLog(log, robot) {
+  const out = []; let run = [];
+  const flush = () => { if (run.length) out.push(toolGroup(run)); run = []; };
+  for (const l of log) {
+    if (l.kind === 'tool') {
+      if (st.toolMode === 'group') run.push(l);
+      else if (st.toolMode === 'all') out.push(toolRow(l));
+      continue;
+    }
+    flush();
+    if (l.kind === 'user' && out.length && !/^\s*<task-notification>/.test(l.text)) out.push(TURN_SEP);
+    out.push(logRow(l, robot));
+  }
+  flush();
+  return out.join('');
+}
+function appendLog(entry, a) {
   const lg = $('#log', PANEL); if (!lg) return;
   const stick = lg.scrollTop + lg.clientHeight >= lg.scrollHeight - 30;
-  lg.insertAdjacentHTML('beforeend', logRow(entry));
+  if (entry.kind === 'tool' && st.toolMode === 'hide') return;
+  if (entry.kind === 'tool' && st.toolMode === 'group') {
+    let i = a.log.length; while (i > 0 && a.log[i - 1].kind === 'tool') i--;
+    const run = a.log.slice(i), last = lg.lastElementChild;
+    if (run.length > 1 && last?.classList.contains('tg')) last.outerHTML = toolGroup(run);
+    else lg.insertAdjacentHTML('beforeend', toolGroup(run));
+  } else {
+    if (entry.kind === 'user' && lg.children.length && !/^\s*<task-notification>/.test(entry.text)) lg.insertAdjacentHTML('beforeend', TURN_SEP);
+    lg.insertAdjacentHTML('beforeend', logRow(entry, a.data.name));
+  }
   if (stick) lg.scrollTop = lg.scrollHeight;
 }
+PANEL.addEventListener('toggle', e => { const k = e.target.dataset?.k; if (k) e.target.open ? openTools.add(k) : openTools.delete(k); }, true);
+PANEL.addEventListener('click', e => {
+  const b = e.target.closest('[data-toolmode]'); if (!b) return;
+  st.toolMode = b.dataset.toolmode; prefSet('toolMode', st.toolMode);
+  const a = st.robots.get(st.selected), lg = $('#log', PANEL);
+  if (a && lg) { lg.innerHTML = renderLog(a.log, a.data.name); lg.scrollTop = lg.scrollHeight; }
+  renderPanel();
+});
+
+// Título del robot: lo pones tú para saber de un vistazo qué hace. Se edita en la cabecera de su panel.
+const titleUi = {editing: null};
+function titleEditor(d) {
+  if (titleUi.editing === d.name) return `<form class="rt-title edit" id="title-form" data-robot="${esc(d.name)}"><input id="title-in" maxlength="60" value="${esc(d.title || '')}" placeholder="Ej.: Tareas de QA · Revisando wallet#32 Ramiro" autocomplete="off"><button class="btn primary sm">Guardar</button><button type="button" class="btn sm" data-title="cancel">Cancelar</button></form>`;
+  return `<div class="rt-title" id="title-view">${d.title ? `<b>📌 ${esc(d.title)}</b>` : '<span class="muted">Sin título</span>'}<button type="button" class="btn sm ghost" data-title="edit" title="Ponle un título para saber qué hace">${d.title ? '✎ Cambiar' : '✎ Ponle un título'}</button></div>`;
+}
+PANEL.addEventListener('click', e => {
+  const b = e.target.closest('[data-title]'); if (!b) return;
+  titleUi.editing = b.dataset.title === 'edit' ? st.selected : null;
+  renderPanel();
+  if (titleUi.editing) { const i = $('#title-in'); i?.focus(); i?.select(); }
+});
+PANEL.addEventListener('keydown', e => { if (e.key === 'Escape' && e.target.id === 'title-in') { e.stopPropagation(); e.preventDefault(); titleUi.editing = null; renderPanel(); } }, true);
+PANEL.addEventListener('submit', async e => {
+  if (e.target.id !== 'title-form') return;
+  e.preventDefault();
+  const name = e.target.dataset.robot, title = $('#title-in').value;
+  try { await api('POST', `/api/robots/${name}/title`, {title}); titleUi.editing = null; renderPanel(); } catch { /* toast ya mostrado */ }
+});
 
 function robotPanel(a) {
   const d = a.data;
@@ -1281,15 +1370,15 @@ function robotPanel(a) {
   const subRow = s => `<div class="sub-row${s.status === 'done' ? ' ok' : ''}" title="${esc(s.desc || s.activity || '')}"><i></i><b>${esc(shortType(s.type))}</b><span>${s.status === 'done' ? 'listo' : esc(s.activity || 'trabajando')}</span></div>`;
   const subs = d.subs.length ? `<div class="rp-block"><h4>Subagentes <small>${running.length ? `${running.length} trabajando` : ''}${running.length && finished.length ? ' · ' : ''}${finished.length ? `${finished.length} listo${finished.length === 1 ? '' : 's'}` : ''}</small></h4><div class="subs-list" id="subs-list">${[...running, ...finished].map(subRow).join('')}</div></div>` : '';
   let alert = '';
-  if (d.hold) alert = `<div class="alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
-  else if (d.needsPermission) alert = `<div class="alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
+  if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
+  else if (d.needsPermission) alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
-    <div class="ph"><div class="ph-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3><div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
+    <div class="ph"><div class="ph-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}<div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
     ${alert}
-    <div class="rp-grid">
+    <div class="rp-grid" id="rp-grid">
       <div class="rp-col">
-        <h4>Conversación</h4>
-        <div class="log" id="log">${a.log.map(logRow).join('')}</div>
+        <div class="log-h"><h4>Conversación</h4><span class="tmode" role="group" aria-label="Herramientas en la conversación"><small>Herramientas</small>${TOOL_MODES.map(([k, l]) => `<button type="button" class="${st.toolMode === k ? 'on' : ''}" data-toolmode="${k}" aria-pressed="${st.toolMode === k}">${l}</button>`).join('')}</span></div>
+        <div class="log" id="log" style="--c:${COLORS[d.color % 8]}">${renderLog(a.log, d.name)}</div>
         <form class="chat" id="chat-form">
           <textarea id="chat-in" rows="2" placeholder="Escríbele a ${esc(d.name)}… Enter envía, Shift+Enter salto de línea. Pega (Ctrl+V) o arrastra archivos."></textarea><button class="btn primary">Enviar</button>
           <div class="tray" data-tray="${esc(d.name)}">${trayHtml(d.name)}</div>
@@ -1325,6 +1414,7 @@ function newPanel() {
         <div class="field"><label for="job-name">Nombre del robot (opcional)</label>
           <div class="name-row"><input id="job-name" placeholder="se asigna solo" maxlength="20" autocomplete="off" spellcheck="false"><button type="button" class="btn sm" id="job-name-rand" title="Nombre aleatorio: 6 letras y 2 números">Aleatorio</button></div>
         </div>
+        <div class="field full"><label for="job-title">Título (opcional, para saber qué hace)</label><input id="job-title" maxlength="60" placeholder="Ej.: Tareas de QA · Revisando wallet#32 Ramiro" autocomplete="off"></div>
         <div class="field" id="f-skill"><label for="job-skill">Skill</label><input id="job-skill" list="skills-list" placeholder="review-deep" autocomplete="off"></div>
         <div class="field span2" id="f-args"><label for="job-args">Argumentos</label><input id="job-args" placeholder="BFF/bff-integrator origin/production origin/mi-rama --dry-run"></div>
         <div class="field full" id="f-text" hidden><label for="job-text">Qué necesitas</label><textarea id="job-text" rows="5" placeholder="Ej.: revisa por qué falla el pipeline de dropi-atom y explícame la causa sin tocar código"></textarea></div>
@@ -1504,8 +1594,12 @@ function renderPanel() {
     const tpl = document.createElement('template'); tpl.innerHTML = html;
     PANEL._html = html;
     const sl = $('#sala-log', PANEL), slBottom = sl && sl.scrollTop + sl.clientHeight >= sl.scrollHeight - 30;
+    // La conversación se queda abajo aunque aparezca o se vaya el aviso de permiso (si estabas leyendo arriba, no se mueve).
+    const lg0 = $('#log', PANEL), lgTop = lg0?.scrollTop, lgBottom = lg0 && lg0.scrollTop + lg0.clientHeight >= lg0.scrollHeight - 30;
     morph(PANEL, tpl.content);
     if (sl && slBottom) sl.scrollTop = sl.scrollHeight;
+    const lg1 = $('#log', PANEL);
+    if (lg1 && (lgBottom || lg1 !== lg0)) lg1.scrollTop = lgBottom || lg0 == null ? lg1.scrollHeight : lgTop;
     tickRoutines(); syncKind();
     return;
   }
@@ -1586,6 +1680,7 @@ function renderHover() {
   const d = a.data;
   const label = stateLabel(d);
   hover.el.innerHTML = `<div class="hc-top"><b>${esc(d.name)}</b><span class="pill p-${d.state}">${esc(label)}</span></div>
+    ${d.title ? `<div class="hc-title">📌 ${esc(d.title)}</div>` : ''}
     <div class="hc-act">${esc(hoverActivity(d).slice(0, 120))}</div>
     ${d.state === 'input' && d.inputAt ? `<div class="hc-wait">Esperando tu respuesta hace <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></div>` : ''}
     <div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
@@ -1594,6 +1689,18 @@ function renderHover() {
   hover.el.style.top = py(a.pos.y);
   hover.el.classList.toggle('flip', a.pos.y < 30);
   hover.el.hidden = false;
+  clampHover();
+}
+// Robots del borde: la tarjeta se corre hacia adentro para no quedar cortada por el borde del mapa
+// (la flecha sigue apuntando al robot). En la vista 2.5D no se toca: allí la rota la perspectiva.
+function clampHover() {
+  const el = hover.el;
+  el.style.setProperty('--hx', '0px');
+  if (MAP.closest('.map-wrap')?.classList.contains('iso')) return;
+  const r = el.getBoundingClientRect(), m = MAP.getBoundingClientRect(), w = MAP.parentElement.getBoundingClientRect();
+  const left = Math.max(m.left, w.left) + 6, right = Math.min(m.right, w.right) - 6;
+  const dx = r.left < left ? left - r.left : r.right > right ? right - r.right : 0;
+  if (dx) el.style.setProperty('--hx', Math.round(dx) + 'px');
 }
 
 async function refreshHoverLine() {
@@ -1683,8 +1790,8 @@ PANEL.addEventListener('submit', async e => {
     const libre = $('#kind-libre').checked;
     const attachments = attList('job').map(f => f.path);
     const body = libre
-      ? {kind: 'libre', text: $('#job-text').value, permissionMode: $('#job-mode').value, name: $('#job-name').value.trim() || undefined, attachments}
-      : {kind: 'skill', skill: $('#job-skill').value, args: $('#job-args').value, permissionMode: $('#job-mode').value, name: $('#job-name').value.trim() || undefined, attachments};
+      ? {kind: 'libre', text: $('#job-text').value, permissionMode: $('#job-mode').value, name: $('#job-name').value.trim() || undefined, title: $('#job-title').value.trim() || undefined, attachments}
+      : {kind: 'skill', skill: $('#job-skill').value, args: $('#job-args').value, permissionMode: $('#job-mode').value, name: $('#job-name').value.trim() || undefined, title: $('#job-title').value.trim() || undefined, attachments};
     body.origin = 'Lanzado por ti desde «Nuevo encargo»';
     try {
       const {name} = await api('POST', '/api/robots', body);
