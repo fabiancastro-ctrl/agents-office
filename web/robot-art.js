@@ -40,9 +40,8 @@ const OUT = 'stroke="rgba(8,12,20,.45)" stroke-width=".9"';
 const SHADE_HEAD = `<path d="M8 17.5h24V19a5 5 0 0 1-5 5H13a5 5 0 0 1-5-5z" fill="#0b1018" opacity=".22"/><rect x="10.5" y="9.4" width="11" height="2.1" rx="1.05" fill="#fff" opacity=".38"/><circle cx="28.6" cy="10.6" r=".9" fill="#fff" opacity=".35"/>`;
 const SHADE_BODY = `<path d="M10 34h20v2a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4z" fill="#0b1018" opacity=".22"/><rect x="12" y="27.3" width="9" height="1.6" rx=".8" fill="#fff" opacity=".32"/>`;
 const VISOR_GLARE = `<path d="M12.4 13.4h4.2" stroke="#fff" stroke-width=".9" stroke-linecap="round" opacity=".28"/>`;
-// Expresiones (las muestra la hoja de estilos según el estado): concentrado, feliz, pregunta y sudor.
-const FACES = `<g class="f f-focus" stroke="#0f141c" stroke-width="1.4" stroke-linecap="round"><path d="M12.6 10.6l4.2 1.1M27.4 10.6l-4.2 1.1"/></g>
-  <g class="f f-happy" stroke="#bdf7ee" stroke-width="1.5" fill="none" stroke-linecap="round"><path d="M13.6 17q1.9-2.6 3.8 0M22.6 17q1.9-2.6 3.8 0"/></g>
+// Expresiones (las muestra la hoja de estilos según el estado): feliz, pregunta y sudor.
+const FACES = `<g class="f f-happy" stroke="#bdf7ee" stroke-width="1.5" fill="none" stroke-linecap="round"><path d="M13.6 17q1.9-2.6 3.8 0M22.6 17q1.9-2.6 3.8 0"/></g>
   <g class="f f-ask" font-family="Arial,sans-serif" font-weight="700" font-size="6.2" fill="#ffd27a" text-anchor="middle"><text x="15.5" y="18.3">?</text><text x="24.5" y="18.3">?</text></g>
   <g class="f f-sweat"><path d="M32.6 9.5q2.2 3.3 0 4.6q-2.2-1.3 0-4.6z" fill="#9fd3f0" stroke="#5c8fb3" stroke-width=".5"/></g>`;
 function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {

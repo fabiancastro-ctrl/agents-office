@@ -785,7 +785,8 @@ kbd{font-family:var(--mono);font-size:11px;background:#1d2533;border:1px solid v
 .desk.on[data-tool=t-agent] .m2{background-color:#151229}
 /* caras: la expresión del visor sigue el estado del robot */
 .robot .f{display:none}
-.robot.st-working .f-focus,.robot.st-delegating .f-focus{display:inline}
+/* trabajando: sin cejas (se leían como enojo); los ojos miran hacia arriba, a su monitor */
+.robot.st-working .eye,.robot.st-delegating .eye{translate:0 -1.2px}
 .robot.st-done .f-happy{display:inline} .robot.st-done .eye{opacity:0}
 .robot.st-input .f-ask{display:inline} .robot.st-input .eye{opacity:0}
 .robot.stuck .f-sweat,.robot.crit .f-sweat{display:inline}
