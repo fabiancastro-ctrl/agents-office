@@ -337,7 +337,7 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 .panel h4{margin:2px 0 0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
 .panel p{margin:0;color:var(--muted)}
 .ph{display:flex;gap:10px;align-items:center}
-.ph-av{width:34px;flex:none} .ph-av svg{width:34px;height:41px}
+.ph-av{width:44px;flex:none;align-self:flex-start;padding-top:2px} .ph-av svg{width:44px;height:40px;overflow:visible}
 .sub-h{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-word}
 .pill{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;font-weight:600;align-self:flex-start}
 .p-idle{background:#2e3a4d;color:var(--muted)} .p-walking{background:#24405e;color:#cfe3fb} .p-working{background:#1f4a45;color:#c9f3ec}

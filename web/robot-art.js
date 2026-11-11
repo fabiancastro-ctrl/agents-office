@@ -35,6 +35,11 @@ const PROPS_HAND = `<g class="p p-glass"><line x1="33.5" y1="38" x2="34.5" y2="4
     <g class="p p-pencil"><path d="M33.5 37.5l-3.5 6" stroke="#f3b74f" stroke-width="2" stroke-linecap="round"/><path d="M30 43.5l-.7 1.4" stroke="#2a2418" stroke-width="1.3"/></g>
     <g class="p p-baton"><line x1="33.5" y1="38" x2="33.5" y2="46" stroke="#e8edf4" stroke-width="1.2" stroke-linecap="round"/><circle cx="33.5" cy="46" r="1" fill="#f3b74f"/></g>
     <g class="p p-mug"><rect x="31" y="37" width="5" height="5" rx="1" fill="#e8edf4"/><path d="M36 38.2h1.1a1.4 1.4 0 010 2.8H36" stroke="#e8edf4" stroke-width=".9" fill="none"/><path d="M32.2 35.5q.6-1 0-2M34.4 35.5q.6-1 0-2" stroke="#97a5ba" stroke-width=".6" fill="none"/></g>`;
+// Volumen: brillo arriba-izquierda, sombra abajo y contorno suave sobre cabeza, cuerpo, brazos y piernas.
+const OUT = 'stroke="rgba(8,12,20,.45)" stroke-width=".9"';
+const SHADE_HEAD = `<path d="M8 17.5h24V19a5 5 0 0 1-5 5H13a5 5 0 0 1-5-5z" fill="#0b1018" opacity=".22"/><rect x="10.5" y="9.4" width="11" height="2.1" rx="1.05" fill="#fff" opacity=".38"/><circle cx="28.6" cy="10.6" r=".9" fill="#fff" opacity=".35"/>`;
+const SHADE_BODY = `<path d="M10 34h20v2a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4z" fill="#0b1018" opacity=".22"/><rect x="12" y="27.3" width="9" height="1.6" rx=".8" fill="#fff" opacity=".32"/>`;
+const VISOR_GLARE = `<path d="M12.4 13.4h4.2" stroke="#fff" stroke-width=".9" stroke-linecap="round" opacity=".28"/>`;
 // Expresiones (las muestra la hoja de estilos según el estado): concentrado, feliz, pregunta y sudor.
 const FACES = `<g class="f f-focus" stroke="#0f141c" stroke-width="1.4" stroke-linecap="round"><path d="M12.6 10.6l4.2 1.1M27.4 10.6l-4.2 1.1"/></g>
   <g class="f f-happy" stroke="#bdf7ee" stroke-width="1.5" fill="none" stroke-linecap="round"><path d="M13.6 17q1.9-2.6 3.8 0M22.6 17q1.9-2.6 3.8 0"/></g>
@@ -43,21 +48,21 @@ const FACES = `<g class="f f-focus" stroke="#0f141c" stroke-width="1.4" stroke-l
 function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
   const u = look.uniform;
   return `<svg viewBox="0 0 40 48" aria-hidden="true">
-    <g class="legs"><rect class="leg-l" x="13" y="40" width="5" height="7" rx="2" fill="#56627a"/><rect class="leg-r" x="22" y="40" width="5" height="7" rx="2" fill="#56627a"/></g>
-    <g class="arm-l"><rect x="4" y="27" width="5" height="11" rx="2.5" fill="${color}"/></g>
-    <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}"/>
+    <g class="legs"><g class="leg-l"><rect x="13" y="40" width="5" height="7" rx="2" fill="#56627a" ${OUT}/><rect x="13.6" y="44.6" width="3.8" height="2" rx="1" fill="#0b1018" opacity=".25"/></g><g class="leg-r"><rect x="22" y="40" width="5" height="7" rx="2" fill="#56627a" ${OUT}/><rect x="22.6" y="44.6" width="3.8" height="2" rx="1" fill="#0b1018" opacity=".25"/></g></g>
+    <g class="arm-l"><rect x="4" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect x="4.4" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/><rect x="5" y="28" width="1.4" height="4" rx=".7" fill="#fff" opacity=".35"/></g>
+    <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}" ${OUT}/>${SHADE_BODY}
     <rect x="15" y="30" width="10" height="5" rx="1.5" fill="#0f141c" opacity=".45"/>
     ${u ? `<path d="M10.5 26.4h19v3h-19z" fill="${u}"/><path d="M23.5 29l3.4 6-4.4-1.2z" fill="${u}"/>` : ''}
     ${look.acc === 3 ? BOWTIE : ''}
     ${PROPS_BODY}
-    <g class="arm-r"><rect x="31" y="27" width="5" height="11" rx="2.5" fill="${color}"/>${PROPS_HAND}</g>
-    <g class="head">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}"/>${VISORS[look.visor]}${FACES}${HEAD_ACC[look.acc]}</g>
+    <g class="arm-r"><rect x="31" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect x="31.4" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/>${PROPS_HAND}</g>
+    <g class="head">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VISORS[look.visor]}${VISOR_GLARE}${FACES}${HEAD_ACC[look.acc]}</g>
   </svg>`;
 }
 
 // Solo la cabeza (antena, visor y accesorio): avatar pequeño para el chat.
 function robotHead(color, look = {ant: 0, visor: 0, acc: 0}) {
-  return `<svg class="rhead" viewBox="5 -1 30 27" aria-hidden="true">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}"/>${VISORS[look.visor]}${HEAD_ACC[look.acc]}</svg>`;
+  return `<svg class="rhead" viewBox="5 -1 30 27" aria-hidden="true">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VISORS[look.visor]}${VISOR_GLARE}${HEAD_ACC[look.acc]}</svg>`;
 }
 
 // Título sugerido para un robot sin título: sale del encargo con reglas simples (sin preguntarle a Claude).
