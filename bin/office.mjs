@@ -97,7 +97,7 @@ function summary(o) {
   const lock = running(o);
   // Detenida pero con robots vivos en tmux: siguen trabajando (y gastando cuota) sin que nadie los vea.
   const orphans = lock ? [] : liveRobots(o);
-  const robotList = robots.map(r => ({ name: r.name, color: r.color || 0, state: r.state, critical: r.critical || 0, title: r.title || '', room: r.place?.type === 'room' ? (r.place.sala ? 'sala' : 'rutina') : '' }));
+  const robotList = robots.map(r => ({ name: r.name, color: r.color || 0, state: r.state, critical: r.critical || 0, title: r.title || '', request: r.request || null, label: r.label || '', room: r.place?.type === 'room' ? (r.place.sala ? 'sala' : 'rutina') : '' }));
   return {
     name: o.name, title: cfg.name || o.name, createdAt: o.createdAt || null, adopted: !!o.dataExternal, maxRobots: state.maxRobots || o.maxRobots || 3, robotList,
     orphanList: orphans, port: o.port, session: o.session, data: o.data, workspace: cfg.workspace || null,

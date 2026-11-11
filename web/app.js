@@ -531,7 +531,7 @@ function connect() {
     if (m.type === 'snapshot') {
       for (const a of st.robots.values()) { vacate(a.data.place, a); a.el.remove(); }
       st.robots.clear();
-      st.config = m.config; st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || [];
+      st.config = m.config; st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || [];
       setSetup(m.setup);
       renderInboxBadge();
       m.robots.forEach(r => upsert(r, true));
@@ -550,6 +550,7 @@ function connect() {
     } else if (m.type === 'deliver') onDeliver(m.name, m.items);
     else if (m.type === 'inbox') { st.inbox = m.inbox; renderInboxBadge(); renderMeta(); if (st.selected === '@inbox') schedulePanel(); }
     else if (m.type === 'left') onLeft(m.name);
+    else if (m.type === 'favorites') { st.favorites = m.favorites; if (st.selected === '@new') schedulePanel(); }
   };
 }
 
@@ -784,6 +785,42 @@ function renderKpis() {
   if (KPIS._html !== html) { KPIS._html = html; KPIS.innerHTML = html; }
 }
 
+/* ---------- cuestionarios (AskUserQuestion) ---------- */
+// Las preguntas con opciones que el robot te hace se responden aquí (tarjeta o panel). «Otra» deja escribir.
+function askForm(d, scope) {
+  const qs = d.ask.questions;
+  const opt = (q, i) => o => `<label class="ask-opt" title="${esc(o.description || '')}"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="${scope}-q${i}" value="${esc(o.label)}"><span><b>${esc(o.label)}</b>${o.description && scope === 'p' ? `<small>${esc(o.description)}</small>` : ''}</span></label>`;
+  return `<form class="ask ask-${scope}" data-ask="${esc(d.name)}" data-ask-id="${esc(d.ask.id)}">${qs.map((q, i) => `
+    <fieldset class="ask-q"><legend>${q.header ? `<i>${esc(q.header)}</i>` : ''}<span>${esc(q.question)}</span>${q.multiSelect ? ' <small>(puedes marcar varias)</small>' : ''}</legend>
+      <div class="ask-os">${q.options.map(opt(q, i)).join('')}<label class="ask-opt ask-other"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="${scope}-q${i}" value="__other"><input type="text" name="${scope}-q${i}-other" placeholder="Otra respuesta…" autocomplete="off"></label></div>
+    </fieldset>`).join('')}
+    <div class="row"><button class="btn primary sm">Enviar respuesta${qs.length === 1 ? '' : 's'}</button><button type="button" class="btn sm" data-ask-console title="Suelta las preguntas: su consola muestra el menú de siempre">Responder en la consola</button></div></form>`;
+}
+document.addEventListener('input', e => {
+  const t = e.target; if (!t.matches('form[data-ask] input[type=text]')) return;
+  const box = t.closest('label')?.querySelector('input[value="__other"]'); if (box && t.value.trim()) box.checked = true;
+});
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('form[data-ask]'); if (!f) return;
+  e.preventDefault();
+  const name = f.dataset.ask, d = st.robots.get(name)?.data; if (!d?.ask) return;
+  const scope = f.classList.contains('ask-p') ? 'p' : 'c', answers = {};
+  for (const [i, q] of d.ask.questions.entries()) {
+    const n = `${scope}-q${i}`;
+    const vals = [...f.querySelectorAll(`input[name="${n}"]:checked`)].map(x => x.value === '__other' ? f.querySelector(`[name="${n}-other"]`).value.trim() : x.value).filter(Boolean);
+    if (!vals.length) { toast(`Falta responder: ${q.header || q.question}`); return f.querySelector(`input[name="${n}"]`)?.focus(); }
+    answers[q.question] = vals.join(', ');
+  }
+  f.querySelectorAll('button').forEach(b => b.disabled = true);
+  try { await api('POST', `/api/robots/${name}/ask`, {id: f.dataset.askId, answers}); toast(`Respuestas enviadas a ${name}`); }
+  catch { f.querySelectorAll('button').forEach(b => b.disabled = false); }
+});
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-ask-console]'); if (!b) return;
+  const f = b.closest('form[data-ask]');
+  try { await api('POST', `/api/robots/${f.dataset.ask}/ask`, {id: f.dataset.askId, console: true}); toast('Ahora respóndele en su consola («Abrir consola en Terminal»)'); } catch { /* toast ya mostrado */ }
+});
+
 function cardHtml(a) {
   const d = a.data, g = GROUP_OF[d.state] || 'work';
   const subs = runningSubs(d), docs = d.docs.length, tok = tokOf(d);
@@ -791,19 +828,21 @@ function cardHtml(a) {
     ? `<span class="pill p-input">espera <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></span>`
     : `<span class="pill p-${d.state}">${d.state === 'done' && d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : esc(stateLabel(d))}</span>`;
   const perm = d.hold || d.needsPermission;
-  const line = d.state === 'input'
+  const line = d.ask ? `Te hizo ${d.ask.questions.length === 1 ? 'una pregunta' : `${d.ask.questions.length} preguntas`}: ${d.ask.questions.map(q => q.header || q.question).join(' · ')}`
+    : d.state === 'input'
     ? (perm ? `Pide permiso: ${d.hold ? d.hold.tool : (d.activity || 'una herramienta')}` : (plainMd(d.bubble) || 'Tiene una pregunta para ti'))
     : d.state === 'done' ? (plainMd(d.bubble) || 'Terminó su turno') : (d.activity || (d.state === 'walking' ? 'Llegando a su escritorio' : 'Pensando…'));
   let actions = '';
-  if (d.hold) actions = `<button class="btn primary sm" data-card-act="hold-allow">Aprobar</button><button class="btn danger sm" data-card-act="hold-deny">Denegar</button><button class="btn sm" data-card-act="open">Ver</button>`;
+  if (d.ask) actions = askForm(d, 'c');
+  else if (d.hold) actions = `<button class="btn primary sm" data-card-act="hold-allow">Aprobar</button><button class="btn danger sm" data-card-act="hold-deny">Denegar</button><button class="btn sm" data-card-act="open">Ver</button>`;
   else if (d.needsPermission) actions = `<button class="btn primary sm" data-card-act="perm-approve">Aprobar</button><button class="btn danger sm" data-card-act="perm-reject">Rechazar</button><button class="btn sm" data-card-act="open">Ver consola</button>`;
   else if (d.state === 'input') actions = `<form class="rc-reply" data-card-reply><input id="reply-${esc(d.name)}" placeholder="Responder a ${esc(d.name)}…" autocomplete="off"><button class="btn primary sm">Enviar</button></form>`;
-  else if (d.state === 'done') actions = `<button class="btn sm" data-card-act="open">Ver</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
+  else if (d.state === 'done') actions = `<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
   const stuck = isStuck(d);
   const cls = ['rc', `g-${g}`, `s-${d.state}`, stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
   return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % 8]}">
     <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</span>
-      <div class="rc-t"><b>${esc(d.name)}</b>${d.title ? `<span class="rc-title" title="${esc(d.title)}">📌 ${esc(d.title)}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small></div>${pill}</div>
+      <div class="rc-t"><b>${esc(d.name)}</b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">📌 ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small></div>${pill}</div>
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
     <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
       ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">⏸ sin actividad ${fmtDur(idleMs(d))}</span>` : ''}
@@ -869,6 +908,7 @@ CARDS.addEventListener('click', async e => {
   try {
     switch (b.dataset.cardAct) {
       case 'open': return select(name);
+      case 'again': return a && launchAgain(a.data);
       case 'docs': return a?.data.docs.length && showDoc(a.data.docs[a.data.docs.length - 1].path);
       case 'perm-approve': return await api('POST', `/api/robots/${name}/permission`, {decision: 'approve'});
       case 'perm-reject': return await api('POST', `/api/robots/${name}/permission`, {decision: 'reject'});
@@ -1291,6 +1331,55 @@ function taskNoteWeb(p) {
   const what = /"([^"]+)"/.exec(sum)?.[1], ok = !/fail|error|killed|exit code [1-9]/i.test(sum + ' ' + status);
   return what ? `${ok ? '✓ Terminó' : '✗ Falló'}: ${what}${ok ? '' : ` (${status || sum})`}` : sum || status || 'Tarea en segundo plano sin detalle';
 }
+// Copiar: solo en lo que el robot redacta para que lo uses: citas «>», bloques de código y, si separa el
+// mensaje con una línea (---), lo que viene después de la línea. Se copia en formato de chat (Google Chat y
+// WhatsApp usan *negrita*, _cursiva_, ~tachado~ y ```bloques```), no en Markdown.
+const COPY_BTN = '<button type="button" class="cp-btn" data-copy title="Copiar con formato de chat (Google Chat, WhatsApp, Slack)">📋 Copiar</button>';
+function copyable(h) {
+  h = h.replace(/<blockquote>/g, `<blockquote class="cp">${COPY_BTN}`).replace(/<pre>/g, `<div class="cp cp-code">${COPY_BTN}<pre>`).replace(/<\/pre>/g, '</pre></div>');
+  const parts = h.split(/<hr\s*\/?>/);
+  if (parts.length < 2) return h;
+  return parts.map((p, i) => i === 0 || !p.trim() || /^\s*<(div class="cp cp-code"|blockquote class="cp")>[\s\S]*<\/(div|blockquote)>\s*$/.test(p) ? p : `<div class="cp cp-sec">${COPY_BTN}${p}</div>`).join('<hr>');
+}
+const mdToChat = t => t.replace(/\*\*(.+?)\*\*/g, '*$1*').replace(/__(.+?)__/g, '_$1_').replace(/~~(.+?)~~/g, '~$1~')
+  .replace(/^#{1,6}\s+(.+)$/gm, '*$1*').replace(/^(\s*)[-+]\s+/gm, '$1• ').replace(/\[([^\]]+)\]\((\S+?)\)/g, (m, a, u) => a === u ? u : `${a} (${u})`);
+function toChat(root) {
+  const mark = (m, s) => { const t = s.trim(); return t ? s.replace(t, m + t + m) : s; };
+  const walk = n => {
+    if (n.nodeType === 3) return n.nodeValue.replace(/\n/g, ' ');
+    if (n.nodeType !== 1 || n.classList.contains('cp-btn')) return '';
+    const kids = () => [...n.childNodes].map(walk).join(''), t = n.tagName.toLowerCase();
+    switch (t) {
+      case 'strong': case 'b': return mark('*', kids());
+      case 'em': case 'i': return mark('_', kids());
+      case 'del': case 's': return mark('~', kids());
+      case 'code': return '`' + n.textContent + '`';
+      case 'pre': { const code = n.querySelector('code'), raw = (code || n).textContent.replace(/\n$/, ''); return /language-(?!markdown|md|text|txt)\w/.test(code?.className || '') ? '```\n' + raw + '\n```\n\n' : mdToChat(raw) + '\n\n'; }
+      case 'br': return '\n';
+      case 'p': case 'div': return kids().trim() + '\n\n';
+      case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6': return '*' + kids().trim() + '*\n\n';
+      case 'ul': case 'ol': return [...n.children].map((li, i) => (t === 'ol' ? `${i + 1}. ` : '• ') + walk(li).trim().replace(/\n+/g, '\n   ')).join('\n') + '\n\n';
+      case 'a': { const x = kids(), u = n.getAttribute('href'); return u && u !== x ? `${x} (${u})` : x; }
+      case 'tr': return [...n.children].map(c => walk(c).trim()).join(' | ') + '\n';
+      case 'table': return kids() + '\n';
+      case 'input': return n.checked ? '☑ ' : '☐ ';
+      default: return kids();
+    }
+  };
+  return walk(root).replace(/[ \t]+\n/g, '\n').replace(/\n (?=\S)/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch {
+    const ta = Object.assign(document.createElement('textarea'), {value: t}); document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  }
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-copy]'); if (!b) return;
+  if (await copyText(toChat(b.parentElement))) { b.textContent = '✓ Copiado'; b.classList.add('ok'); setTimeout(() => { b.textContent = '📋 Copiar'; b.classList.remove('ok'); }, 1500); }
+  else toast('No se pudo copiar: selecciona el texto y usa ⌘C');
+});
+
 function logRow(l, robot) {
   if (l.kind === 'tool') return toolRow(l);
   if (l.kind === 'user' && /^\s*<task-notification>/.test(l.text)) l = {...l, kind: 'bg', text: taskNoteWeb(l.text)};
@@ -1300,7 +1389,8 @@ function logRow(l, robot) {
   const md = MD_KINDS.has(l.kind) && window.marked && window.DOMPurify;
   const who = l.who || (l.kind === 'agent' && robot) || KIND_LABEL[l.kind] || l.kind;
   const pasted = hasPaste(l.text) ? ' <i class="pasted">pegado</i>' : '', text = unwrapPaste(l.text);
-  return `<div class="lg ${l.kind}"><span class="w">${esc(who)} · ${t}${pasted}</span>${md ? `<div class="x md-chat">${mdHtml(text)}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
+  const body = md ? (l.kind === 'agent' ? copyable(mdHtml(text)) : mdHtml(text)) : '';
+  return `<div class="lg ${l.kind}"><span class="w">${esc(who)} · ${t}${pasted}</span>${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
 }
 function renderLog(log, robot) {
   const out = []; let run = [];
@@ -1344,12 +1434,16 @@ PANEL.addEventListener('click', e => {
 
 // Título del robot: lo pones tú para saber de un vistazo qué hace. Se edita en la cabecera de su panel.
 const titleUi = {editing: null};
+// El título que pusiste o, si no hay, uno sugerido a partir del encargo (se ve más tenue).
+const titleOf = d => d.title || suggestTitle(d.request);
 function titleEditor(d) {
-  if (titleUi.editing === d.name) return `<form class="rt-title edit" id="title-form" data-robot="${esc(d.name)}"><input id="title-in" maxlength="60" value="${esc(d.title || '')}" placeholder="Ej.: Tareas de QA · Revisando wallet#32 Ramiro" autocomplete="off"><button class="btn primary sm">Guardar</button><button type="button" class="btn sm" data-title="cancel">Cancelar</button></form>`;
-  return `<div class="rt-title" id="title-view">${d.title ? `<b>📌 ${esc(d.title)}</b>` : '<span class="muted">Sin título</span>'}<button type="button" class="btn sm ghost" data-title="edit" title="Ponle un título para saber qué hace">${d.title ? '✎ Cambiar' : '✎ Ponle un título'}</button></div>`;
+  if (titleUi.editing === d.name) return `<form class="rt-title edit" id="title-form" data-robot="${esc(d.name)}"><input id="title-in" maxlength="60" value="${esc(d.title || titleOf(d))}" placeholder="Ej.: Tareas de QA · Revisando wallet#32 Ramiro" autocomplete="off"><button class="btn primary sm">Guardar</button><button type="button" class="btn sm" data-title="cancel">Cancelar</button></form>`;
+  const sug = !d.title && titleOf(d);
+  return `<div class="rt-title" id="title-view">${d.title ? `<b>📌 ${esc(d.title)}</b>` : sug ? `<b class="auto">📌 ${esc(sug)}</b><small class="muted">sugerido</small><button type="button" class="btn sm ghost" data-title="accept" title="Guardar este título">✓ Usar</button>` : '<span class="muted">Sin título</span>'}<button type="button" class="btn sm ghost" data-title="edit" title="Ponle un título para saber qué hace">${d.title || sug ? '✎ Cambiar' : '✎ Ponle un título'}</button></div>`;
 }
 PANEL.addEventListener('click', e => {
   const b = e.target.closest('[data-title]'); if (!b) return;
+  if (b.dataset.title === 'accept') { const d = st.robots.get(st.selected)?.data; if (d) api('POST', `/api/robots/${d.name}/title`, {title: titleOf(d)}).catch(() => {}); return; }
   titleUi.editing = b.dataset.title === 'edit' ? st.selected : null;
   renderPanel();
   if (titleUi.editing) { const i = $('#title-in'); i?.focus(); i?.select(); }
@@ -1370,7 +1464,8 @@ function robotPanel(a) {
   const subRow = s => `<div class="sub-row${s.status === 'done' ? ' ok' : ''}" title="${esc(s.desc || s.activity || '')}"><i></i><b>${esc(shortType(s.type))}</b><span>${s.status === 'done' ? 'listo' : esc(s.activity || 'trabajando')}</span></div>`;
   const subs = d.subs.length ? `<div class="rp-block"><h4>Subagentes <small>${running.length ? `${running.length} trabajando` : ''}${running.length && finished.length ? ' · ' : ''}${finished.length ? `${finished.length} listo${finished.length === 1 ? '' : 's'}` : ''}</small></h4><div class="subs-list" id="subs-list">${[...running, ...finished].map(subRow).join('')}</div></div>` : '';
   let alert = '';
-  if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
+  if (d.ask) alert = `<div class="alert ask-box" id="rp-alert"><b>Te pregunta</b>${askForm(d, 'p')}</div>`;
+  else if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission) alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
     <div class="ph"><div class="ph-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}<div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
@@ -1392,6 +1487,8 @@ function robotPanel(a) {
         <pre class="term" id="pane">${esc(paneCache.get(d.name) ?? 'cargando…')}</pre>
         <div class="row">
           <button class="btn sm" data-act="console">Abrir consola en Terminal</button>
+          <button class="btn sm" data-act="again" title="Abre «Nuevo encargo» con lo mismo que le pediste a este robot">↻ Lanzar otro igual</button>
+          <button class="btn sm" data-act="fav" title="Guarda este encargo como acceso rápido en «Nuevo encargo»">★ Frecuente</button>
           <button class="btn sm danger" data-act="kill">Dar de baja</button>
         </div>
         <div class="stats">tokens · salida ${u.out ?? 0} · entrada ${u.in ?? 0} · caché leída ${u.cacheRead ?? 0} · caché escrita ${u.cacheWrite ?? 0}${d.permissionMode ? ' · permisos: ' + esc(d.permissionMode) : ''}</div>
@@ -1406,7 +1503,8 @@ function newPanel() {
   const present = [...st.robots.values()];
   return `<div class="dlg-head"><h3>Nuevo encargo</h3><p>Entra un robot por la puerta y abre su consola tmux con <code>claude</code> usando tu suscripción. Al terminar se queda en su escritorio con el cartel LISTO hasta que lo des de baja (✕ sobre el robot o «Despedir terminados»).</p></div>
     <form class="dlg-sec" id="job-form">
-      <div class="fgrid">
+      ${st.favorites.length ? `<div class="favs" id="job-favs"><span class="flabel">Frecuentes</span>${st.favorites.map(f => `<span class="fav"><button type="button" data-fav="${esc(f.id)}" title="${esc(f.kind === 'skill' ? `/${f.skill} ${f.args}` : f.text)}">★ ${esc(f.name)}</button><button type="button" class="fav-x" data-fav-del="${esc(f.id)}" aria-label="Quitar ${esc(f.name)} de frecuentes">×</button></span>`).join('')}</div>` : ''}
+      <div class="fgrid" id="job-grid">
         <div class="seg span2" role="radiogroup" aria-label="Tipo de encargo">
           <label><input type="radio" name="kind" id="kind-skill" value="skill" checked>Skill</label>
           <label><input type="radio" name="kind" id="kind-libre" value="libre">Tarea libre</label>
@@ -1422,7 +1520,7 @@ function newPanel() {
         <div class="field"><label for="job-mode">Permisos</label><select id="job-mode"><option value="">Heredar tu modo</option><option value="default">Preguntar (default)</option><option value="acceptEdits">Aceptar ediciones</option><option value="plan">Solo planear</option></select></div>
       </div>
       <div class="dlg-foot">
-        <label class="btn sm attach">Adjuntar archivos<input type="file" multiple hidden data-attfor="job"></label>
+        <div class="row"><label class="btn sm attach">Adjuntar archivos<input type="file" multiple hidden data-attfor="job"></label><button type="button" class="btn sm" data-fav-save title="Guarda lo que llenaste como acceso rápido">★ Guardar como frecuente</button></div>
         <div class="row"><span class="stats">${st.robots.size}/${max} robots en la oficina</span><button class="btn primary" ${full ? 'disabled' : ''}>${full ? `Tope de ${max} robots alcanzado` : 'Invocar robot'}</button></div>
       </div>
     </form>
@@ -1613,7 +1711,7 @@ function renderPanel() {
   const lg = $('#log', PANEL) || $('#sala-log', PANEL); if (lg) lg.scrollTop = atBottom || logScroll == null ? lg.scrollHeight : logScroll;
   syncKind();
   if (a) { refreshPane(a.data.name); paneTimer = setInterval(() => refreshPane(a.data.name), 2000); }
-  if (wasHidden) (PANEL.querySelector('#chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();
+  if (wasHidden) (PANEL.querySelector('#rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();
 }
 
 async function refreshPane(name) {
@@ -1627,6 +1725,31 @@ async function refreshPane(name) {
     if (pre && st.selected === name && pre.textContent !== last) { pre.textContent = last; pre.scrollTop = pre.scrollHeight; }
   } catch { /* el robot pudo haberse ido */ }
 }
+
+/* ---------- lanzar otro igual y encargos frecuentes ---------- */
+st.favorites = [];
+function fillJob(req) {
+  select('@new');
+  const set = (id, v) => { const el = $('#' + id, PANEL); if (el) el.value = v ?? ''; };
+  ($(req.kind === 'libre' ? '#kind-libre' : '#kind-skill', PANEL) || {}).checked = true;
+  set('job-skill', req.skill ? req.skill : ''); set('job-args', req.args); set('job-text', req.text);
+  set('job-mode', req.permissionMode); set('job-title', req.title); set('job-name', '');
+  syncKind();
+  const focus = req.kind === 'libre' ? $('#job-text', PANEL) : $('#job-args', PANEL);
+  focus?.focus(); focus?.setSelectionRange?.(focus.value.length, focus.value.length);
+}
+const launchAgain = d => fillJob({...d.request, title: d.title});
+PANEL.addEventListener('click', async e => {
+  const use = e.target.closest('[data-fav]'), del = e.target.closest('[data-fav-del]'), save = e.target.closest('[data-fav-save]');
+  if (use) { const f = st.favorites.find(x => x.id === use.dataset.fav); if (f) fillJob(f); return; }
+  if (del) { try { await api('DELETE', `/api/favorites/${del.dataset.favDel}`); } catch { /* toast ya mostrado */ } return; }
+  if (!save) return;
+  const libre = $('#kind-libre', PANEL)?.checked;
+  try {
+    await api('POST', '/api/favorites', {kind: libre ? 'libre' : 'skill', skill: $('#job-skill').value, args: $('#job-args').value, text: $('#job-text').value, permissionMode: $('#job-mode').value, title: $('#job-title').value});
+    toast('Guardado en frecuentes');
+  } catch { /* toast ya mostrado */ }
+});
 
 function syncKind() {
   const libre = $('#kind-libre', PANEL)?.checked;
@@ -1665,6 +1788,7 @@ function lastConsoleLine(text) {
 }
 
 function hoverActivity(d) {
+  if (d.ask) return `Te hizo ${d.ask.questions.length === 1 ? 'una pregunta' : `${d.ask.questions.length} preguntas`} con opciones`;
   if (d.needsPermission || d.hold) return 'Esperando tu permiso';
   if (d.state === 'delegating') {
     const running = d.subs.filter(s => s.status === 'running');
@@ -1680,7 +1804,7 @@ function renderHover() {
   const d = a.data;
   const label = stateLabel(d);
   hover.el.innerHTML = `<div class="hc-top"><b>${esc(d.name)}</b><span class="pill p-${d.state}">${esc(label)}</span></div>
-    ${d.title ? `<div class="hc-title">📌 ${esc(d.title)}</div>` : ''}
+    ${titleOf(d) ? `<div class="hc-title${d.title ? '' : ' auto'}">📌 ${esc(titleOf(d))}</div>` : ''}
     <div class="hc-act">${esc(hoverActivity(d).slice(0, 120))}</div>
     ${d.state === 'input' && d.inputAt ? `<div class="hc-wait">Esperando tu respuesta hace <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></div>` : ''}
     <div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
@@ -1907,6 +2031,8 @@ PANEL.addEventListener('click', async e => {
   const name = st.selected, a = st.robots.get(name);
   try {
     if (b.dataset.act === 'console') await api('POST', `/api/robots/${name}/console`);
+    if (b.dataset.act === 'again' && a) return launchAgain(a.data);
+    if (b.dataset.act === 'fav' && a) { await api('POST', '/api/favorites', {...a.data.request, title: a.data.title}); toast('Guardado en frecuentes: lo ves arriba de «Nuevo encargo»'); }
     if (b.dataset.act === 'kill') { b.disabled = true; await api('DELETE', `/api/robots/${name}`); }
     if (b.dataset.act === 'perm-approve') await api('POST', `/api/robots/${name}/permission`, {decision: 'approve'});
     if (b.dataset.act === 'perm-reject') await api('POST', `/api/robots/${name}/permission`, {decision: 'reject'});
@@ -2019,8 +2145,49 @@ $('#modal-close').addEventListener('click', () => $('#modal').hidden = true);
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').hidden = true; });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  if (!$('#modal').hidden) $('#modal').hidden = true; // primero el documento, luego la ventana
+  if (!$('#keys')?.hidden && $('#keys')) $('#keys').hidden = true;
+  else if (!$('#modal').hidden) $('#modal').hidden = true; // primero el documento, luego la ventana
   else if (st.selected) select(null);
+});
+
+/* ---------- atajos de teclado ---------- */
+// No actúan mientras escribes. J/K recorren los robots en el orden de las tarjetas (primero los que te necesitan).
+const KEYS = [['J / K', 'Siguiente / anterior robot'], ['A', 'Aprobar el permiso del robot abierto'], ['R', 'Escribirle al robot abierto'],
+  ['N', 'Nuevo encargo'], ['B', 'Bandeja'], ['Esc', 'Cerrar'], ['?', 'Esta ayuda']];
+function keysHelp() {
+  let box = $('#keys');
+  if (!box) {
+    box = document.createElement('aside'); box.id = 'keys'; box.hidden = true;
+    box.innerHTML = `<div class="aw-h"><b>Atajos de teclado</b><button type="button" class="aw-x" aria-label="Cerrar">×</button></div><dl>${KEYS.map(([k, t]) => `<dt>${k.split(' / ').map(x => `<kbd>${x}</kbd>`).join(' / ')}</dt><dd>${t}</dd>`).join('')}</dl>`;
+    box.addEventListener('click', e => { if (e.target.closest('.aw-x')) box.hidden = true; });
+    document.body.appendChild(box);
+  }
+  box.hidden = !box.hidden;
+}
+document.addEventListener('keydown', async e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  const k = e.key.toLowerCase(), a = st.robots.get(st.selected);
+  if (k === 'j' || k === 'k') {
+    const names = [...CARDS.querySelectorAll('[data-card]')].map(c => c.dataset.card);
+    if (!names.length) return;
+    const i = names.indexOf(st.selected);
+    select(names[i < 0 ? (k === 'j' ? 0 : names.length - 1) : (i + (k === 'j' ? 1 : -1) + names.length) % names.length]);
+  } else if (k === 'n') select('@new');
+  else if (k === 'b') select('@inbox');
+  else if (k === 'r' && a) { e.preventDefault(); $('#chat-in')?.focus(); }
+  else if (k === 'a' && a) {
+    const d = a.data;
+    try {
+      if (d.hold) await api('POST', `/api/decision/${d.hold.id}`, {decision: 'allow'});
+      else if (d.needsPermission) await api('POST', `/api/robots/${d.name}/permission`, {decision: 'approve'});
+      else if (d.ask) return $('#rp-alert input')?.focus();
+      else return toast(`${d.name} no está pidiendo permiso`);
+      toast(`Aprobado: ${d.name}`);
+    } catch { /* toast ya mostrado */ }
+  } else if (e.key === '?') keysHelp();
+  else return;
+  e.preventDefault();
 });
 
 const setSkills = skills => { $('#skills-list').innerHTML = (skills || []).map(s => `<option value="${esc(s)}">`).join(''); };
@@ -2028,4 +2195,51 @@ fetch('/api/skills').then(r => r.json()).then(({skills}) => setSkills(skills)).c
 
 renderPanel();
 connect();
+
+/* ---------- mientras no estabas ---------- */
+// Si sales de la pestaña (u otra ventana tapa la oficina) más de AWAY_MS, al volver ves un solo resumen
+// de lo que cambió: quién terminó, quién te necesita, quién entró o se fue y documentos nuevos.
+const AWAY_MS = 10 * 60e3;
+const away = {since: 0, snap: null, inbox: null};
+const needWhat = d => d.ask ? 'te hizo preguntas' : d.hold || d.needsPermission ? 'pide permiso' : 'tiene una pregunta para ti';
+function awaySnap() {
+  away.since = Date.now();
+  away.snap = new Map([...st.robots.values()].map(a => [a.data.name, {state: a.data.state, critical: a.data.critical || 0}]));
+  away.inbox = new Set(st.inbox.map(i => i.id));
+}
+function awayBack(force) {
+  if (!away.snap) return;
+  const mins = Math.round((Date.now() - away.since) / 60e3), snap = away.snap, seen = away.inbox;
+  away.snap = null;
+  if (!force && Date.now() - away.since < AWAY_MS) return;
+  const items = [];
+  for (const a of st.robots.values()) {
+    const d = a.data, was = snap.get(d.name);
+    const who = `<a data-away="${esc(d.name)}">${esc(d.name)}</a>${d.title ? ` <small>📌 ${esc(d.title)}</small>` : ''}`;
+    if (!was) items.push({k: 'new', h: `${who} entró a trabajar`});
+    else if (d.state === 'input' && was.state !== 'input') items.push({k: 'need', h: `${who} ${needWhat(d)}`});
+    else if (d.state === 'done' && was.state !== 'done') items.push({k: d.critical ? 'crit' : 'done', h: `${who} terminó${d.critical ? ` con ⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : ''}`});
+    else if (isStuck(d) && was.state !== 'input') items.push({k: 'stuck', h: `${who} lleva ${fmtDur(idleMs(d))} sin actividad`});
+  }
+  for (const name of snap.keys()) if (!st.robots.has(name)) items.push({k: 'gone', h: `${esc(name)} se fue`});
+  const docs = st.inbox.filter(i => !seen.has(i.id) && !isTempDoc(i.path)).length;
+  if (docs) items.push({k: 'doc', h: `<a data-away="@inbox">${docs} documento${docs === 1 ? '' : 's'} nuevo${docs === 1 ? '' : 's'}</a> en tu bandeja`});
+  if (!items.length) return;
+  const order = {need: 0, crit: 1, stuck: 2, done: 3, doc: 4, new: 5, gone: 6};
+  items.sort((x, y) => order[x.k] - order[y.k]);
+  let box = $('#away');
+  if (!box) { box = document.createElement('aside'); box.id = 'away'; box.setAttribute('role', 'status'); document.body.appendChild(box); }
+  box.innerHTML = `<div class="aw-h"><b>Mientras no estabas</b><small>${mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`}</small><button type="button" class="aw-x" aria-label="Cerrar">×</button></div>
+    <ul>${items.map(i => `<li class="aw-${i.k}">${i.h}</li>`).join('')}</ul>`;
+  box.hidden = false;
+}
+document.addEventListener('visibilitychange', () => document.hidden ? (away.snap || awaySnap()) : awayBack());
+window.addEventListener('blur', () => { if (!away.snap) awaySnap(); });
+window.addEventListener('focus', () => awayBack());
+document.addEventListener('click', e => {
+  const box = e.target.closest('#away'); if (!box) return;
+  const l = e.target.closest('[data-away]');
+  if (l) select(l.dataset.away);
+  if (l || e.target.closest('.aw-x')) box.hidden = true;
+});
 })();

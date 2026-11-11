@@ -49,3 +49,30 @@ function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
     <g class="head">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}"/>${VISORS[look.visor]}${HEAD_ACC[look.acc]}</g>
   </svg>`;
 }
+
+// Título sugerido para un robot sin título: sale del encargo con reglas simples (sin preguntarle a Claude).
+// «/review-deep https://github.com/DROPI-SAS/dropi-tools/pull/52» → «review-deep · dropi-tools#52»
+// «revisa por qué falla el pipeline de dropi-atom» → «Revisa por qué falla el pipeline de dropi-atom»
+function suggestTitle(req) {
+  if (!req) return '';
+  const src = req.kind === 'skill' ? String(req.args || '') : String(req.text || '');
+  const refs = [];
+  const add = x => { if (x && !refs.includes(x)) refs.push(x); };
+  for (const m of src.matchAll(/(?:github\.com|bitbucket\.org)\/[\w.-]+\/([\w.-]+)\/(?:pull|pull-requests)\/(\d+)/gi)) add(`${m[1]}#${m[2]}`);
+  for (const m of src.matchAll(/\b([A-Z][A-Z0-9]{1,9}-\d{1,6})\b/g)) add(m[1]);
+  if (!refs.length) for (const m of src.matchAll(/\bPR\s*#?\s*(\d{1,6})\b/gi)) add(`PR #${m[1]}`);
+  const cut = (t, n) => t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, '') + '…';
+  if (req.kind === 'skill') {
+    const target = refs[0] || (src.split(/\s+/).find(w => w && !w.startsWith('-') && !/^origin\//.test(w)) || '').replace(/\/$/, '').split('/').pop();
+    return cut([req.skill, target].filter(Boolean).join(' · '), 60);
+  }
+  const lines = src.replace(/<[^>]+>/g, '\n').replace(/https?:\/\/\S+/g, ' ').split('\n').map(l => l.replace(/^\s*(#+|>|[-*+]|\d+\.)\s+/, '').replace(/[`*_]/g, '').replace(/\s+/g, ' ').trim());
+  let t = lines.find(l => l.length > 2) || '';
+  t = t.split(/(?<=[.!?])\s/)[0];
+  t = t.replace(/^(hola|buenas|buenos días|oye|bueno|ok|dale|por favor|porfa)[,!.]?\s+/i, '')
+       .replace(/^(me (puedes|podrías) ayudar (a|con) |ay[uú]dame (a|con) )/i, '').trim();
+  if (!t) return refs.join(' · ');
+  t = t[0].toUpperCase() + t.slice(1);
+  const extra = refs.filter(r => !t.includes(r.replace(/^PR #/, ''))).join(' ');
+  return cut(t, extra ? 58 - extra.length : 60) + (extra ? ` · ${extra}` : '');
+}

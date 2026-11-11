@@ -711,3 +711,66 @@ details.rc-sec[open]>summary h4::after{transform:rotate(90deg)}
 .rt-title.edit input{flex:1;min-width:220px;font-size:13px;padding:4px 8px}
 .rc-title{display:block;font-size:12px;font-weight:600;color:var(--amber);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hc-title{font-weight:700;color:#7a4b00;word-break:break-word}
+/* cuestionarios del robot: preguntas con opciones */
+.ask{display:grid;gap:8px;min-width:0}
+.ask-q{border:0;margin:0;padding:0;display:grid;gap:5px;min-width:0}
+.ask-q legend{padding:0;font-size:12.5px;color:var(--ink);display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;margin-bottom:4px}
+.ask-q legend i{font-style:normal;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#1a2230;background:var(--amber);border-radius:4px;padding:0 5px}
+.ask-q legend small{color:var(--muted);font-size:11px}
+.ask-os{display:flex;flex-wrap:wrap;gap:5px}
+.ask-p .ask-os{display:grid;gap:5px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.ask-opt{display:flex;gap:7px;align-items:flex-start;border:1px solid var(--line);border-radius:7px;padding:4px 9px;cursor:pointer;background:#121923;font-size:12px;min-width:0}
+.ask-opt:hover{border-color:#4a5a73}
+.ask-opt:has(input:checked){border-color:var(--amber);background:#2a2213}
+.ask-opt>input{margin:2px 0 0;accent-color:var(--amber);flex:none}
+.ask-opt span{display:grid;gap:1px;min-width:0}
+.ask-opt small{color:#b3bfd0;font-size:11.5px}
+.ask-other{flex:1 1 160px}
+.ask-other input[type=text]{flex:1;min-width:0;background:transparent;border:0;border-bottom:1px dashed var(--line);border-radius:0;padding:0 2px;font-size:12px;color:var(--ink)}
+.ask-other input[type=text]:focus{outline:none;border-bottom-color:var(--amber)}
+.alert.ask-box{background:#1d1a12;border-color:#5c4a24}
+.alert.ask-box>b{color:var(--amber)}
+.rc-acts .ask{width:100%}
+/* copiar lo que el robot redacta para ti (citas, código y la parte tras ---): botón siempre visible, discreto */
+.md-chat .cp{position:relative}
+.md-chat blockquote.cp,.md-chat .cp-sec{padding-right:6.4em}
+.md-chat .cp-sec{border-left:2px solid color-mix(in srgb,var(--c) 45%,transparent);padding-left:10px;margin:.2em 0 .55em}
+.md-chat .cp-code{margin:0 0 .55em}
+.md-chat .cp-code>pre{margin:0;padding-top:24px}
+.cp-btn{position:absolute;top:3px;right:3px;background:#1d2533;border:1px solid var(--line);color:#c3cdda;border-radius:5px;font-size:10.5px;padding:1px 7px;cursor:pointer;opacity:.7;transition:opacity .15s;font-family:var(--body);z-index:1}
+.md-chat .cp:hover>.cp-btn,.cp-btn:focus-visible,.cp-btn.ok{opacity:1}
+.cp-btn:hover{color:var(--ink);border-color:var(--amber)}
+.cp-btn.ok{color:var(--teal);border-color:var(--teal);opacity:1}
+/* resumen «Mientras no estabas» */
+#away{position:fixed;top:14px;right:14px;z-index:6000;width:min(360px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--amber);border-radius:12px;padding:10px 12px;box-shadow:0 12px 32px rgba(0,0,0,.5);animation:rcin .3s ease-out;font-size:13px}
+#away[hidden]{display:none}
+.aw-h{display:flex;align-items:baseline;gap:8px}
+.aw-h b{font-family:var(--display);font-weight:500;font-size:15px;color:var(--amber)}
+.aw-h small{color:var(--muted);font-size:11.5px}
+.aw-x{margin-left:auto;background:none;border:0;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
+.aw-x:hover{color:var(--ink)}
+#away ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:5px}
+#away li{padding-left:20px;position:relative;line-height:1.35}
+#away li::before{position:absolute;left:0;top:0}
+#away li small{color:var(--amber);font-size:11.5px}
+#away a{color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+#away .aw-need::before{content:"✋"} #away .aw-crit::before{content:"⚠"} #away .aw-stuck::before{content:"⏸"}
+#away .aw-done::before{content:"✓";color:var(--teal)} #away .aw-doc::before{content:"▤";color:var(--sky)}
+#away .aw-new::before{content:"＋";color:var(--teal)} #away .aw-gone::before{content:"←";color:var(--muted)}
+/* encargos frecuentes */
+.favs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+.favs .flabel{margin-right:2px}
+.fav{display:inline-flex;align-items:stretch;border:1px solid #5c4a24;border-radius:999px;background:#2a2213;overflow:hidden}
+.fav button{background:none;border:0;color:var(--ink);font-size:12px;padding:3px 10px;cursor:pointer;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fav button:hover{background:#3a2e17}
+.fav .fav-x{padding:3px 8px;color:var(--muted);border-left:1px solid #5c4a24}
+.fav .fav-x:hover{color:var(--rose)}
+.rc-title.auto,.rt-title b.auto{color:#c9a35a;font-weight:500;font-style:italic}
+.hc-title.auto{color:#8a6a2a;font-weight:600;font-style:italic}
+/* ayuda de atajos (?) */
+#keys{position:fixed;bottom:16px;right:16px;z-index:6000;width:min(320px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:0 12px 32px rgba(0,0,0,.5);font-size:12.5px}
+#keys[hidden]{display:none}
+#keys .aw-h b{color:var(--ink)}
+#keys dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:8px 0 0;align-items:center}
+#keys dt{white-space:nowrap;color:var(--muted)} #keys dd{margin:0}
+kbd{font-family:var(--mono);font-size:11px;background:#1d2533;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--ink)}

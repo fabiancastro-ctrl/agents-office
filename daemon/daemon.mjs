@@ -129,7 +129,7 @@ function view(r, withLog = false) {
     name: r.name, kind: r.kind, skill: r.skill, label: r.label, color: r.color,
     state: r.state, place: r.place, subs: r.subs, pendingSubs: r.pendingSubs,
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
-    hold: r.hold, docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '',
+    hold: r.hold, ask: r.ask || null, request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '',
     permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null
   };
   if (withLog) v.log = r.log.slice(-150);
@@ -370,7 +370,7 @@ function saveState() {
       robots: [...robots.values()].map(r => ({
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
-        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', timeline: r.timeline, lastEventAt: r.lastEventAt
+        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', request: r.request, timeline: r.timeline, lastEventAt: r.lastEventAt
       }))
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
@@ -511,6 +511,25 @@ function countCriticals(file) {
 // Críticos del robot = los de sus entregas que siguen sin ver en la bandeja (de este robot, no de uno anterior
 // con el mismo nombre). Al abrir el review, marcarlo visto o archivarlo, el cartel ⚠ del robot se quita;
 // si lo vuelve a entregar corregido, cuenta lo nuevo.
+// Lo que se le encargó al robot, para «Lanzar otro igual». Los robots de antes de guardarlo se deducen del prompt.
+function requestOf(r) {
+  if (r.request) return r.request;
+  const p = String(r.prompt || '').replace(/ \[Adjuntos: [^\]]*\]$/, '');
+  const m = /^\/([a-z0-9:_-]+)\s*([\s\S]*)$/i.exec(p);
+  return m ? { kind: 'skill', skill: m[1], args: m[2], text: '', permissionMode: r.permissionMode || '' }
+    : { kind: 'libre', skill: null, args: '', text: p, permissionMode: r.permissionMode || '' };
+}
+
+// Encargos frecuentes: atajos guardados en Nuevo encargo (por oficina, en su carpeta de datos).
+const FAV_FILE = path.join(RUNS, 'frecuentes.json');
+let favorites = [];
+try { favorites = JSON.parse(fs.readFileSync(FAV_FILE, 'utf8')); } catch { /* sin frecuentes */ }
+function saveFavorites() { fs.writeFileSync(FAV_FILE, JSON.stringify(favorites, null, 2)); broadcast({ type: 'favorites', favorites }); }
+
+// Indicaciones que la oficina le suma a cada robot nuevo: los mensajes para enviar van en una cita (>) para que la
+// oficina les ponga «📋 Copiar»; al copiar se convierten al formato del chat, así que el robot escribe Markdown normal.
+const ROBOT_HINTS = 'Trabajas dentro de la Oficina de Agentes, que muestra tus respuestas en una página web. Cuando te pidan redactar un mensaje para enviar a otra persona (Google Chat, WhatsApp, Slack, correo), entrega el texto del mensaje completo dentro de una cita Markdown (cada línea empieza con «> »), sin comentarios tuyos adentro; lo que quieras decirme a mí va fuera de la cita. Dentro de la cita usa Markdown normal (**negrita**, _cursiva_, listas con -, enlaces): la oficina lo convierte al formato del chat al copiarlo. Si son varios mensajes, usa una cita por mensaje.';
+
 const cleanTitle = t => String(t ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
 
 function criticalOf(r) {
@@ -629,9 +648,46 @@ function hold(r, body) {
   });
 }
 
+// Cuestionarios (AskUserQuestion): la oficina retiene el hook y te muestra las preguntas con sus opciones.
+// Lo que respondas vuelve como `answers` en updatedInput y el robot lo recibe como si contestaras en su consola.
+// «Responder en la consola», el reinicio de la oficina o el tiempo límite sueltan el hook y la consola muestra su menú.
+function askHold(r, body) {
+  const id = crypto.randomBytes(3).toString('hex');
+  const questions = body.tool_input.questions.slice(0, 8).map(q => ({
+    question: String(q.question ?? ''), header: trunc(q.header, 30), multiSelect: !!q.multiSelect,
+    options: (q.options || []).slice(0, 10).map(o => ({ label: String(o.label ?? ''), description: trunc(o.description, 300) }))
+  }));
+  r.ask = { id, questions, at: now() };
+  r.inputAt = now();
+  setState(r, 'input');
+  log(r, 'sys', `Te hizo ${questions.length === 1 ? 'una pregunta' : `${questions.length} preguntas`} con opciones`);
+  emit(r);
+  return new Promise(resolve => {
+    const release = (out, note) => { clearTimeout(timer); pending.delete(id); if (r.ask?.id === id) r.ask = null; if (robots.get(r.name) === r) { if (note) log(r, 'sys', note); emit(r); } resolve(out); };
+    const timer = setTimeout(() => release(null, 'Las preguntas pasaron a su consola (nadie respondió en la oficina)'), APPROVAL_TIMEOUT_MS);
+    pending.set(id, { r, ask: true, input: body.tool_input, release });
+  });
+}
+
+function answerAsk(r, id, answers, toConsole) {
+  const p = pending.get(id);
+  if (!p?.ask || p.r !== r) return false;
+  if (toConsole) { p.release(null, 'Responderás las preguntas en su consola'); return true; }
+  const clean = {};
+  for (const q of r.ask?.questions || []) {
+    const a = String(answers?.[q.question] ?? '').trim();
+    if (!a) throw new Error(`Falta responder: ${q.header || q.question}`);
+    clean[q.question] = a.slice(0, 2000);
+  }
+  log(r, 'user', Object.entries(clean).map(([q, a]) => `**${q}** → ${a}`).join('\n'));
+  setState(r, 'working');
+  p.release({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: 'Respondido desde la oficina', updatedInput: { ...p.input, answers: clean } } });
+  return true;
+}
+
 function decide(id, decision) {
   const p = pending.get(id);
-  if (!p) return false;
+  if (!p || p.ask) return false;
   let d = decision === 'allow' ? 'allow' : 'deny';
   let reason = `Decidido desde la oficina (${d})`;
   if (d === 'allow' && p.tool === 'Bash' && NEVER_ALLOW.some(rx => rx.test(p.input?.command || ''))) {
@@ -707,6 +763,7 @@ async function onHook(name, body) {
         }
         emit(r);
       }
+      if (!sub && body.tool_name === 'AskUserQuestion' && Array.isArray(body.tool_input?.questions)) return askHold(r, body);
       if (APPROVAL && HOLD_TOOLS.has(body.tool_name)) return hold(r, body);
       break;
     }
@@ -847,7 +904,8 @@ async function launch({ kind, skill, args, text, permissionMode, name, origin, l
   await ensureSession();
   const sessionId = crypto.randomUUID();
   const r = {
-    name, kind, skill, label, title: cleanTitle(title), prompt, color: colorSeq++ % 8, place, permissionMode: permissionMode || '', leaveWhenDone: !!leaveWhenDone,
+    name, kind, skill, label, title: cleanTitle(title), prompt, color: colorSeq++ % 8, place,
+    request: { kind, skill, args: kind === 'skill' ? String(args || '') : '', text: kind === 'libre' ? String(text || '').trim() : '', permissionMode: permissionMode || '' }, permissionMode: permissionMode || '', leaveWhenDone: !!leaveWhenDone,
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
     sessionId, transcript: null, offset: 0, partial: '', msgUsage: new Map(), startedAt: now(),
     alive: true, state: 'walking', timeline: [{ at: now(), s: 'walking' }], subs: [], pendingSubs: 0, bubble: '', activity: '',
@@ -858,7 +916,7 @@ async function launch({ kind, skill, args, text, permissionMode, name, origin, l
   const tmuxArgs = ['new-window', '-d', '-t', `${SESSION}:`, '-n', name, '-c', WORKSPACE,
     '-e', `OFFICE_ROBOT=${name}`, '-e', `OFFICE_PORT=${PORT}`,
     'env', '-u', 'ANTHROPIC_API_KEY',
-    'claude', '--settings', SETTINGS, '--session-id', sessionId];
+    'claude', '--settings', SETTINGS, '--session-id', sessionId, '--append-system-prompt', ROBOT_HINTS];
   if (permissionMode) tmuxArgs.push('--permission-mode', permissionMode);
   tmuxArgs.push(prompt);
   try {
@@ -1291,7 +1349,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView() })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites })}\n\n`);
       clients.add(res);
       const ping = setInterval(() => res.write(': ping\n\n'), 20000);
       req.on('close', () => { clearInterval(ping); clients.delete(res); });
@@ -1381,6 +1439,23 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
     }
+    if (req.method === 'POST' && url.pathname === '/api/favorites') {
+      const b = await readBody(req);
+      const kind = b.kind === 'libre' ? 'libre' : 'skill';
+      const f = { id: crypto.randomBytes(3).toString('hex'), name: trunc(String(b.name || '').trim(), 40), kind,
+        skill: kind === 'skill' ? String(b.skill || '').replace(/^\//, '').trim() : null, args: kind === 'skill' ? String(b.args || '') : '',
+        text: kind === 'libre' ? String(b.text || '') : '', permissionMode: b.permissionMode || '', title: cleanTitle(b.title) };
+      if (kind === 'skill' ? !f.skill : !f.text.trim()) return send(res, 400, { error: 'Llena el encargo antes de guardarlo.' });
+      f.name ||= f.title || (kind === 'skill' ? trunc(`/${f.skill} ${f.args}`.trim(), 40) : trunc(f.text, 40));
+      favorites.push(f); if (favorites.length > 30) favorites.shift();
+      saveFavorites();
+      return send(res, 201, { ok: true, favorite: f });
+    }
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'favorites' && parts[2]) {
+      favorites = favorites.filter(f => f.id !== parts[2]);
+      saveFavorites();
+      return send(res, 200, { ok: true });
+    }
     if (req.method === 'POST' && url.pathname === '/api/robots') {
       const r = await launch(await readBody(req));
       return send(res, 201, { ok: true, name: r.name });
@@ -1401,6 +1476,10 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
       // Título que le pones tú al robot («Tareas de QA», «Revisando wallet#32 Ramiro»); vacío lo quita.
+      if (req.method === 'POST' && action === 'ask') {
+        const { id, answers, console: toConsole } = await readBody(req);
+        return answerAsk(r, id, answers, !!toConsole) ? send(res, 200, { ok: true }) : send(res, 404, { error: 'Esas preguntas ya no están pendientes.' });
+      }
       if (req.method === 'POST' && action === 'title') {
         r.title = cleanTitle((await readBody(req)).title);
         emit(r);

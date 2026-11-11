@@ -354,8 +354,14 @@ function windows(o) {
     const r = list[i];
     if (!r) return '<span class="win" data-tip="|puesto libre"></span>';
     const tag = r.state === 'input' ? '<i class="tag ask">?</i>' : r.state === 'done' ? (r.critical ? `<i class="tag crit">⚠${r.critical}</i>` : '<i class="tag done">LISTO</i>') : '';
-    return `<span class="win r s-${esc(r.state)}" data-tip="${esc(r.name)}|${esc(STATE[r.state] || r.state)}${r.title ? " · 📌 " + esc(r.title) : ""}">${tag}${robotArt(r)}</span>`;
+    return `<span class="win r s-${esc(r.state)}" data-tip="${esc(r.name)}|${esc(STATE[r.state] || r.state)}${robotTitle(r) ? " · 📌 " + esc(robotTitle(r)) : ""}">${tag}${robotArt(r)}</span>`;
   }).join('');
+}
+// El título que le pusiste o el sugerido a partir de su encargo (misma regla que la oficina, en robot-art.js).
+function robotTitle(r) {
+  if (r.title) return r.title;
+  const m = /^\/([\w:-]+)\s*(.*)$/.exec(r.label || '');
+  return suggestTitle(r.request || (m ? {kind: 'skill', skill: m[1], args: m[2]} : {kind: 'libre', text: r.label}));
 }
 function floorInner(o, idx) {
   const orph = !o.running && o.orphans > 0;
