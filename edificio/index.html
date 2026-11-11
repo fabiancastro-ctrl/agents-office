@@ -16,12 +16,13 @@
   --display:"Pixelify Sans","Courier New",monospace;--body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
   /* cielo: lo cambia la hora del día (clases t-* en <body>) */
   --sky-top:#0b1222;--sky-bot:#1d2b45;--star:1;--lamp:1;
+  --city-far:#121a2a;--city-near:#182132;--cwin:#1f2a3d;--cwin-on:#f3cf86;--glow:1;
   --wall:#2a3446;--wall-2:#232c3c;--brick:rgba(255,255,255,.035);--slab:#3a475c;--glass:#0d1420;
   color-scheme:dark;
 }
-body.t-dawn{--sky-top:#25305a;--sky-bot:#c97a5b;--star:.25;--lamp:.6}
-body.t-day{--sky-top:#2f6496;--sky-bot:#8dbfe0;--star:0;--lamp:0}
-body.t-dusk{--sky-top:#1d2550;--sky-bot:#b25e57;--star:.35;--lamp:.8}
+body.t-dawn{--sky-top:#25305a;--sky-bot:#c97a5b;--star:.25;--lamp:.6;--city-far:#3b3a5c;--city-near:#2c2e4a;--cwin:#3d3f62;--cwin-on:#f6c27a;--glow:.7}
+body.t-day{--sky-top:#2f6496;--sky-bot:#8dbfe0;--star:0;--lamp:0;--city-far:#86a6c6;--city-near:#6787a8;--cwin:#9dbbd6;--cwin-on:#c4d9ea;--glow:.35}
+body.t-dusk{--sky-top:#1d2550;--sky-bot:#b25e57;--star:.35;--lamp:.8;--city-far:#33294a;--city-near:#262340;--cwin:#352f52;--cwin-on:#f6c27a;--glow:.85}
 *{box-sizing:border-box}
 html{font-variant-ligatures:none} /* Pixelify Sans convierte «fi» en una ligadura que parece una A */
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink)}
@@ -61,15 +62,37 @@ body.t-day .cloud{background:rgba(255,255,255,.55)}
 
 /* ---------- escena ---------- */
 .scene{position:relative;padding:56px 16px 0;display:grid;justify-items:center;min-height:calc(100vh - 58px);align-content:end;overflow-x:clip}
-.bld{--w:min(900px,100%);position:relative;width:var(--w);filter:drop-shadow(0 20px 30px rgba(0,0,0,.35))}
+.bld{--w:min(1000px,100%);z-index:2;position:relative;width:var(--w);filter:drop-shadow(0 20px 30px rgba(0,0,0,.35))}
+
+/* ciudad al fondo: dos capas de edificios con ventanas (las genera city() en JS) */
+.city{position:absolute;left:50%;bottom:94px;width:100vw;height:430px;transform:translateX(-50%);pointer-events:none;z-index:0}
+.city svg{position:absolute;inset:0;width:100%;height:100%}
+.city .far{fill:var(--city-far);transition:fill 2s} .city .near,.fcp-tower .near{fill:var(--city-near);transition:fill 2s}
+.city .cw,.fcp-tower .cw{fill:var(--cwin);transition:fill 2s} .city .cw.on,.fcp-tower .cw.on{fill:var(--cwin-on)}
+.fcp-tower{position:absolute;right:2%;width:150px;top:-84px;bottom:0;z-index:-1;pointer-events:none} /* asoma ~140 px sobre la azotea */
+.fcp-tower svg{display:block;width:100%;height:100%}
+#fcp .cw{transition:fill .35s,opacity .35s} #fcp.show .cw[data-r].on{fill:#ffd36b;filter:drop-shadow(0 0 2px #ffcf70)} #fcp.show .cw:not([data-r]){opacity:.4}
+.street{z-index:1}
 
 /* azotea */
-.roof{position:relative;height:74px;margin:0 22px}
-.parapet{position:absolute;left:0;right:0;bottom:0;height:16px;background:var(--slab);border-radius:4px 4px 0 0;box-shadow:inset 0 -3px 0 rgba(0,0,0,.25)}
+.roof{position:relative;height:74px;margin:0}
+.parapet{position:absolute;left:-8px;right:-8px;bottom:0;height:18px;background:var(--slab);border-radius:4px 4px 0 0;box-shadow:inset 0 -3px 0 rgba(0,0,0,.25),inset 0 3px 0 rgba(255,255,255,.08)}
+.parapet::after{content:"";position:absolute;left:10px;right:10px;top:100%;height:8px;background:repeating-linear-gradient(90deg,#4a5870 0 10px,transparent 10px 18px)} /* dentículos de la cornisa */
+.solar{position:absolute;left:19%;bottom:18px;display:flex;gap:4px}
+.solar i{width:34px;height:16px;background:repeating-linear-gradient(90deg,#2b4d7a 0 7px,#365e93 7px 8px),#2b4d7a;border:2px solid #8b98ad;transform:skewX(-25deg);box-shadow:0 4px 0 -1px #4a5870}
+.garden{position:absolute;right:21%;bottom:18px;width:120px;height:26px}
+.garden::before{content:"";position:absolute;left:0;right:0;bottom:0;height:12px;background:#6b4b33;border-radius:2px;box-shadow:inset 0 3px 0 rgba(255,255,255,.1)}
+.garden i{position:absolute;bottom:9px;width:22px;height:20px;border-radius:50% 50% 40% 40%;background:#4f9a62;box-shadow:inset -4px -3px 0 rgba(0,0,0,.18)}
+.garden i:nth-child(1){left:6px} .garden i:nth-child(2){left:34px;width:26px;height:24px;background:#5aa86c} .garden i:nth-child(3){left:66px;background:#e08aa6;width:14px;height:14px} .garden i:nth-child(4){left:86px}
+.sign{box-shadow:0 0 0 0 transparent}
+.sign i{position:absolute;bottom:-1px;left:8px;right:8px;height:3px;background:radial-gradient(circle,#ffd98a 1.2px,transparent 1.6px) 0 0/10px 3px;opacity:var(--glow);filter:drop-shadow(0 0 2px #ffcf70)}
+.bld::after{content:"";position:absolute;top:56px;bottom:0;right:-18px;width:18px;background:linear-gradient(90deg,#1a212e,#121823);transform:skewY(-40deg);transform-origin:left top;z-index:-1} /* lado del edificio en perspectiva */
+
+/* azotea */
 .sign{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);padding:5px 14px 4px;background:#141b27;border:2px solid #4a5870;border-bottom:0;border-radius:6px 6px 0 0;font-family:var(--display);font-weight:500;font-size:16px;letter-spacing:.08em;color:var(--amber);text-shadow:0 0 6px rgba(243,183,79,.55);white-space:nowrap}
 .sign::before,.sign::after{content:"";position:absolute;bottom:-1px;width:4px;height:10px;background:#4a5870}
 .sign::before{left:16%}.sign::after{right:16%}
-.antenna{position:absolute;right:16%;bottom:16px;width:4px;height:58px;background:#6b7891}
+.antenna{position:absolute;right:19.6%;bottom:16px;width:4px;height:58px;background:#6b7891}
 .antenna::before{content:"";position:absolute;left:-7px;top:16px;width:18px;height:3px;background:#6b7891;box-shadow:0 12px 0 #6b7891}
 .antenna i{position:absolute;left:-3px;top:-6px;width:10px;height:10px;border-radius:50%;background:#7a2730;animation:beacon 1.6s steps(1) infinite}
 .antenna.alert i{background:#ff4d63;animation-duration:.6s}
@@ -82,8 +105,10 @@ body.t-day .cloud{background:rgba(255,255,255,.55)}
 .body{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 54px;background:var(--wall);border-left:6px solid var(--wall-2);border-right:6px solid var(--wall-2);
   background-image:linear-gradient(var(--brick) 1px,transparent 1px),linear-gradient(90deg,var(--brick) 1px,transparent 1px);background-size:100% 12px,24px 12px}
 .floors{display:grid}
-.floor{--oh:174;position:relative;display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:12px;padding:14px 12px 16px 14px;cursor:pointer;border-bottom:8px solid var(--slab);transition:background .2s;outline-offset:-3px}
+.floor{--oh:174;position:relative;display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:12px;padding:20px 12px 22px 14px;cursor:pointer;border-bottom:8px solid var(--slab);transition:background .2s;outline-offset:-3px}
 .floor::before{content:"";position:absolute;left:0;right:0;bottom:-8px;height:3px;background:hsl(var(--oh) 55% 50%);opacity:.9}
+.floor::after{content:"";position:absolute;left:176px;right:12px;top:4px;height:7px;border-radius:0 0 5px 5px;background:repeating-linear-gradient(90deg,hsl(var(--oh) 55% 52%) 0 16px,hsl(var(--oh) 40% 82%) 16px 32px);box-shadow:0 3px 0 rgba(0,0,0,.25);opacity:.9} /* marquesina con el color de la oficina */
+.floor.off::after{filter:saturate(.35) brightness(.7)}
 .floor:hover{background:rgba(255,255,255,.035)}
 .floor.need{animation:needglow 1.6s ease-in-out infinite}
 @keyframes needglow{50%{background:color-mix(in srgb,var(--rose) 9%,transparent)}}
@@ -97,15 +122,17 @@ body.t-day .cloud{background:rgba(255,255,255,.55)}
 .plq .needb{font-family:var(--mono);font-size:11px;color:var(--rose);font-weight:600}
 
 /* ventanas: un puesto por ventana */
-.wins{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
-.win{position:relative;aspect-ratio:5/6;border-radius:3px;overflow:hidden;background:var(--glass);border:3px solid #4a5870;border-bottom-width:5px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
+.wins{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:12px;padding:0 4px;background:linear-gradient(90deg,transparent 0 calc(100% - 1px),rgba(0,0,0,.18) 0) 0 0/calc((100% + 12px)/8) 100%} /* columnas entre ventanas */
+.win{position:relative;aspect-ratio:5/6;border-radius:3px;overflow:hidden;background:var(--glass);border:3px solid #56647c;border-bottom-width:5px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),0 7px 0 -2px #6b7891,0 9px 0 -2px rgba(0,0,0,.35)} /* marco y alféizar */
 .win::after{content:"";position:absolute;inset:0;background:linear-gradient(125deg,transparent 40%,rgba(255,255,255,.07) 41%,rgba(255,255,255,.07) 52%,transparent 53%);pointer-events:none} /* reflejo */
 .win svg{position:absolute;left:50%;bottom:-4px;width:72%;transform:translateX(-50%)}
 .win .p{display:none} /* utilería de la oficina (hojas, ondas…): aquí no */
 .win .f{display:none} /* caras: feliz al terminar, «?» cuando te pregunta */
 .win.s-done .f-happy,.win.s-input .f-ask{display:inline} .win.s-done .eye,.win.s-input .eye{opacity:0}
 .win .tag{position:absolute;top:3px;left:50%;transform:translateX(-50%);font:700 8.5px/1 var(--mono);padding:2px 3px;border-radius:2px;white-space:nowrap;z-index:1}
-.on .win{background:linear-gradient(#3a3424,#2a2619)} /* luz encendida, puesto vacío */
+.on .win{background:radial-gradient(ellipse at 50% -10%,rgba(255,226,160,.55),transparent 60%),linear-gradient(#6b5a3a,#4d4029 70%,#3b3120)} /* luz encendida, puesto vacío */
+.on .win.free svg{bottom:0;width:100%}
+body.t-night .on .win,body.t-dusk .on .win{box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),0 7px 0 -2px #6b7891,0 9px 0 -2px rgba(0,0,0,.35),0 0 calc(18px * var(--glow)) rgba(255,210,130,calc(.28 * var(--glow)))}
 .on .win.r{background:radial-gradient(circle at 50% 70%,#ffe2a0,#e9b864 60%,#b9863e)}
 .on .win.s-delegating{background:radial-gradient(circle at 50% 70%,#e2dcff,#b6a9f2 60%,#7d6fc4)}
 .on .win.s-input{animation:winneed 1s steps(2) infinite}
@@ -120,6 +147,8 @@ body.t-day .cloud{background:rgba(255,255,255,.55)}
 .win .tag.ask{background:var(--rose);color:#3a0d13}
 /* piso detenido: ventanas a oscuras; robots que siguen vivos en tmux, como siluetas ámbar */
 .floor.off .win{background:#0a0f18}
+.floor.off .win:not(.orph){background:repeating-linear-gradient(#5d6a80 0 5px,#47536a 5px 6px,#3a4558 6px 7px)} /* persianas bajadas */
+.floor.off .win:not(.orph)::before{content:"";position:absolute;left:50%;top:0;width:2px;height:70%;background:#2c3444;transform:translateX(-50%)} /* cordón */
 .floor.off .win.orph svg{opacity:.55;filter:grayscale(1) brightness(.6) sepia(1) saturate(4) hue-rotate(-12deg)}
 .floor.off .win.orph{border-color:color-mix(in srgb,var(--amber) 55%,#4a5870)}
 .floor.off .win.orph.busy svg{animation:flick 1.4s steps(2) infinite}
@@ -162,12 +191,47 @@ body.t-day .cloud{background:rgba(255,255,255,.55)}
 /* calle */
 .street{position:relative;width:100vw;height:96px;margin:0 calc(50% - 50vw);justify-self:center;background:linear-gradient(#5b6578 0 16px,#3a4252 16px 22px,#20252f 22px)}
 .street::after{content:"";position:absolute;left:0;right:0;top:58px;height:4px;background:repeating-linear-gradient(90deg,#d9c58f 0 34px,transparent 34px 72px);opacity:.7}
-.lamp{position:absolute;bottom:80px;width:6px;height:150px;background:#4a5870;z-index:1}
+.lamp{position:absolute;bottom:80px;width:6px;height:150px;background:#4a5870;z-index:3}
 .lamp::before{content:"";position:absolute;top:-4px;left:-10px;width:26px;height:8px;border-radius:4px;background:#6b7891}
 .lamp::after{content:"";position:absolute;top:4px;left:-34px;width:74px;height:140px;background:radial-gradient(ellipse at top,rgba(255,224,150,.32),transparent 70%);opacity:var(--lamp);transition:opacity 2s;pointer-events:none}
-.tree{position:absolute;bottom:80px;width:70px;height:110px;z-index:1}
+.tree{position:absolute;bottom:80px;width:70px;height:110px;z-index:3}
 .tree::before{content:"";position:absolute;bottom:0;left:30px;width:10px;height:44px;background:#6b4b33}
 .tree::after{content:"";position:absolute;bottom:34px;left:0;width:70px;height:76px;border-radius:46% 46% 40% 40%;background:#3f7d50;box-shadow:inset -8px -8px 0 rgba(0,0,0,.18)}
+
+/* calle con vida: autos que pasan, banca con gato, robots que entran */
+.vcar{position:absolute;width:96px;height:38px;left:-140px;bottom:14px;animation:drive 30s linear infinite;z-index:2}
+.vcar.b{bottom:40px;left:auto;right:-140px;animation:driveb 41s linear infinite;animation-delay:-17s}
+.vcar.b svg{transform:scaleX(-1)}
+.vcar svg{width:100%;height:100%}
+.vcar .hl{opacity:var(--lamp)}
+@keyframes drive{0%{transform:translateX(0)}35%,100%{transform:translateX(calc(100vw + 280px))}}
+@keyframes driveb{0%{transform:translateX(0)}30%,100%{transform:translateX(calc(-100vw - 280px))}}
+.bench{position:absolute;bottom:80px;width:74px;height:40px;z-index:1}
+.bench svg{width:100%;height:100%;overflow:visible}
+.bench .tail{transform-origin:62px 26px;animation:tail 2.6s ease-in-out infinite}
+@keyframes tail{50%{transform:rotate(-22deg)}}
+.walker{position:fixed;left:0;top:0;z-index:25;width:34px;pointer-events:none}
+.walker svg{display:block;width:100%}
+.walker .p,.walker .f{display:none}
+.walker .leg-l,.walker .leg-r{transform-box:fill-box;transform-origin:top}
+.walker .leg-l{animation:wstep .3s ease-in-out infinite alternate} .walker .leg-r{animation:wstep .3s .15s ease-in-out infinite alternate}
+@keyframes wstep{from{transform:rotate(14deg)}to{transform:rotate(-14deg)}}
+
+/* gatos: si dejas el mouse encima 3 segundos, dicen algo */
+.cat{position:absolute;display:block;pointer-events:auto;cursor:default;z-index:4}
+.cat.lying{width:34px;height:20px} .cat.sit{width:24px;height:24px}
+.cat svg{display:block;width:100%;height:100%;overflow:visible}
+.cat.sit .tail{transform-origin:19px 22px;animation:tailsit 3.2s ease-in-out infinite}
+@keyframes tailsit{50%{transform:rotate(16deg)}}
+.cat .say{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%) translateY(4px);background:#f4efe2;color:#1a2230;font:600 11.5px/1.2 var(--body);padding:4px 8px;border-radius:8px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.35);opacity:0;visibility:hidden;transition:opacity .2s,transform .2s,visibility 0s .2s;pointer-events:none}
+.cat .say::after{content:"";position:absolute;top:100%;left:50%;margin-left:-5px;border:5px solid transparent;border-top-color:#f4efe2}
+.cat:hover .say{opacity:1;visibility:visible;transform:translateX(-50%);transition:opacity .25s 3s,transform .25s 3s,visibility 0s 3s}
+a.cat{cursor:pointer;text-decoration:none} a.cat:hover .say{pointer-events:auto} a.cat .say{color:#0a66c2}
+.mail{position:relative}
+.cat.peek svg{clip-path:inset(0 0 55% 0)} /* asoma detrás del mostrador */
+
+/* fuegos artificiales (código Konami): en el cielo, detrás del edificio */
+.fireworks{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1}
 
 /* vacío */
 .empty-lot{padding:26px 16px;text-align:center;color:var(--muted);font-size:13px;background:repeating-linear-gradient(135deg,#2a3446 0 14px,#262f40 14px 28px)}
@@ -248,6 +312,8 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
 <div class="orb" aria-hidden="true"></div>
 <div class="cloud" style="top:110px;width:120px;animation-duration:140s" aria-hidden="true"></div>
 <div class="cloud" style="top:190px;width:80px;animation-duration:190s;animation-delay:-80s" aria-hidden="true"></div>
+<div class="cloud" style="top:150px;width:150px;animation-duration:230s;animation-delay:-150s" aria-hidden="true"></div>
+<div class="cloud" style="top:240px;width:100px;animation-duration:170s;animation-delay:-30s" aria-hidden="true"></div>
 
 <header class="hud">
   <h1>Edificio de Oficinas</h1>
@@ -257,10 +323,15 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
 </header>
 
 <main class="scene">
+  <div class="city" id="city" aria-hidden="true"></div>
   <div class="bld" id="bld">
+    <div class="fcp-tower" id="fcp-tower" aria-hidden="true"></div>
     <div class="roof" aria-hidden="true">
       <div class="tank"></div>
-      <div class="sign">EDIFICIO DE OFICINAS</div>
+      <span class="cat sit" style="left:calc(12% + 46px);bottom:18px"><svg viewBox="0 0 26 26"><g fill="#2b2f38"><path class="tail" d="M19 22q7 0 5-8" stroke="#2b2f38" stroke-width="2.4" fill="none" stroke-linecap="round"/><ellipse cx="13" cy="19" rx="7" ry="6.5"/><circle cx="13" cy="9" r="5.5"/><path d="M8.6 6.4l.4-5 3.4 3.4zM17.4 6.4l-.4-5-3.4 3.4z"/></g><circle cx="11" cy="9" r="1" fill="#ffd27a"/><circle cx="15" cy="9" r="1" fill="#ffd27a"/><path d="M12.3 11.2l.7.5.7-.5" stroke="#ffd27a" stroke-width=".5" fill="none"/></svg><b class="say">@dexterfcp</b></span>
+      <div class="solar"><i></i><i></i><i></i></div>
+      <div class="garden"><i></i><i></i><i></i><i></i></div>
+      <div class="sign">EDIFICIO DE OFICINAS<i></i></div>
       <div class="antenna" id="antenna"><i></i></div>
       <div class="parapet"></div>
     </div>
@@ -272,7 +343,7 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
       <div class="awning" aria-hidden="true"></div>
       <div class="reception" aria-hidden="true">
         <div class="plant"></div>
-        <div class="desk"></div>
+        <div class="desk"><a class="cat sit peek" title="" href="https://www.linkedin.com/in/fabicastro89" target="_blank" rel="noopener" aria-label="Perfil de LinkedIn: fabicastro89" style="right:10px;bottom:31px"><svg viewBox="0 0 26 26"><g fill="#2b2f38"><path class="tail" d="M19 22q7 0 5-8" stroke="#2b2f38" stroke-width="2.4" fill="none" stroke-linecap="round"/><ellipse cx="13" cy="19" rx="7" ry="6.5"/><circle cx="13" cy="9" r="5.5"/><path d="M8.6 6.4l.4-5 3.4 3.4zM17.4 6.4l-.4-5-3.4 3.4z"/></g><circle cx="11" cy="9" r="1" fill="#ffd27a"/><circle cx="15" cy="9" r="1" fill="#ffd27a"/><path d="M12.3 11.2l.7.5.7-.5" stroke="#ffd27a" stroke-width=".5" fill="none"/></svg><b class="say">linkedin fabicastro89 ↗</b></a></div>
         <svg class="me" viewBox="0 0 40 48"><circle cx="20" cy="13" r="9" fill="#e7c9a5"/><path d="M11 12a9 9 0 0118 0c-3-3-12-3-18 0z" fill="#3b2c22"/><rect x="8" y="24" width="24" height="20" rx="8" fill="#f3b74f"/></svg>
       </div>
       <button class="door" type="button" data-new aria-label="Nueva oficina: construir un piso nuevo"><i></i><i></i><span>Nueva oficina</span><small>construir un piso</small></button>
@@ -280,8 +351,12 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
     </div>
   </div>
   <div class="street" aria-hidden="true">
-    <div class="lamp" style="left:calc(50% - 520px)"></div><div class="tree" style="left:calc(50% - 640px)"></div>
-    <div class="lamp" style="left:calc(50% + 500px)"></div><div class="tree" style="left:calc(50% + 560px)"></div>
+    <div class="lamp" style="left:calc(50% - 545px)"></div><div class="tree" style="left:calc(50% - 650px)"></div><div class="tree" style="left:calc(50% - 820px)"></div>
+    <div class="lamp" style="left:calc(50% + 535px)"></div><div class="tree" style="left:calc(50% + 700px)"></div>
+    <div class="bench" style="left:calc(50% + 560px)"><svg viewBox="0 0 74 40"><rect x="4" y="18" width="66" height="5" rx="2" fill="#8a6447"/><rect x="4" y="8" width="66" height="5" rx="2" fill="#9b7352"/><rect x="10" y="23" width="4" height="17" fill="#3b4252"/><rect x="60" y="23" width="4" height="17" fill="#3b4252"/></svg>
+      <span class="cat lying" style="left:36px;bottom:21px"><svg viewBox="36 0 34 20"><g fill="#2b2f38"><ellipse cx="52" cy="14" rx="9" ry="5"/><circle cx="44" cy="10" r="4.5"/><path d="M41 6l1-4 2.5 3zM45.5 5.2l2-3.6 1 4z"/><path class="tail" d="M60 15q8-2 6-12" stroke="#2b2f38" stroke-width="2.6" fill="none" stroke-linecap="round"/></g><circle cx="42.6" cy="9.6" r=".9" fill="#ffd27a"/><circle cx="45.4" cy="9.6" r=".9" fill="#ffd27a"/></svg><b class="say">By Fabian Castro</b></span></div>
+    <div class="vcar"><svg viewBox="0 0 96 38"><path d="M6 26v-7q0-4 4-5l14-3 10-8h28l12 9 14 3q4 1 4 5v6z" fill="#d1585d"/><path d="M36 6h12v8H27zM52 6h9l9 8H52z" fill="#bfe0f2" opacity=".85"/><rect x="4" y="24" width="88" height="5" rx="2" fill="#a8434a"/><circle cx="24" cy="30" r="7" fill="#20252f"/><circle cx="24" cy="30" r="3" fill="#8b98ad"/><circle cx="72" cy="30" r="7" fill="#20252f"/><circle cx="72" cy="30" r="3" fill="#8b98ad"/><path class="hl" d="M92 19l40-6v16z" fill="rgba(255,236,170,.35)"/><rect x="88" y="18" width="5" height="3" rx="1" fill="#ffe9a8"/></svg></div>
+    <div class="vcar b"><svg viewBox="0 0 96 38"><path d="M6 26v-9q0-3 3-4h6l5-9h40l8 9h18q4 0 4 4v9z" fill="#5d8fd1"/><path d="M23 6h16v8H19zM43 6h15l6 8H43z" fill="#bfe0f2" opacity=".85"/><rect x="4" y="24" width="88" height="5" rx="2" fill="#4a73aa"/><circle cx="22" cy="30" r="7" fill="#20252f"/><circle cx="22" cy="30" r="3" fill="#8b98ad"/><circle cx="74" cy="30" r="7" fill="#20252f"/><circle cx="74" cy="30" r="3" fill="#8b98ad"/><path class="hl" d="M92 19l40-6v16z" fill="rgba(255,236,170,.35)"/><rect x="88" y="18" width="5" height="3" rx="1" fill="#ffe9a8"/></svg></div>
   </div>
 </main>
 
@@ -339,6 +414,17 @@ function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = fals
 
 /* ---------- pisos ---------- */
 const robotArt = (r) => robotSVG(ROBOT_COLORS[(r.color || 0) % 8], lookOf(r.name, r.room ? {type: 'room', sala: r.room === 'sala'} : null));
+// Interior de un puesto libre con la luz encendida: escritorio con monitor, planta, estante o lámpara.
+const DESK = '<rect x="6" y="40" width="38" height="4" rx="1" fill="#7a5a3c"/><rect x="9" y="44" width="3" height="16" fill="#5a4230"/><rect x="38" y="44" width="3" height="16" fill="#5a4230"/>';
+const MON = '<rect x="15" y="27" width="18" height="12" rx="1.5" fill="#1b2330"/><rect x="16.5" y="28.5" width="15" height="9" fill="#3d6d8f"/><path d="M18 31h8M18 33.5h11M18 36h6" stroke="#9fd3f0" stroke-width=".9"/><rect x="22.5" y="39" width="3" height="1.5" fill="#1b2330"/>';
+const PLANT = x => `<rect x="${x}" y="47" width="9" height="9" rx="1.5" fill="#a0583d"/><ellipse cx="${x + 4.5}" cy="43" rx="7" ry="7.5" fill="#4f9a62"/><ellipse cx="${x + 2}" cy="41" rx="3" ry="4" fill="#5fb276"/>`;
+const ROOM = [
+  `<svg viewBox="0 0 50 60" aria-hidden="true">${DESK}${MON}<rect x="19" y="47" width="12" height="9" rx="2" fill="#2f3a4c"/></svg>`,
+  `<svg viewBox="0 0 50 60" aria-hidden="true">${DESK}${MON}${PLANT(36)}<rect x="9" y="37" width="5" height="3" rx="1" fill="#f4efe2"/></svg>`,
+  `<svg viewBox="0 0 50 60" aria-hidden="true"><rect x="6" y="14" width="22" height="46" fill="#5a4230"/><g fill="#7a5a3c"><rect x="6" y="26" width="22" height="2"/><rect x="6" y="38" width="22" height="2"/><rect x="6" y="50" width="22" height="2"/></g><g><rect x="8" y="17" width="3" height="9" fill="#d1585d"/><rect x="11.5" y="18" width="3" height="8" fill="#5d8fd1"/><rect x="15" y="16" width="2.5" height="10" fill="#f3b74f"/><rect x="9" y="30" width="3" height="8" fill="#5fcbb9"/><rect x="12.5" y="29" width="4" height="9" fill="#a99cf2"/><rect x="18" y="31" width="3" height="7" fill="#ef8f7a"/></g><path d="M38 24l-4 8h8z" fill="#f6d27f"/><rect x="37.4" y="32" width="1.4" height="22" fill="#3b4252"/><ellipse cx="38" cy="55" rx="5" ry="1.6" fill="#3b4252"/></svg>`,
+  `<svg viewBox="0 0 50 60" aria-hidden="true">${PLANT(8)}<rect x="24" y="44" width="20" height="3" rx="1" fill="#7a5a3c"/><rect x="32" y="47" width="3" height="13" fill="#5a4230"/><rect x="29" y="39" width="5" height="5" rx="1" fill="#f4efe2"/><path d="M34 40.4h1.4a1.2 1.2 0 010 2.4H34" stroke="#f4efe2" stroke-width=".8" fill="none"/><rect x="12" y="14" width="18" height="12" rx="1" fill="#2a3446" stroke="#8b98ad"/><path d="M14 23l5-5 4 3 5-5" stroke="#5fcbb9" fill="none" stroke-width="1.2"/></svg>`
+];
+const idxSeed = name => [...String(name)].reduce((h, c) => h + c.charCodeAt(0), 0);
 function windows(o) {
   if (!o.running) {
     // A oscuras; los robots que siguen vivos en tmux se ven como siluetas.
@@ -354,7 +440,7 @@ function windows(o) {
   const n = Math.max(8, list.length);
   return Array.from({length: n}, (_, i) => {
     const r = list[i];
-    if (!r) return '<span class="win" data-tip="|puesto libre"></span>';
+    if (!r) return `<span class="win free" data-tip="|puesto libre">${ROOM[(i + idxSeed(o.name)) % ROOM.length]}</span>`;
     const tag = r.state === 'input' ? '<i class="tag ask">?</i>' : r.state === 'done' ? (r.critical ? `<i class="tag crit">⚠${r.critical}</i>` : '<i class="tag done">LISTO</i>') : '';
     return `<span class="win r s-${esc(r.state)}" data-tip="${esc(r.name)}|${esc(STATE[r.state] || r.state)}${robotTitle(r) ? " · 📌 " + esc(robotTitle(r)) : ""}">${tag}${robotArt(r)}</span>`;
   }).join('');
@@ -420,11 +506,131 @@ function moveCar(list) {
 }
 addEventListener('resize', () => moveCar([...offices].sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))));
 
+/* ---------- ciudad de fondo ---------- */
+// Dos capas de edificios con ventanas; las encendidas cambian de color con la hora (variables --cwin*).
+function city() {
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const layer = (cls, base, minH, maxH, wMin, wMax, lit) => {
+    let x = -20, out = '';
+    while (x < 1620) {
+      const w = wMin + rnd() * (wMax - wMin), h = minH + rnd() * (maxH - minH), y = 430 - h;
+      out += `<rect class="${cls}" x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="${w.toFixed(0)}" height="${h.toFixed(0)}"/>`;
+      if (rnd() < .3) out += `<rect class="${cls}" x="${(x + w / 2 - 2).toFixed(0)}" y="${(y - 14).toFixed(0)}" width="3" height="14"/>`;
+      for (let wy = y + 10; wy < 420; wy += base) for (let wx = x + 6; wx < x + w - 8; wx += base - 2) out += `<rect class="cw${rnd() < lit ? ' on' : ''}" x="${wx.toFixed(0)}" y="${wy.toFixed(0)}" width="4" height="5"/>`;
+      x += w + 2 + rnd() * 10;
+    }
+    return out;
+  };
+  $('city').innerHTML = `<svg viewBox="0 0 1600 430" preserveAspectRatio="xMidYMax slice"><g opacity=".75">${layer('far', 14, 220, 410, 50, 110, .16)}</g>${layer('near', 12, 100, 260, 60, 130, .24)}</svg>`;
+  // Torre de las letras: detrás del edificio principal, asomando 140 px sobre la azotea. Va pegada al edificio
+  // (no a la ciudad) para que se vea con cualquier ancho de pantalla y cualquier cantidad de pisos.
+  let tower = `<rect class="near" x="0" y="0" width="150" height="3000"/><rect class="near" x="72" y="-16" width="4" height="16"/>`;
+  for (let r = 0; r < FCP_ROWS; r++) for (let c = 0; c < FCP_COLS; c++)
+    tower += `<rect class="cw${rnd() < .25 ? ' on' : ''}" data-r="${r}" data-c="${c}" x="${(5 + c * 7.6).toFixed(1)}" y="${10 + r * 10}" width="5" height="6"/>`;
+  for (let y = 10 + FCP_ROWS * 10; y < 300; y += 10) for (let c = 0; c < FCP_COLS; c++)
+    tower += `<rect class="cw${rnd() < .22 ? ' on' : ''}" x="${(5 + c * 7.6).toFixed(1)}" y="${y}" width="5" height="6"/>`;
+  $('fcp-tower').innerHTML = `<svg viewBox="0 -16 150 3016" preserveAspectRatio="xMinYMin slice"><g id="fcp">${tower}</g></svg>`;
+}
+// Cada 2 minutos, solo con la pestaña visible, las luces de la torre forman «FCP» durante 2 segundos.
+const FCP_COLS = 19, FCP_ROWS = 9;
+const FCP = ['11111 01111 11110', '10000 10000 10001', '10000 10000 10001', '11110 10000 11110', '10000 10000 10000', '10000 10000 10000', '10000 01111 10000']
+  .map(row => ' ' + row + ' '); // margen de una ventana a cada lado; los espacios entre letras son columnas apagadas
+const FCP_EVERY = (Number(new URLSearchParams(location.search).get('fcp')) || 120) * 1000;
+let fcpTimer = 0, fcpBefore = null;
+// Enciende «FCP» en la torre por `ms` milisegundos y después devuelve cada ventana a como estaba.
+function fcpShow(ms = 2000) {
+  const g = $('fcp'); if (!g) return;
+  const wins = [...g.querySelectorAll('.cw[data-r]')];
+  if (!fcpBefore) fcpBefore = wins.map(w => w.classList.contains('on'));
+  wins.forEach(w => { const r = +w.dataset.r - 1, c = +w.dataset.c; w.classList.toggle('on', FCP[r]?.[c] === '1'); });
+  g.classList.add('show');
+  clearTimeout(fcpTimer);
+  fcpTimer = setTimeout(() => { wins.forEach((w, i) => w.classList.toggle('on', fcpBefore[i])); fcpBefore = null; g.classList.remove('show'); }, ms);
+}
+const fcpTick = () => { if (document.visibilityState === 'visible' && !party) fcpShow(2000); };
+
+/* ---------- código Konami (↑ ↑ ↓ ↓ ← → ← → B A Espacio): fuegos artificiales y FCP por 30 s ---------- */
+const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a', ' '];
+let kpos = 0, party = false;
+document.addEventListener('keydown', e => {
+  if (e.target.closest?.('input, textarea, select, dialog[open]')) return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  kpos = k === KONAMI[kpos] ? kpos + 1 : (k === KONAMI[0] ? 1 : 0);
+  if (kpos === KONAMI.length) { kpos = 0; if (k === ' ') e.preventDefault(); fiesta(30000); }
+});
+function fiesta(ms) {
+  if (party) return;
+  party = true;
+  fcpShow(ms);
+  const cv = document.createElement('canvas'); cv.className = 'fireworks'; document.body.appendChild(cv);
+  const ctx = cv.getContext('2d'), dpr = devicePixelRatio || 1;
+  const size = () => { cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+  size(); addEventListener('resize', size);
+  const COLORS = ['#ffd36b', '#ef7f8a', '#5fcbb9', '#a99cf2', '#7cb6f0', '#f3b74f', '#ffffff', '#b9d06a'];
+  const rockets = [], sparks = [], end = performance.now() + ms;
+  let nextLaunch = 0, raf = 0;
+  const launch = () => {
+    const x = innerWidth * (.08 + Math.random() * .84);
+    rockets.push({x, y: innerHeight * .9, vx: (Math.random() - .5) * 1.2, vy: -(9 + Math.random() * 4), ty: innerHeight * (.12 + Math.random() * .3), c: COLORS[Math.random() * COLORS.length | 0]});
+  };
+  const boom = r => {
+    const n = 100 + Math.random() * 60 | 0, ring = Math.random() < .3, c2 = COLORS[Math.random() * COLORS.length | 0];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, sp = ring ? 6 : 1.5 + Math.random() * 6;
+      sparks.push({x: r.x, y: r.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, decay: .008 + Math.random() * .008, c: i % 3 ? r.c : c2});
+    }
+  };
+  const frame = t => {
+    ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fillRect(0, 0, innerWidth, innerHeight);
+    ctx.globalCompositeOperation = 'lighter';
+    if (t < end && t > nextLaunch) { launch(); if (Math.random() < .5) launch(); nextLaunch = t + 250 + Math.random() * 500; }
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const r = rockets[i]; r.x += r.vx; r.y += r.vy; r.vy += .12;
+      ctx.fillStyle = r.c; ctx.fillRect(r.x - 1.5, r.y - 1.5, 3, 5);
+      if (r.y <= r.ty || r.vy >= -1) { boom(r); rockets.splice(i, 1); }
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i]; p.x += p.vx; p.y += p.vy; p.vy += .045; p.vx *= .982; p.vy *= .982; p.life -= p.decay;
+      if (p.life <= 0) { sparks.splice(i, 1); continue; }
+      ctx.globalAlpha = p.life; ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.6, p.y - 1.6, 3.2, 3.2); ctx.globalAlpha = 1;
+    }
+    if (t < end || rockets.length || sparks.length) raf = requestAnimationFrame(frame);
+    else { cv.remove(); removeEventListener('resize', size); party = false; }
+  };
+  raf = requestAnimationFrame(frame);
+}
+city();
+setInterval(fcpTick, FCP_EVERY);
+
+/* ---------- robots que llegan ---------- */
+// Cuando una oficina lanza un robot, se le ve entrar caminando por la puerta del edificio.
+let known = null;
+function arrivals() {
+  const now = new Set();
+  for (const o of offices) for (const r of o.robotList || []) now.add(`${o.name}:${r.name}`);
+  if (known) {
+    let k = 0;
+    for (const o of offices) for (const r of o.robotList || []) if (!known.has(`${o.name}:${r.name}`)) setTimeout(() => walkIn(r), 900 * k++);
+  }
+  known = now;
+}
+function walkIn(r) {
+  const door = document.querySelector('.door').getBoundingClientRect();
+  if (door.bottom < 0 || door.top > innerHeight) return;
+  const fromLeft = Math.random() < .5, w = document.createElement('div');
+  w.className = 'walker'; w.innerHTML = robotArt(r);
+  document.body.appendChild(w);
+  const y = door.bottom - 44, x0 = fromLeft ? -40 : innerWidth + 10, x1 = door.left + door.width / 2 - 17;
+  const dur = Math.min(5200, Math.abs(x1 - x0) * 7);
+  w.animate([{transform: `translate(${x0}px,${y}px)`, opacity: 1}, {transform: `translate(${x1}px,${y}px)`, opacity: 1, offset: .82}, {transform: `translate(${x1}px,${y - 12}px) scale(.8)`, opacity: 0}],
+    {duration: dur, easing: 'linear', fill: 'forwards'}).onfinish = () => w.remove();
+}
+
 async function load() {
   if (busy) return;
   try {
     offices = (await (await fetch('/api/offices')).json()).offices;
-    render();
+    render(); arrivals();
   } catch { $('chips').innerHTML = '<span class="chip need">sin conexión con el edificio</span>'; }
 }
 

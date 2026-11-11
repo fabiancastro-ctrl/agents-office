@@ -880,3 +880,8 @@ html[data-theme=light] .btn.danger{border-color:#e3a3ab;color:#a32234}
 html[data-theme=light] .sec-need h4{color:#b4283b}
 html[data-theme=light] .rt-err{color:#a32234}
 html[data-theme=light] .sub-row{background:#ece9fb;color:#3b2f86}
+/* copiar el mensaje entero del robot: arriba a la derecha de su globo */
+.lg.agent{position:relative}
+.lg.agent>.cp-msg{top:5px;right:6px}
+.lg.agent>.w{padding-right:5.6em}
+.lg.agent:hover>.cp-msg{opacity:1}

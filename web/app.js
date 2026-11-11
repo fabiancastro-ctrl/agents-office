@@ -1470,7 +1470,9 @@ async function copyText(t) {
 }
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-copy]'); if (!b) return;
-  if (await copyBlock(b.parentElement)) { b.textContent = '✓ Copiado'; b.classList.add('ok'); setTimeout(() => { b.textContent = '📋 Copiar'; b.classList.remove('ok'); }, 1500); }
+  // «msg»: el mensaje entero del robot (sin los botones de sus bloques); si no, el bloque donde está el botón.
+  const target = b.dataset.copy === 'msg' ? b.closest('.lg')?.querySelector('.md-chat') : b.parentElement;
+  if (target && await copyBlock(target)) { b.textContent = '✓ Copiado'; b.classList.add('ok'); setTimeout(() => { b.textContent = '📋 Copiar'; b.classList.remove('ok'); }, 1500); }
   else toast('No se pudo copiar: selecciona el texto y usa ⌘C');
 });
 
@@ -1488,7 +1490,8 @@ function logRow(l, robot) {
   const pasted = hasPaste(l.text) ? ' <i class="pasted">pegado</i>' : '', text = unwrapPaste(l.text);
   const body = md ? (l.kind === 'agent' ? copyable(mdHtml(text)) : mdHtml(text)) : '';
   const av = l.kind === 'agent' ? avatarOf(l.kind === 'agent' && !l.who ? robot : l.who) : '';
-  return `<div class="lg ${l.kind}${av ? ' has-av' : ''}"${av && l.who ? ` style="--c:${avColor(l.who)}"` : ''}><span class="w">${av}${esc(who)} · ${t}${pasted}</span>${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
+  const cpAll = l.kind === 'agent' && md ? '<button type="button" class="cp-btn cp-msg" data-copy="msg" title="Copiar todo el mensaje con formato de chat (Google Chat, WhatsApp)">📋 Copiar</button>' : '';
+  return `<div class="lg ${l.kind}${av ? ' has-av' : ''}"${av && l.who ? ` style="--c:${avColor(l.who)}"` : ''}><span class="w">${av}${esc(who)} · ${t}${pasted}</span>${cpAll}${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
 }
 function renderLog(log, robot) {
   const out = []; let run = [];
