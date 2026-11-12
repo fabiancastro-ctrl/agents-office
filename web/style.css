@@ -885,3 +885,22 @@ html[data-theme=light] .sub-row{background:#ece9fb;color:#3b2f86}
 .lg.agent>.cp-msg{top:5px;right:6px}
 .lg.agent>.w{padding-right:5.6em}
 .lg.agent:hover>.cp-msg{opacity:1}
+
+/* fiesta (código Konami): todos bailan, luces de disco, confeti y gritos de «FCP» */
+.map.party .robot svg{animation:partybounce .36s var(--pd,0s) ease-in-out infinite alternate!important;transform-origin:50% 100%}
+.map.party .robot .arm-l,.map.party .robot .arm-r{transform-box:fill-box;transform-origin:50% 10%;animation:partyarm .36s var(--pd,0s) ease-in-out infinite alternate!important}
+.map.party .robot .arm-r{animation-direction:alternate-reverse!important}
+.map.party .robot .f-happy{display:inline} .map.party .robot .eye,.map.party .robot .f-ask,.map.party .robot .f-sweat{opacity:0}
+@keyframes partybounce{0%{transform:translateY(0) rotate(-10deg)}100%{transform:translateY(-9px) rotate(10deg)}}
+@keyframes partyarm{0%{transform:rotate(20deg)}100%{transform:rotate(-160deg)}}
+.party-fx{position:absolute;inset:0;pointer-events:none;z-index:950;overflow:hidden}
+.party-fx .disco{position:absolute;inset:0;mix-blend-mode:screen;opacity:.42}
+.party-fx .disco::before{content:"";position:absolute;left:50%;top:30%;width:260%;aspect-ratio:1;translate:-50% -50%;background:conic-gradient(rgba(255,40,140,.55) 0 6%,transparent 6% 14%,rgba(40,200,255,.55) 14% 20%,transparent 20% 30%,rgba(255,220,40,.5) 30% 36%,transparent 36% 46%,rgba(120,255,120,.5) 46% 52%,transparent 52% 62%,rgba(170,120,255,.55) 62% 68%,transparent 68% 80%,rgba(255,120,60,.5) 80% 86%,transparent 86%);animation:discospin 4s linear infinite}
+.party-fx .ball{position:absolute;left:50%;top:2%;width:34px;height:34px;margin-left:-17px;border-radius:50%;background:repeating-conic-gradient(#e8edf4 0 25%,#8b98ad 0 50%) 0 0/8px 8px;box-shadow:0 0 18px 6px rgba(255,255,255,.35);animation:discospin 3s linear infinite}
+.party-fx .ball::before{content:"";position:absolute;left:50%;bottom:100%;width:2px;height:40px;background:#8b98ad}
+@keyframes discospin{to{rotate:360deg}}
+.party-fx .confetti{position:absolute;top:-12px;width:7px;height:11px;border-radius:1px;animation:confall linear infinite}
+@keyframes confall{to{transform:translateY(110vh) rotate(var(--r))}}
+.pbub{position:absolute;left:50%;bottom:calc(100% + 30px);transform:translateX(-50%);background:#ffd36b;color:#2a1d05;font:500 13px/1 var(--display);letter-spacing:.04em;padding:5px 9px;border-radius:9px;white-space:nowrap;z-index:6000;box-shadow:0 4px 12px rgba(0,0,0,.4);animation:pbub 1.5s ease-out forwards}
+.pbub::after{content:"";position:absolute;top:100%;left:50%;margin-left:-5px;border:5px solid transparent;border-top-color:#ffd36b}
+@keyframes pbub{0%{opacity:0;transform:translate(-50%,8px) scale(.6)}15%{opacity:1;transform:translate(-50%,0) scale(1.08)}25%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-10px)}}

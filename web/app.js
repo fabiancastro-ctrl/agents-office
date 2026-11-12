@@ -2249,6 +2249,44 @@ document.addEventListener('keydown', e => {
   else if (st.selected) select(null);
 });
 
+/* ---------- código Konami (↑ ↑ ↓ ↓ ← → ← → B A Espacio): fiesta de 15 s ---------- */
+// Va en captura, antes que los atajos: mientras tecleas la secuencia, la B y la A no abren la bandeja ni aprueban.
+const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a', ' '];
+let kpos = 0, partying = false;
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const inSeq = kpos >= 8; // la B, la A y el Espacio solo se «roban» si ya venías con las flechas
+  kpos = k === KONAMI[kpos] ? kpos + 1 : (k === KONAMI[0] ? 1 : 0);
+  if (inSeq && kpos > 8) { e.stopImmediatePropagation(); e.preventDefault(); }
+  if (kpos === KONAMI.length) { kpos = 0; officeParty(15000); }
+}, true);
+function officeParty(ms) {
+  if (partying) return;
+  partying = true;
+  MAP.classList.add('party');
+  const bots = [...MAP.querySelectorAll('.robot')];
+  bots.forEach(el => el.style.setProperty('--pd', `${(-Math.random() * .4).toFixed(2)}s`));
+  const fx = document.createElement('div'); fx.className = 'party-fx'; fx.setAttribute('aria-hidden', 'true');
+  const COLORS = ['#ffd36b', '#ef7f8a', '#5fcbb9', '#a99cf2', '#7cb6f0', '#b9d06a'];
+  fx.innerHTML = '<div class="disco"></div><div class="ball"></div>' + Array.from({length: 70}, () =>
+    `<i class="confetti" style="left:${(Math.random() * 100).toFixed(1)}%;background:${COLORS[Math.random() * COLORS.length | 0]};animation-duration:${(2.2 + Math.random() * 2.2).toFixed(2)}s;animation-delay:${(-Math.random() * 4).toFixed(2)}s;--r:${(Math.random() * 720 - 360) | 0}deg"></i>`).join('');
+  MAP.appendChild(fx);
+  const shout = () => {
+    const live = [...MAP.querySelectorAll('.robot')]; if (!live.length) return;
+    const el = live[Math.random() * live.length | 0];
+    const b = document.createElement('div'); b.className = 'pbub'; b.textContent = ['¡FCP! 🎉', 'FCP 🕺', '¡F-C-P! 🎶', 'FCP ✨'][Math.random() * 4 | 0];
+    el.appendChild(b); setTimeout(() => b.remove(), 1500);
+  };
+  shout(); const iv = setInterval(shout, 700);
+  setTimeout(() => {
+    clearInterval(iv); fx.remove(); MAP.classList.remove('party');
+    MAP.querySelectorAll('.pbub').forEach(b => b.remove());
+    bots.forEach(el => el.style.removeProperty('--pd'));
+    partying = false;
+  }, ms);
+}
+
 /* ---------- atajos de teclado ---------- */
 // No actúan mientras escribes. J/K recorren los robots en el orden de las tarjetas (primero los que te necesitan).
 const KEYS = [['J / K', 'Siguiente / anterior robot'], ['A', 'Aprobar el permiso del robot abierto'], ['R', 'Escribirle al robot abierto'],
