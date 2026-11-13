@@ -81,28 +81,60 @@ const OUTFIT_HAND = {
 const BOLTS = `<circle cx="7.4" cy="16" r="2" fill="#8b98ad" ${OUT}/><circle cx="32.6" cy="16" r="2" fill="#8b98ad" ${OUT}/><circle cx="7" cy="15.5" r=".6" fill="#fff" opacity=".5"/><circle cx="32.2" cy="15.5" r=".6" fill="#fff" opacity=".5"/>`;
 const VENTS = `<path d="M24.6 10.6h4M25.4 12h3.2" stroke="#0b1018" stroke-width=".7" stroke-linecap="round" opacity=".25"/>`;
 const CHEST = `<rect x="14.4" y="29.4" width="11.2" height="6.2" rx="1.6" fill="#0f141c" opacity=".55"/><circle class="led l1" cx="17" cy="32.5" r=".95" fill="#5fcbb9"/><circle class="led l2" cx="20" cy="32.5" r=".95" fill="#f3b74f"/><circle class="led l3" cx="23" cy="32.5" r=".95" fill="#ef7f8a"/><rect x="10.4" y="36.6" width="19.2" height="1.3" fill="#0b1018" opacity=".22"/>`;
-const leg = (cls, x) => `<g class="${cls}"><rect x="${x}" y="40" width="5" height="6" rx="2" fill="#56627a" ${OUT}/><rect x="${x + .6}" y="43.6" width="3.8" height="1.6" rx=".8" fill="#0b1018" opacity=".25"/><rect x="${x - 1}" y="45" width="7" height="3" rx="1.3" fill="#3b4252" ${OUT}/></g>`;
-const arm = (cls, x, color, extra = '') => `<g class="${cls}"><rect x="${x}" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect x="${x + .4}" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/><circle cx="${x + 2.5}" cy="28.4" r="2.1" fill="#8b98ad" ${OUT}/><circle cx="${x + 2.5}" cy="38.6" r="1.9" fill="#56627a" ${OUT}/>${cls === 'arm-l' ? `<rect x="${x + 1}" y="29.4" width="1.4" height="3.4" rx=".7" fill="#fff" opacity=".35"/>` : ''}${extra}</g>`;
+const leg = (cls, x) => `<g class="${cls}"><rect x="${x}" y="40" width="5" height="6" rx="2" fill="#56627a" ${OUT}/><rect class="hd" x="${x}" y="40" width="5" height="6" rx="2" fill="url(#hd-cyl)"/><rect x="${x + .6}" y="43.6" width="3.8" height="1.6" rx=".8" fill="#0b1018" opacity=".25"/><rect x="${x - 1}" y="45" width="7" height="3" rx="1.3" fill="#3b4252" ${OUT}/><rect class="hd" x="${x - .4}" y="45.4" width="5.4" height=".9" rx=".45" fill="#fff" opacity=".22"/></g>`;
+const arm = (cls, x, color, extra = '') => `<g class="${cls}"><rect x="${x}" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect class="hd" x="${x}" y="27" width="5" height="11" rx="2.5" fill="url(#hd-cyl)"/><rect x="${x + .4}" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/><circle cx="${x + 2.5}" cy="28.4" r="2.1" fill="#8b98ad" ${OUT}/><circle cx="${x + 2.5}" cy="38.6" r="1.9" fill="#56627a" ${OUT}/>${cls === 'arm-l' ? `<rect x="${x + 1}" y="29.4" width="1.4" height="3.4" rx=".7" fill="#fff" opacity=".35"/>` : ''}${extra}</g>`;
+// Modo HD (botón «HD» de la oficina): capas de volumen, cristal del visor, brillo de los ojos, reflejo del monitor
+// y juntas. Siempre se dibujan pero la hoja de estilos solo las muestra con html.hd-on, así cambiar de modo no
+// redibuja nada. Los degradados son grises sobre el color del robot: sirven para cualquier color y viven una sola vez
+// en el documento (HD_DEFS).
+const HD_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="hd-vol" x1="0" y1="0" x2=".25" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".38" stop-color="#fff" stop-opacity="0"/><stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".42"/></linearGradient>
+  <linearGradient id="hd-cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".3"/><stop offset=".32" stop-color="#fff" stop-opacity=".3"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".4"/></linearGradient>
+  <linearGradient id="hd-glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".26"/><stop offset=".42" stop-color="#fff" stop-opacity=".04"/><stop offset=".43" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#5fcbb9" stop-opacity=".12"/></linearGradient>
+  <radialGradient id="hd-glow"><stop offset="0" stop-color="#bdf7ee" stop-opacity=".75"/><stop offset="1" stop-color="#bdf7ee" stop-opacity="0"/></radialGradient>
+  <clipPath id="hd-v0"><rect x="11" y="12" width="18" height="8" rx="3"/></clipPath>
+  <clipPath id="hd-v1"><rect x="9.5" y="13" width="21" height="6" rx="3"/></clipPath>
+  <clipPath id="hd-v2"><circle cx="15.5" cy="16" r="3.6"/><circle cx="24.5" cy="16" r="3.6"/></clipPath>
+</defs></svg>`;
+if (typeof document !== 'undefined') {
+  const addDefs = () => { if (!document.getElementById('hd-vol')) document.body.insertAdjacentHTML('afterbegin', HD_DEFS); };
+  if (document.body) addDefs(); else document.addEventListener('DOMContentLoaded', addDefs);
+}
+const VISOR_BOX = [[11, 12, 18, 8, 3], [9.5, 13, 21, 6, 3], null];
+const EYES = [[16, 16, 24, 16], [15.5, 16, 24.5, 16], [15.5, 16, 24.5, 16]];
+function hdHead(v) {
+  const b = VISOR_BOX[v], e = EYES[v];
+  const glass = b ? `<rect x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" rx="${b[4]}" fill="url(#hd-glass)"/>` : '<circle cx="15.5" cy="16" r="3.6" fill="url(#hd-glass)"/><circle cx="24.5" cy="16" r="3.6" fill="url(#hd-glass)"/>';
+  return `<g class="hd"><rect x="8" y="8" width="24" height="16" rx="5" fill="url(#hd-vol)"/>
+    <path d="M31.2 11.4v8.6" stroke="#fff" stroke-opacity=".38" stroke-width=".7" stroke-linecap="round"/><path d="M8.8 21.4h22.4" stroke="#0b1018" stroke-opacity=".22" stroke-width=".45"/>
+    <circle cx="10.3" cy="10.1" r=".5" fill="#0b1018" opacity=".4"/><circle cx="29.7" cy="22.1" r=".5" fill="#0b1018" opacity=".4"/>
+    <circle cx="${e[0]}" cy="${e[1]}" r="3.4" fill="url(#hd-glow)"/><circle cx="${e[2]}" cy="${e[3]}" r="3.4" fill="url(#hd-glow)"/>
+    ${glass}<g clip-path="url(#hd-v${v})"><rect class="hd-refl" x="6" y="11" width="3.2" height="10" fill="#9ff0e4" transform="skewX(-18)"/></g>
+    <circle class="eye" cx="${e[0] - .7}" cy="${e[1] - .8}" r=".5" fill="#fff" opacity=".85"/><circle class="eye" cx="${e[2] - .7}" cy="${e[3] - .8}" r=".5" fill="#fff" opacity=".85"/></g>`;
+}
+const HD_BODY = `<g class="hd"><rect x="10" y="26" width="20" height="14" rx="4" fill="url(#hd-vol)"/><path d="M29.1 28.4v8.4" stroke="#fff" stroke-opacity=".32" stroke-width=".6" stroke-linecap="round"/>
+  <path d="M10.6 31h3.4M26 31h3.4" stroke="#0b1018" stroke-opacity=".22" stroke-width=".45"/><circle cx="11.9" cy="38.3" r=".45" fill="#0b1018" opacity=".4"/><circle cx="28.1" cy="38.3" r=".45" fill="#0b1018" opacity=".4"/></g>`;
+const HD_NECK = `<path class="hd" d="M17 24.1h6M17 25.5h6" stroke="#0b1018" stroke-opacity=".35" stroke-width=".5"/>`;
 function hatOf(look) { return HATS[look.season] || HATS[look.outfit] || ''; }
 function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
   const u = look.uniform, hat = hatOf(look);
   return `<svg viewBox="0 0 40 48" aria-hidden="true">
     <g class="legs">${leg('leg-l', 13)}${leg('leg-r', 22)}</g>
     ${arm('arm-l', 4, color, OUTFIT_HAND[look.outfit] || '')}
-    <rect x="16.5" y="22.6" width="7" height="4.4" rx="1.2" fill="#3a4558"/>
-    <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}" ${OUT}/>${SHADE_BODY}${CHEST}
+    <rect x="16.5" y="22.6" width="7" height="4.4" rx="1.2" fill="#3a4558"/>${HD_NECK}
+    <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}" ${OUT}/>${SHADE_BODY}${HD_BODY}${CHEST}
     ${u ? `<path d="M10.5 26.4h19v3h-19z" fill="${u}"/><path d="M23.5 29l3.4 6-4.4-1.2z" fill="${u}"/>` : ''}
     ${look.acc === 3 ? BOWTIE : ''}
     ${PROPS_BODY}
     ${arm('arm-r', 31, color, PROPS_HAND)}
-    <g class="head">${hat ? '' : ANTENNAS[look.ant]}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${FACES}${hat || HEAD_ACC[look.acc]}</g>
+    <g class="head">${hat ? '' : `<g class="antg">${ANTENNAS[look.ant]}</g>`}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${hdHead(look.visor)}${FACES}${hat || HEAD_ACC[look.acc]}</g>
   </svg>`;
 }
 
 // Solo la cabeza (antena, visor y accesorio o gorro): avatar pequeño para el chat.
 function robotHead(color, look = {ant: 0, visor: 0, acc: 0}) {
   const hat = hatOf(look);
-  return `<svg class="rhead" viewBox="4 -5 32 31" aria-hidden="true">${hat ? '' : ANTENNAS[look.ant]}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${hat || HEAD_ACC[look.acc]}</svg>`;
+  return `<svg class="rhead" viewBox="4 -5 32 31" aria-hidden="true">${hat ? '' : ANTENNAS[look.ant]}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${hdHead(look.visor)}${hat || HEAD_ACC[look.acc]}</svg>`;
 }
 
 // Título sugerido para un robot sin título: sale del encargo con reglas simples (sin preguntarle a Claude).

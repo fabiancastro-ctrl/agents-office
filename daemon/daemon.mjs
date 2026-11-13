@@ -584,6 +584,12 @@ const FAV_FILE = path.join(RUNS, 'frecuentes.json');
 let favorites = [];
 try { favorites = JSON.parse(fs.readFileSync(FAV_FILE, 'utf8')); } catch { /* sin frecuentes */ }
 function saveFavorites() { fs.writeFileSync(FAV_FILE, JSON.stringify(favorites, null, 2)); broadcast({ type: 'favorites', favorites }); }
+// «Para enviar»: mensajes de robots que fijaste para pegarlos después en Google Chat o Slack. Guardan el texto,
+// así siguen aunque el robot se vaya.
+const PIN_FILE = path.join(RUNS, 'para-enviar.json');
+let pins = [];
+try { pins = JSON.parse(fs.readFileSync(PIN_FILE, 'utf8')); } catch { /* sin fijados */ }
+function savePins() { fs.writeFileSync(PIN_FILE, JSON.stringify(pins, null, 2)); broadcast({ type: 'pins', pins }); }
 
 // Indicaciones que la oficina le suma a cada robot nuevo: los mensajes para enviar van en una cita (>) para que la
 // oficina les ponga «📋 Copiar»; al copiar se convierten al formato del chat, así que el robot escribe Markdown normal.
@@ -1413,7 +1419,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins })}\n\n`);
       clients.add(res);
       const ping = setInterval(() => res.write(': ping\n\n'), 20000);
       req.on('close', () => { clearInterval(ping); clients.delete(res); });
@@ -1522,6 +1528,23 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'favorites' && parts[2]) {
       favorites = favorites.filter(f => f.id !== parts[2]);
       saveFavorites();
+      return send(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/pins') {
+      const b = await readBody(req);
+      const text = String(b.text || '').slice(0, 60000), robot = trunc(String(b.robot || '').trim(), 40);
+      if (!text.trim() || !robot) return send(res, 400, { error: 'Falta el mensaje.' });
+      const at = String(b.at || new Date().toISOString());
+      const dup = pins.find(p => p.robot === robot && p.at === at);
+      if (dup) return send(res, 200, { ok: true, pin: dup });
+      const p = { id: crypto.randomBytes(4).toString('hex'), robot, title: trunc(String(b.title || ''), 80), at, text, pinnedAt: new Date().toISOString() };
+      pins.push(p); if (pins.length > 100) pins.shift();
+      savePins();
+      return send(res, 201, { ok: true, pin: p });
+    }
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'pins' && parts[2]) {
+      pins = pins.filter(p => p.id !== parts[2]);
+      savePins();
       return send(res, 200, { ok: true });
     }
     if (req.method === 'POST' && url.pathname === '/api/robots') {

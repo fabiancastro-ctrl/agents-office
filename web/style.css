@@ -1011,3 +1011,113 @@ html[data-theme=light] .sub-row{background:#ece9fb;color:#3b2f86}
 .ocat .zzz i{font-style:normal;font-size:8px;position:relative;top:-5px}
 .ocat.sleep .zzz{display:block;animation:zzz 2.4s ease-in-out infinite}
 @keyframes zzz{0%{opacity:0;transform:translateY(4px)}30%,70%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+
+/* ---------- modo HD: volumen, cristal, brillos y microanimaciones (solo con html.hd-on) ---------- */
+.hd{display:none}
+html.hd-on .hd{display:inline}
+.hd-refl{opacity:0}
+html.hd-on .robot .shadow{width:38px;margin-left:-19px;height:9px;background:radial-gradient(closest-side,rgba(0,0,0,.72),rgba(0,0,0,.25) 60%,transparent)}
+html.hd-on .robot > svg{filter:drop-shadow(0 1.5px 1px rgba(0,0,0,.35))}
+html.hd-on .robot.sel > svg{filter:drop-shadow(0 0 5px rgba(243,183,79,.8)) drop-shadow(0 1.5px 1px rgba(0,0,0,.35))}
+/* respira: el cuerpo sube y baja un pelo (no mientras camina, baila o se va) */
+html.hd-on .robot:not(.moving):not(.dance):not(.leaving) > svg{animation:breathe calc(3.4s * var(--sp,1)) var(--d,0s) ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(1.012,1.022)}}
+/* la antena se mece despacio; al caminar, rebota */
+.antg{transform-box:view-box;transform-origin:20px 9px}
+html.hd-on .robot .antg{animation:sway calc(2.8s * var(--sp,1)) var(--d,0s) ease-in-out infinite alternate}
+html.hd-on .robot.moving .antg{animation:sway-fast .3s ease-in-out infinite alternate}
+@keyframes sway{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}
+@keyframes sway-fast{from{transform:rotate(-12deg)}to{transform:rotate(12deg)}}
+/* mientras redacta (sin herramienta) teclea suave */
+html.hd-on .robot.st-working.t-think .arm-l{animation:type calc(.32s * var(--sp,1)) var(--d,0s) ease-in-out infinite alternate}
+html.hd-on .robot.st-working.t-think .arm-r{animation:type calc(.32s * var(--sp,1)) calc(var(--d,0s) + .16s) ease-in-out infinite alternate}
+/* reflejo del monitor que cruza el visor mientras trabaja */
+html.hd-on .robot.st-working .hd-refl,html.hd-on .robot.st-delegating .hd-refl{animation:refl calc(2.6s * var(--sp,1)) var(--d,0s) ease-in-out infinite}
+@keyframes refl{0%{opacity:0;transform:skewX(-18deg) translateX(0)}15%{opacity:.35}70%{opacity:.25}100%{opacity:0;transform:skewX(-18deg) translateX(30px)}}
+html.hd-on .robot.st-working .led,html.hd-on .robot.st-delegating .led{animation-duration:.7s}
+/* pestaña oculta: todo quieto */
+html.tab-hidden .map *{animation-play-state:paused!important}
+
+/* ---------- zoom del mapa ---------- */
+.map-wrap{position:relative}
+.map-wrap.zoomed{overflow:auto;overscroll-behavior:contain}
+.map-wrap.zoomed .map{transform-origin:0 0;transition:none}
+.map-wrap.zoomed.dragging{cursor:grabbing}
+.map-wrap.zoomed.dragging *{cursor:grabbing!important}
+.zoom-ui{position:sticky;top:0;left:0;height:0;z-index:3000;pointer-events:none}
+.zoom-ui .zu{position:absolute;right:8px;top:8px;display:flex;gap:4px;align-items:center;pointer-events:auto;background:rgba(17,23,34,.82);border:1px solid var(--line);border-radius:8px;padding:3px;backdrop-filter:blur(3px)}
+.zoom-ui button{background:transparent;border:0;color:var(--ink);min-width:24px;height:22px;border-radius:5px;font:600 13px/1 var(--body);cursor:pointer;padding:0 6px}
+.zoom-ui button:hover{background:var(--panel-2)}
+.zoom-ui #zoom-n{font:600 11px/1 var(--mono);color:#c3cdda;min-width:38px;text-align:center}
+.zoom-ui .zf{position:absolute;left:8px;top:8px;pointer-events:auto;background:var(--sky);color:#0b1a2b;border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;font-weight:600;display:flex;gap:6px;align-items:center;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.zoom-ui .zf button{color:#0b1a2b;min-width:18px;height:18px}
+.zoom-ui .zf button:hover{background:rgba(255,255,255,.4)}
+.map-wrap.iso .zoom-ui{display:none}
+.robot.followed .nm{background:var(--sky);color:#0b1a2b}
+html[data-theme=light] .zoom-ui .zu{background:rgba(255,255,255,.9);border-color:#c9d2de}
+html[data-theme=light] .zoom-ui button{color:#26303e}
+html[data-theme=light] .zoom-ui #zoom-n{color:#3b475a}
+
+/* ---------- acciones del globo del robot: 📌 fijar, ↪ pasar, 📋 copiar ---------- */
+.lg-acts{position:absolute;top:4px;right:6px;display:flex;gap:4px;z-index:1}
+.lg-acts .cp-btn{position:static;opacity:.55}
+.lg.agent:hover .lg-acts .cp-btn,.lg-acts .cp-btn:focus-visible,.lg-acts .cp-btn.ok,.lg-acts .cp-btn.on{opacity:1}
+.lg-acts .cp-btn.on{border-color:var(--amber);background:color-mix(in srgb,var(--amber) 22%,#1d2533)}
+.lg.agent:has(>.lg-acts [data-fwd])>.w{padding-right:14.5em}
+.lg.agent:has(>.lg-acts [data-fwd]){min-width:min(330px,100%)}
+.lg.flash{animation:lgflash 2.2s ease-out}
+@keyframes lgflash{0%,40%{box-shadow:0 0 0 3px var(--amber)}100%{box-shadow:0 0 0 0 transparent}}
+.fwd{display:grid;gap:6px;margin-top:6px;padding:8px;border:1px dashed var(--line);border-radius:8px;background:rgba(0,0,0,.18)}
+.fwd label{font-size:12px;color:#c3cdda;display:flex;gap:8px;align-items:center}
+.fwd select,.fwd textarea{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit;font-size:12.5px;min-width:0}
+.fwd select{flex:1}
+.fwd textarea{resize:vertical}
+
+/* ---------- cola de los que te esperan ---------- */
+.qbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--rose) 12%,var(--panel-2));border:1px solid color-mix(in srgb,var(--rose) 40%,var(--line));font-size:12.5px}
+.qbar b{color:var(--rose)}
+.qbar .qk{color:var(--muted);font-size:11.5px}
+.qbar .btn{margin-left:auto}
+kbd{font:600 10.5px/1 var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 4px;background:var(--panel-2);color:var(--ink)}
+.ph-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0 2px}
+.sd-pick{max-width:240px}
+
+/* ---------- buscador ---------- */
+.srch input{width:100%;padding:9px 12px;font-size:15px;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:8px}
+.srch input:focus{outline:2px solid var(--amber);outline-offset:1px}
+.sr{display:grid;gap:12px;align-content:start}
+.sr-g h4{display:flex;align-items:center;gap:8px;margin:0 0 4px}
+.sr-g h4 .rhead{width:22px;height:22px}
+.sr-g h4 small{color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-hit{display:grid;gap:2px;width:100%;text-align:left;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-bottom:4px;cursor:pointer;color:var(--ink)}
+.sr-hit:hover,.sr-hit:focus-visible{border-color:var(--amber)}
+.sr-w{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#b3bfd0;font-weight:600}
+.sr-t{font-size:13px;line-height:1.4;word-break:break-word}
+.sr-t mark{background:color-mix(in srgb,var(--amber) 45%,transparent);color:inherit;border-radius:2px;padding:0 1px}
+
+/* ---------- conversación al lado ---------- */
+.dlg-card.split{flex-direction:row;width:min(1680px,100%)}
+.dlg-card.split>.panel{flex:1 1 0}
+.dlg-card.split .rp-grid{grid-template-columns:minmax(0,1fr)}
+.dlg-card.split .tall .term,.dlg-card.split .term{height:220px}
+.side{flex:0 0 clamp(300px,34%,560px);display:flex;flex-direction:column;gap:8px;min-height:0;padding:16px 14px 16px 18px;border-right:1px solid var(--line);background:color-mix(in srgb,var(--panel-2) 50%,var(--panel));border-radius:12px 0 0 12px}
+.sd-h{display:flex;align-items:center;gap:8px}
+.sd-av .rhead{width:30px;height:30px}
+.sd-n{display:grid;min-width:0;flex:1}
+.sd-n small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-h .pill{font-size:10.5px}
+.side .sd-log{flex:1;min-height:0;max-height:none;height:auto}
+.side .alert.sm{padding:6px 10px}
+.side .sd-chat{display:grid;grid-template-columns:1fr auto;gap:6px}
+.side .sd-chat textarea{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;resize:none}
+@media (max-width:1100px){.dlg-card.split{flex-direction:column}.side{flex:0 0 40%;border-right:0;border-bottom:1px solid var(--line);border-radius:12px 12px 0 0}}
+
+/* ---------- para enviar ---------- */
+.pins-n{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--amber);color:#2a1d05;font-size:11px;line-height:18px;text-align:center}
+.pins-log{max-height:none}
+.pins-log .lg.agent{max-width:100%}
+#btn-hd.on{background:var(--teal);color:#062b26;border-color:var(--teal);font-weight:700}
+html[data-theme=light] .qbar .qk{color:#5a6678}
+html[data-theme=light] .sr-w{color:#5a6678}
+html[data-theme=light] .fwd label{color:#3b475a}
+.pin-item>.w{padding-right:17em}

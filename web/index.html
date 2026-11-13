@@ -20,9 +20,12 @@
   <button class="btn primary" id="btn-new">Nuevo encargo</button>
   <button class="btn" id="btn-routine">Rutinas</button>
   <button class="btn" id="btn-inbox">Bandeja</button>
+  <button class="btn" id="btn-pins" title="Mensajes que guardaste con 📌 para pegarlos después en Google Chat o Slack (tecla P)">📌 Para enviar <b class="pins-n" id="pins-n" hidden></b></button>
+  <button class="btn" id="btn-search" title="Buscar en todas las conversaciones de la oficina (tecla /)">🔎 Buscar</button>
   <button class="btn" id="btn-usage">Uso y estado Claude</button>
   <button class="btn" id="btn-compact" aria-pressed="false" title="Esconde el mapa y deja métricas, tarjetas (en columnas) y línea de tiempo: para el portátil o media pantalla">Vista compacta</button>
   <select class="mt-sel" id="map-theme" title="Estilo de esta oficina: se guarda en la oficina, así se ve igual en cualquier navegador" aria-label="Estilo de la oficina"><option value="moderna">Estilo: Moderna</option><option value="garaje">Estilo: Garaje</option><option value="nave">Estilo: Nave</option><option value="biblioteca">Estilo: Biblioteca</option><option value="cafeteria">Estilo: Cafetería</option></select>
+  <button class="btn" id="btn-hd" aria-pressed="false" title="Robots en alta definición: volumen, brillo en el visor y microanimaciones. Se guarda en este navegador.">HD</button>
   <button class="btn" id="btn-view" aria-pressed="false" title="Alterna entre el plano 2D y la vista en perspectiva 2.5D">Vista 2.5D</button>
   <button class="btn" id="btn-notify" aria-pressed="false" title="Sonido y notificación del sistema cuando un robot te necesita o se queda sin actividad. El título de la pestaña siempre muestra cuántos te necesitan.">Avisos: no</button>
   <button class="btn" id="btn-dismiss" hidden></button>
@@ -40,6 +43,7 @@
 <div class="office">
  <div class="main-col">
   <div class="map-wrap">
+    <div class="zoom-ui" id="zoom-ui"><div class="zu" role="group" aria-label="Zoom del mapa"><button type="button" data-zoom="out" title="Alejar (tecla −)" aria-label="Alejar">−</button><span id="zoom-n">100%</span><button type="button" data-zoom="in" title="Acercar (tecla +, o ⌘/Ctrl + rueda, o pellizco en el trackpad)" aria-label="Acercar">+</button><button type="button" data-zoom="reset" title="Ver todo (tecla 0)" aria-label="Ver todo">⤢</button></div><div class="zf" id="zoom-follow" hidden></div></div>
     <div class="map" id="map">
       <div class="room r-break" data-room="break" style="left:2%;top:3%;width:52%;height:30%" title="Robots en descanso: haz clic en uno para darle un encargo">
         <div class="room-h"><span>Sala de descanso</span><small id="break-n"></small></div>

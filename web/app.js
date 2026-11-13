@@ -33,7 +33,7 @@ const deskPos = i => ({x: 5 + (i % COLS) * 18, y: 43 + Math.floor(i / COLS) * RO
 // Lugares de los subagentes alrededor del robot: dos a los lados y cinco debajo.
 const MINI_SLOTS = [[-4.8, 0], [4.8, 0], [-6.6, 6], [-3.3, 6], [0, 6], [3.3, 6], [6.6, 6]];
 
-const st = {robots: new Map(), inbox: [], routines: [], salas: [], config: {}, selected: null, att: {}, weeks: [], claude: null, claudeLoading: false, claudeError: ''};
+const st = {robots: new Map(), pins: [], side: null, jump: null, inbox: [], routines: [], salas: [], config: {}, selected: null, att: {}, weeks: [], claude: null, claudeLoading: false, claudeError: ''};
 const ATTACH_MAX = 20 * 1024 * 1024;
 const brk = {bots: new Map()}; // robots de la sala de descanso (solo animación)
 
@@ -287,6 +287,7 @@ function upsert(d, fromSnapshot = false) {
   tickWaiting();
   renderSalaChips();
   if (st.selected === d.name) schedulePanel();
+  if (st.side === d.name) renderSide();
   if (hover.name === d.name) renderHover();
   renderMeta();
 }
@@ -535,6 +536,8 @@ function onLeft(name) {
   // Se va con una caja con sus cosas (planta, taza y papeles), como quien deja la oficina.
   queue(a, async () => { a.el.classList.remove('sel'); a.el.classList.add('leaving'); a.el.insertAdjacentHTML('beforeend', '<div class="lbox" aria-hidden="true"><i class="lb-plant"></i><i class="lb-mug"></i><i class="lb-paper"></i></div>'); await walkTo(a, door()); a.el.remove(); layout(); });
   paneCache.delete(name);
+  if (zoom.follow === name) stopFollow();
+  if (st.side === name) { st.side = null; renderSide(); }
   if (st.selected === name) { select(null); toast(`${name} salió de la oficina.`); }
   renderSalaChips();
   if (st.selected?.startsWith('@sala:')) schedulePanel();
@@ -551,7 +554,7 @@ function connect() {
     if (m.type === 'snapshot') {
       for (const a of st.robots.values()) { vacate(a.data.place, a); a.el.remove(); }
       st.robots.clear();
-      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || [];
+      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || []; st.pins = m.pins || []; renderPinsBadge();
       setSetup(m.setup);
       renderInboxBadge();
       m.robots.forEach(r => upsert(r, true));
@@ -566,10 +569,11 @@ function connect() {
     else if (m.type === 'routines') { st.routines = m.routines; renderRoutineChips(); renderMeta(); if (st.selected === '@cron') schedulePanel(); }
     else if (m.type === 'log') {
       const a = st.robots.get(m.name);
-      if (a) { a.log.push(m.entry); if (st.selected === m.name) appendLog(m.entry, a); }
+      if (a) { a.log.push(m.entry); if (st.selected === m.name) appendLog(m.entry, a); if (st.side === m.name) appendLog(m.entry, a, $('#side .sd-log')); }
     } else if (m.type === 'deliver') onDeliver(m.name, m.items);
     else if (m.type === 'inbox') { st.inbox = m.inbox; renderInboxBadge(); renderMeta(); if (st.selected === '@inbox') schedulePanel(); }
     else if (m.type === 'left') onLeft(m.name);
+    else if (m.type === 'pins') { st.pins = m.pins; renderPinsBadge(); markPins(); if (st.selected === '@pins') schedulePanel(); }
     else if (m.type === 'favorites') { st.favorites = m.favorites; if (st.selected === '@new') schedulePanel(); }
   };
 }
@@ -983,7 +987,7 @@ function setView(iso) {
   $('#btn-view').textContent = iso ? 'Vista 2D' : 'Vista 2.5D';
   prefSet('mapView', iso ? 'iso' : '2d');
 }
-$('#btn-view').addEventListener('click', () => setView(!$('.map-wrap').classList.contains('iso')));
+$('#btn-view').addEventListener('click', () => { setZoom(1); setView(!$('.map-wrap').classList.contains('iso')); });
 // Estilo de la oficina (lo guarda el daemon en la configuración de esta oficina). «Moderna» es el de siempre.
 const TDECO = {
   garaje: '<i class="td-box" style="left:3%;top:89%"></i><i class="td-box" style="left:5.8%;top:89%"></i><i class="td-box" style="left:4.4%;top:84.6%"></i><i class="td-box" style="left:71%;top:90%"></i><i class="td-board" style="left:31%;top:33.4%;width:8%;height:4.2%"></i>',
@@ -1518,7 +1522,7 @@ document.addEventListener('click', async e => {
 // Avatar del robot en sus globos: su cabeza con su color y accesorio (en salas, el de cada robot que habla).
 const avColor = name => { const d = st.robots.get(name)?.data; return d ? COLORS[d.color % 8] : COLORS[[...String(name)].reduce((h, c) => h + c.charCodeAt(0), 0) % 8]; };
 const avatarOf = name => name ? robotHead(avColor(name), lookOf(name, st.robots.get(name)?.data.place, st.robots.get(name)?.data)) : '';
-function logRow(l, robot) {
+function logRow(l, robot, i) {
   if (l.kind === 'tool') return toolRow(l);
   if (l.kind === 'user' && /^\s*<task-notification>/.test(l.text)) l = {...l, kind: 'bg', text: taskNoteWeb(l.text)};
   const t = hhmm(l.at);
@@ -1529,27 +1533,27 @@ function logRow(l, robot) {
   const pasted = hasPaste(l.text) ? ' <i class="pasted">pegado</i>' : '', text = unwrapPaste(l.text);
   const body = md ? (l.kind === 'agent' ? copyable(mdHtml(text)) : mdHtml(text)) : '';
   const av = l.kind === 'agent' ? avatarOf(l.kind === 'agent' && !l.who ? robot : l.who) : '';
-  const cpAll = l.kind === 'agent' && md ? '<button type="button" class="cp-btn cp-msg" data-copy="msg" title="Copiar todo el mensaje con formato de chat (Google Chat, WhatsApp)">📋 Copiar</button>' : '';
-  return `<div class="lg ${l.kind}${av ? ' has-av' : ''}"${av && l.who ? ` style="--c:${avColor(l.who)}"` : ''}><span class="w">${av}${esc(who)} · ${t}${pasted}</span>${cpAll}${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
+  const cpAll = l.kind === 'agent' && md ? `<span class="lg-acts">${i != null ? '<button type="button" class="cp-btn" data-pin title="Guardar en «Para enviar» para pegarlo después">📌</button><button type="button" class="cp-btn" data-fwd title="Pasar este mensaje a otro robot">↪ Pasar</button>' : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg" title="Copiar todo el mensaje con formato de chat (Google Chat, WhatsApp)">📋 Copiar</button></span>` : '';
+  return `<div class="lg ${l.kind}${av ? ' has-av' : ''}"${i != null ? ` data-i="${i}"` : ''}${av && l.who ? ` style="--c:${avColor(l.who)}"` : ''}><span class="w">${av}${esc(who)} · ${t}${pasted}</span>${cpAll}${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
 }
 function renderLog(log, robot) {
   const out = []; let run = [];
   const flush = () => { if (run.length) out.push(toolGroup(run)); run = []; };
-  for (const l of log) {
+  log.forEach((l, i) => {
     if (l.kind === 'tool') {
       if (st.toolMode === 'group') run.push(l);
       else if (st.toolMode === 'all') out.push(toolRow(l));
-      continue;
+      return;
     }
     flush();
     if (l.kind === 'user' && out.length && !/^\s*<task-notification>/.test(l.text)) out.push(TURN_SEP);
-    out.push(logRow(l, robot));
-  }
+    out.push(logRow(l, robot, i));
+  });
   flush();
   return out.join('');
 }
-function appendLog(entry, a) {
-  const lg = $('#log', PANEL); if (!lg) return;
+function appendLog(entry, a, lg = $('#log', PANEL)) {
+  if (!lg) return;
   const stick = lg.scrollTop + lg.clientHeight >= lg.scrollHeight - 30;
   if (entry.kind === 'tool' && st.toolMode === 'hide') return;
   if (entry.kind === 'tool' && st.toolMode === 'group') {
@@ -1559,7 +1563,8 @@ function appendLog(entry, a) {
     else lg.insertAdjacentHTML('beforeend', toolGroup(run));
   } else {
     if (entry.kind === 'user' && lg.children.length && !/^\s*<task-notification>/.test(entry.text)) lg.insertAdjacentHTML('beforeend', TURN_SEP);
-    lg.insertAdjacentHTML('beforeend', logRow(entry, a.data.name));
+    lg.insertAdjacentHTML('beforeend', logRow(entry, a.data.name, a.log.length - 1));
+    if (entry.kind === 'agent') markPins(lg.lastElementChild);
   }
   if (stick) lg.scrollTop = lg.scrollHeight;
 }
@@ -1625,12 +1630,12 @@ function robotPanel(a) {
   else if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission) alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
-    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}${lookEditor(d)}<div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
-    ${alert}
+    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}${lookEditor(d)}<div class="ph-tools" id="ph-tools"><button type="button" class="btn sm ghost" data-act="follow" title="Cierra esta ventana y la cámara del mapa sigue a este robot (tecla F, o Mayús + clic en el robot)">📍 Seguir en el mapa</button>${sidePicker(d)}</div><div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
+    ${queueBar(d)}${alert}
     <div class="rp-grid" id="rp-grid">
       <div class="rp-col">
         <div class="log-h"><h4>Conversación</h4><span class="tmode" role="group" aria-label="Herramientas en la conversación"><small>Herramientas</small>${TOOL_MODES.map(([k, l]) => `<button type="button" class="${st.toolMode === k ? 'on' : ''}" data-toolmode="${k}" aria-pressed="${st.toolMode === k}">${l}</button>`).join('')}</span></div>
-        <div class="log" id="log" style="--c:${COLORS[d.color % 8]}">${renderLog(a.log, d.name)}</div>
+        <div class="log" id="log" data-src="${esc(d.name)}" style="--c:${COLORS[d.color % 8]}">${renderLog(a.log, d.name)}</div>
         <form class="chat" id="chat-form">
           <textarea id="chat-in" rows="2" placeholder="Escríbele a ${esc(d.name)}… Enter envía, Shift+Enter salto de línea. Pega (Ctrl+V) o arrastra archivos."></textarea><button class="btn primary">Enviar</button>
           <div class="tray" data-tray="${esc(d.name)}">${trayHtml(d.name)}</div>
@@ -1786,7 +1791,7 @@ function salasPanel() {
 
 function salaPanel(s) {
   const present = salaRobots(s.id);
-  const thread = s.thread.map(m => logRow({kind: m.from === 'Coordinador' ? 'user' : 'agent', text: m.text, at: m.at, who: m.from})).join('');
+  const thread = s.thread.map((m, i) => logRow({kind: m.from === 'Coordinador' ? 'user' : 'agent', text: m.text, at: m.at, who: m.from}, undefined, i)).join('');
   const docs = s.docs.length ? `<h4>Documentos (${s.docs.length})</h4><div class="list doclist">${s.docs.slice().reverse().map(x => `<div class="item" data-docpath="${esc(x.path)}" title="${esc(x.path)}"><div class="meta-i"><b>${esc(fileName(x.path))}</b><div>${esc(x.robot)} · ${esc(shortPath(x.path))}</div></div></div>`).join('')}</div>` : '';
   const max = st.config.maxRobots || 3;
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done').length;
@@ -1795,7 +1800,7 @@ function salaPanel(s) {
     <div class="rp-grid">
       <div class="rp-col">
         <h4>Hilo de la sala</h4>
-        <div class="log" id="sala-log">${thread || '<div class="lg sys"><span class="x">Todavía no hay mensajes. Lo que digan los robots al cerrar cada turno aparece aquí.</span></div>'}</div>
+        <div class="log" id="sala-log" data-src="@sala:${esc(s.id)}">${thread || '<div class="lg sys"><span class="x">Todavía no hay mensajes. Lo que digan los robots al cerrar cada turno aparece aquí.</span></div>'}</div>
         <form class="chat" id="sala-form">
           <textarea id="sala-in" rows="2" placeholder="Escribe en el hilo… Enter publica, Shift+Enter salto de línea."></textarea><button class="btn primary">Publicar</button>
           <label class="check" style="grid-column:1/-1"><input type="checkbox" id="sala-notify"> Enviárselo también a los ${present.length} robots de la sala (gasta cuota)</label>
@@ -1832,7 +1837,7 @@ function renderPanel() {
   const sala = sel?.startsWith('@sala:') ? st.salas.find(s => s.id === sel.slice(6)) : null;
   if (sel?.startsWith('@sala:') && !sala) { st.selected = '@war'; return renderPanel(); } // la sala se cerró
   if (!sel || (!a && !sel.startsWith('@'))) {
-    st.selected = null;
+    st.selected = null; st.side = null; renderSide();
     clearInterval(paneTimer);
     $('#dialog').hidden = true;
     PANEL.innerHTML = ''; PANEL.dataset.view = '';
@@ -1843,7 +1848,7 @@ function renderPanel() {
   $('#dialog').hidden = false;
   $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war');
   $('#dlg-card').classList.toggle('tall', !!a || !!sala);
-  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : newPanel();
+  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@pins' ? pinsPanel() : newPanel();
   if (sameView) {
     if (html === PANEL._html) { tickRoutines(); return; }
     const tpl = document.createElement('template'); tpl.innerHTML = html;
@@ -1855,7 +1860,7 @@ function renderPanel() {
     if (sl && slBottom) sl.scrollTop = sl.scrollHeight;
     const lg1 = $('#log', PANEL);
     if (lg1 && (lgBottom || lg1 !== lg0)) lg1.scrollTop = lgBottom || lg0 == null ? lg1.scrollHeight : lgTop;
-    tickRoutines(); syncKind();
+    tickRoutines(); syncKind(); renderSide(); markPins(PANEL); doJump();
     return;
   }
   clearInterval(paneTimer);
@@ -1868,7 +1873,8 @@ function renderPanel() {
   const lg = $('#log', PANEL) || $('#sala-log', PANEL); if (lg) lg.scrollTop = atBottom || logScroll == null ? lg.scrollHeight : logScroll;
   syncKind();
   if (a) { refreshPane(a.data.name); paneTimer = setInterval(() => refreshPane(a.data.name), 2000); }
-  if (wasHidden) (PANEL.querySelector('#rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();
+  renderSide(); markPins(PANEL); doJump();
+  if (wasHidden) (PANEL.querySelector('#search-in, #rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();
 }
 
 async function refreshPane(name) {
@@ -1981,7 +1987,7 @@ function clampHover() {
   const r = el.getBoundingClientRect(), m = MAP.getBoundingClientRect(), w = MAP.parentElement.getBoundingClientRect();
   const left = Math.max(m.left, w.left) + 6, right = Math.min(m.right, w.right) - 6;
   const dx = r.left < left ? left - r.left : r.right > right ? right - r.right : 0;
-  if (dx) el.style.setProperty('--hx', Math.round(dx) + 'px');
+  if (dx) el.style.setProperty('--hx', Math.round(dx / zoom.z) + 'px');
 }
 
 async function refreshHoverLine() {
@@ -2187,6 +2193,8 @@ PANEL.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const name = st.selected, a = st.robots.get(name);
   try {
+    if (b.dataset.act === 'follow' && a) { select(null); return follow(name); }
+    if (b.dataset.act === 'qnext') return goNextWaiting();
     if (b.dataset.act === 'console') await api('POST', `/api/robots/${name}/console`);
     if (b.dataset.act === 'again' && a) return launchAgain(a.data);
     if (b.dataset.act === 'fav' && a) { await api('POST', '/api/favorites', {...a.data.request, title: a.data.title}); toast('Guardado en frecuentes: lo ves arriba de «Nuevo encargo»'); }
@@ -2247,6 +2255,8 @@ $('#office-name').addEventListener('click', () => {
 });
 $('#cap-up').addEventListener('click', () => { if ((st.config.maxRobots || 3) >= 3) toast('Más robots a la vez gastan tu cuota más rápido.'); setCap(1); });
 $('#btn-inbox').addEventListener('click', () => select('@inbox'));
+$('#btn-pins').addEventListener('click', () => select('@pins'));
+$('#btn-search').addEventListener('click', () => { select('@search'); $('#search-in')?.focus(); });
 $('#btn-usage').addEventListener('click', () => { select('@usage'); loadWeeks(); if (!st.claude) loadClaudeStatus(false); });
 $('#week-chip').addEventListener('click', () => $('#btn-usage').click());
 // Despide a todos los que terminaron; como la ✕ de cada robot, pide un segundo clic para confirmar.
@@ -2303,6 +2313,7 @@ document.addEventListener('keydown', e => {
   if (!$('#keys')?.hidden && $('#keys')) $('#keys').hidden = true;
   else if (!$('#modal').hidden) $('#modal').hidden = true; // primero el documento, luego la ventana
   else if (st.selected) select(null);
+  else if (zoom.follow) stopFollow();
 });
 
 /* ---------- código Konami (↑ ↑ ↓ ↓ ← → ← → B A Espacio): fiesta de 15 s ---------- */
@@ -2343,10 +2354,301 @@ function officeParty(ms) {
   }, ms);
 }
 
+/* ---------- modo HD ---------- */
+// Solo cambia una clase en <html>: las capas HD ya están dibujadas en cada robot (robot-art.js).
+function setHd(on) {
+  document.documentElement.classList.toggle('hd-on', on);
+  $('#btn-hd').setAttribute('aria-pressed', String(on));
+  $('#btn-hd').classList.toggle('on', on);
+}
+setHd(prefGet('hd', '0') === '1');
+$('#btn-hd').addEventListener('click', () => { const on = !document.documentElement.classList.contains('hd-on'); setHd(on); prefSet('hd', on ? '1' : '0'); });
+document.addEventListener('visibilitychange', () => document.documentElement.classList.toggle('tab-hidden', document.hidden));
+
+/* ---------- zoom del mapa y cámara que sigue a un robot ---------- */
+// El mapa se escala desde la esquina y el contenedor hace scroll; el punto bajo el mouse queda fijo al acercar.
+// Solo en la vista 2D (en 2.5D la perspectiva ya mueve el plano).
+const WRAP = MAP.parentElement;
+const zoom = {z: 1, follow: null, raf: 0, drag: null, moved: false};
+function setZoom(z, cx, cy) {
+  z = Math.min(3, Math.max(1, Math.round(z * 100) / 100));
+  if (WRAP.classList.contains('iso')) z = 1;
+  const old = zoom.z; if (z === old) return;
+  cx ??= WRAP.clientWidth / 2; cy ??= WRAP.clientHeight / 2;
+  const sx = (WRAP.scrollLeft + cx) / old, sy = (WRAP.scrollTop + cy) / old;
+  zoom.z = z;
+  WRAP.classList.toggle('zoomed', z > 1);
+  MAP.style.transform = z > 1 ? `scale(${z})` : '';
+  WRAP.scrollLeft = sx * z - cx; WRAP.scrollTop = sy * z - cy;
+  $('#zoom-n').textContent = Math.round(z * 100) + '%';
+  if (z === 1) stopFollow();
+  if (hover.name) clampHover();
+}
+$('#zoom-ui').addEventListener('click', e => {
+  const b = e.target.closest('[data-zoom]');
+  if (b) return b.dataset.zoom === 'in' ? setZoom(zoom.z * 1.35) : b.dataset.zoom === 'out' ? setZoom(zoom.z / 1.35) : setZoom(1);
+  if (e.target.closest('[data-unfollow]')) stopFollow();
+});
+WRAP.addEventListener('wheel', e => {
+  if (!(e.ctrlKey || e.metaKey)) { if (zoom.follow && zoom.z > 1) stopFollow(); return; } // rueda sola: scroll normal
+  e.preventDefault();
+  const r = WRAP.getBoundingClientRect(), dy = Math.max(-60, Math.min(60, e.deltaY));
+  setZoom(zoom.z * Math.exp(-dy * 0.006), e.clientX - r.left, e.clientY - r.top);
+}, {passive: false});
+// Arrastrar el piso con el mouse mueve la vista cuando hay zoom (y deja de seguir al robot).
+WRAP.addEventListener('pointerdown', e => {
+  if (zoom.z === 1 || e.button !== 0 || e.target.closest('.zoom-ui, button, input, select, textarea')) return;
+  zoom.drag = {x: e.clientX, y: e.clientY, sl: WRAP.scrollLeft, st: WRAP.scrollTop}; zoom.moved = false;
+});
+window.addEventListener('pointermove', e => {
+  const d = zoom.drag; if (!d) return;
+  const dx = e.clientX - d.x, dy = e.clientY - d.y;
+  if (!zoom.moved && Math.hypot(dx, dy) < 5) return;
+  if (!zoom.moved) { zoom.moved = true; WRAP.classList.add('dragging'); stopFollow(); }
+  WRAP.scrollLeft = d.sl - dx; WRAP.scrollTop = d.st - dy;
+});
+window.addEventListener('pointerup', () => { zoom.drag = null; WRAP.classList.remove('dragging'); });
+// Si arrastraste, el clic de soltar no abre nada.
+MAP.addEventListener('click', e => { if (zoom.moved) { zoom.moved = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+function follow(name) {
+  const a = st.robots.get(name); if (!a) return;
+  if (WRAP.classList.contains('iso')) return toast('Seguir a un robot funciona en la vista 2D');
+  stopFollow();
+  zoom.follow = name; a.el.classList.add('followed');
+  if (zoom.z < 2) setZoom(2);
+  const f = $('#zoom-follow'); f.innerHTML = `Siguiendo a ${esc(name)} <button type="button" data-unfollow title="Dejar de seguir (Esc)" aria-label="Dejar de seguir">×</button>`; f.hidden = false;
+  const tick = () => {
+    const r = st.robots.get(zoom.follow); if (!r) return stopFollow();
+    const b = r.el.getBoundingClientRect(), w = WRAP.getBoundingClientRect();
+    const tx = WRAP.scrollLeft + (b.left + b.width / 2 - w.left) - WRAP.clientWidth / 2;
+    const ty = WRAP.scrollTop + (b.top + b.height / 2 - w.top) - WRAP.clientHeight / 2;
+    WRAP.scrollLeft += (tx - WRAP.scrollLeft) * .12; WRAP.scrollTop += (ty - WRAP.scrollTop) * .12;
+    zoom.raf = requestAnimationFrame(tick);
+  };
+  zoom.raf = requestAnimationFrame(tick);
+}
+function stopFollow() {
+  cancelAnimationFrame(zoom.raf);
+  if (zoom.follow) st.robots.get(zoom.follow)?.el.classList.remove('followed');
+  zoom.follow = null; $('#zoom-follow').hidden = true;
+}
+// Mayús + clic en un robot: la cámara lo sigue (sin abrir su ventana).
+MAP.addEventListener('click', e => {
+  if (!e.shiftKey) return;
+  const r = e.target.closest('.robot:not(.on-break)'); if (!r) return;
+  e.stopImmediatePropagation(); follow(r.dataset.name);
+}, true);
+
+/* ---------- cola de los que te esperan ---------- */
+// Del que lleva más esperando al más reciente. S salta al siguiente; tras aprobar o denegar con A/D pasa solo.
+const waitingList = () => [...st.robots.values()].map(a => a.data).filter(d => d.state === 'input')
+  .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0)).map(d => d.name);
+function nextWaiting(from) {
+  const l = waitingList(); if (!l.length) return null;
+  const i = l.indexOf(from);
+  return i < 0 ? l[0] : l.length > 1 ? l[(i + 1) % l.length] : null;
+}
+function goNextWaiting() {
+  const n = nextWaiting(st.selected);
+  if (n) select(n); else toast(waitingList().length ? 'Es el único que te espera' : 'Nadie te está esperando');
+}
+function queueBar(d) {
+  const l = waitingList(), others = l.filter(n => n !== d.name).length;
+  if (!others) return '';
+  const pos = l.indexOf(d.name);
+  return `<div class="qbar" id="qbar"><b>${pos >= 0 ? `${pos + 1} de ${l.length}` : `${others}`}</b> ${pos >= 0 ? 'te esperan' : others === 1 ? 'robot más te espera' : 'robots más te esperan'}<span class="qk"><kbd>A</kbd> aprobar · <kbd>D</kbd> denegar · <kbd>S</kbd> siguiente</span><button type="button" class="btn sm" data-act="qnext">Siguiente ›</button></div>`;
+}
+async function decide(d, allow) {
+  if (d.hold) await api('POST', `/api/decision/${d.hold.id}`, {decision: allow ? 'allow' : 'deny'});
+  else if (d.needsPermission) await api('POST', `/api/robots/${d.name}/permission`, {decision: allow ? 'approve' : 'reject'});
+  else return false;
+  return true;
+}
+
+/* ---------- buscador en todas las conversaciones ---------- */
+const searchUi = {q: '', t: 0};
+const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+function snippet(text, qn) {
+  const plain = plainMd(text), i = norm(plain).indexOf(qn);
+  if (i < 0) return null;
+  const a = Math.max(0, i - 60), b = Math.min(plain.length, i + qn.length + 90);
+  return `${a ? '…' : ''}${esc(plain.slice(a, i))}<mark>${esc(plain.slice(i, i + qn.length))}</mark>${esc(plain.slice(i + qn.length, b))}${b < plain.length ? '…' : ''}`;
+}
+function searchResults(q) {
+  const qn = norm(q.trim());
+  if (qn.length < 2) return '<p class="muted">Escribe al menos 2 letras. Busca en lo que dijeron los robots y lo que les escribiste, también en las salas.</p>';
+  const groups = [];
+  for (const a of st.robots.values()) {
+    const hits = [];
+    a.log.forEach((l, i) => { if (l.kind === 'tool' || hits.length >= 25) return; const sn = snippet(l.text, qn); if (sn) hits.push({i, l, sn}); });
+    if (hits.length) groups.push({key: a.data.name, head: `${robotHead(COLORS[a.data.color % 8], lookOf(a.data.name, a.data.place, a.data))}<b>${esc(a.data.name)}</b>${titleOf(a.data) ? `<small>📌 ${esc(titleOf(a.data))}</small>` : ''}`, hits, robot: a.data.name});
+  }
+  for (const s of st.salas) {
+    const hits = [];
+    s.thread.forEach((m, i) => { if (hits.length >= 25) return; const sn = snippet(m.text, qn); if (sn) hits.push({i, l: {at: m.at, kind: m.from === 'Coordinador' ? 'user' : 'agent', who: m.from}, sn}); });
+    if (hits.length) groups.push({key: '@sala:' + s.id, head: `<b>Sala «${esc(s.name)}»</b>`, hits});
+  }
+  if (!groups.length) return `<p class="muted">Nada con «${esc(q.trim())}» en las conversaciones de los robots que están en la oficina.</p>`;
+  const total = groups.reduce((k, g) => k + g.hits.length, 0);
+  return `<p class="muted">${total} resultado${total === 1 ? '' : 's'} en ${groups.length} ${groups.length === 1 ? 'conversación' : 'conversaciones'}</p>` + groups.map(g => `<section class="sr-g"><h4>${g.head}</h4>${g.hits.map(h => `<button type="button" class="sr-hit" data-jump="${esc(g.key)}" data-i="${h.i}"><span class="sr-w">${esc(h.l.who || (h.l.kind === 'user' ? 'Tú' : h.l.kind === 'agent' ? g.robot || '' : KIND_LABEL[h.l.kind] || h.l.kind))} · ${hhmm(h.l.at)}</span><span class="sr-t">${h.sn}</span></button>`).join('')}</section>`).join('');
+}
+function searchPanel() {
+  return `<div class="dlg-head"><h3>🔎 Buscar en las conversaciones</h3></div>
+    <form class="srch" id="search-form" role="search"><input id="search-in" type="search" placeholder="wallet#32, crítico, el nombre de un PR…" autocomplete="off" spellcheck="false"></form>
+    <div class="sr" id="search-res">${searchResults(searchUi.q)}</div>`;
+}
+PANEL.addEventListener('input', e => {
+  if (e.target.id !== 'search-in') return;
+  searchUi.q = e.target.value;
+  clearTimeout(searchUi.t); searchUi.t = setTimeout(() => { const r = $('#search-res', PANEL); if (r) r.innerHTML = searchResults(searchUi.q); }, 120);
+});
+PANEL.addEventListener('submit', e => { if (e.target.id === 'search-form') { e.preventDefault(); $('.sr-hit', PANEL)?.click(); } });
+document.addEventListener('click', e => {
+  const h = e.target.closest('[data-jump]'); if (!h) return;
+  st.jump = {sel: h.dataset.jump, i: +h.dataset.i}; select(h.dataset.jump);
+});
+// Tras abrir la conversación: lleva el mensaje al centro y lo resalta un momento.
+function doJump() {
+  const j = st.jump; if (!j || j.sel !== st.selected) return;
+  st.jump = null;
+  const row = PANEL.querySelector(`[data-src] > [data-i="${j.i}"]`); if (!row) return;
+  row.scrollIntoView({block: 'center'}); row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 2200);
+}
+
+/* ---------- conversación al lado ---------- */
+// Un segundo robot a la izquierda de la ventana: lees y le escribes sin perder el que tienes abierto.
+function renderSide() {
+  const card = $('#dlg-card');
+  const a = st.side && st.robots.get(st.side);
+  const show = !!a && !!st.robots.get(st.selected) && st.side !== st.selected;
+  card.classList.toggle('split', show);
+  let box = $('#side');
+  if (!show) { if (box) { box.hidden = true; box.dataset.robot = ''; } return; }
+  if (!box) {
+    box = document.createElement('aside'); box.id = 'side'; box.className = 'side'; box.setAttribute('aria-label', 'Conversación al lado');
+    box.innerHTML = `<div class="sd-h"></div><div class="sd-alert"></div><div class="log sd-log"></div><form class="chat sd-chat" data-side-reply><textarea rows="2"></textarea><button class="btn primary sm">Enviar</button></form>`;
+    card.prepend(box);
+  }
+  box.hidden = false;
+  const d = a.data, color = COLORS[d.color % 8];
+  box.querySelector('.sd-h').innerHTML = `<span class="sd-av">${robotHead(color, lookOf(d.name, d.place, d))}</span><div class="sd-n"><b>${esc(d.name)}</b>${titleOf(d) ? `<small>📌 ${esc(titleOf(d))}</small>` : ''}</div><span class="pill p-${d.state}">${esc(stateLabel(d))}</span><button type="button" class="btn sm ghost" data-side="swap" title="Abrir este en grande y poner el otro al lado">⇄</button><button type="button" class="btn sm ghost" data-side="close" title="Cerrar la conversación de al lado" aria-label="Cerrar">✕</button>`;
+  const perm = d.hold || d.needsPermission;
+  box.querySelector('.sd-alert').innerHTML = perm ? `<div class="alert sm"><b>Pide permiso</b><span class="sub-h">${esc(d.hold ? d.hold.tool : d.activity || '')}</span><div class="row"><button class="btn primary sm" data-side="allow">Aprobar</button><button class="btn danger sm" data-side="deny">Denegar</button></div></div>`
+    : d.ask ? `<div class="alert sm"><b>Te hizo una pregunta</b><div class="row"><button class="btn sm" data-side="swap">Responder</button></div></div>` : '';
+  const lg = box.querySelector('.sd-log');
+  lg.style.setProperty('--c', color);
+  if (box.dataset.robot !== d.name) {
+    box.dataset.robot = d.name; lg.dataset.src = d.name;
+    lg.innerHTML = renderLog(a.log, d.name); lg.scrollTop = lg.scrollHeight;
+    box.querySelector('textarea').placeholder = `Escríbele a ${d.name}… Enter envía`;
+  }
+}
+function sidePicker(d) {
+  const others = [...st.robots.values()].filter(x => x.data.name !== d.name);
+  if (!others.length) return '';
+  return `<select class="mt-sel sd-pick" id="side-pick" title="Abre otro robot a la izquierda para leer las dos conversaciones a la vez" aria-label="Ver otro robot al lado"><option value="">⇆ Ver al lado…</option>${others.map(x => `<option value="${esc(x.data.name)}"${st.side === x.data.name ? ' selected' : ''}>${esc(x.data.name)}${titleOf(x.data) ? ' · ' + esc(titleOf(x.data).slice(0, 40)) : ''}</option>`).join('')}</select>`;
+}
+PANEL.addEventListener('change', e => { if (e.target.id === 'side-pick') { st.side = e.target.value || null; renderSide(); } });
+$('#dlg-card').addEventListener('click', async e => {
+  const b = e.target.closest('[data-side]'); if (!b) return;
+  const act = b.dataset.side, d = st.robots.get(st.side)?.data;
+  if (act === 'close') { st.side = null; renderSide(); return renderPanel(); }
+  if (act === 'swap' && d) { const cur = st.selected; st.side = cur; select(d.name); return; }
+  if ((act === 'allow' || act === 'deny') && d) try { await decide(d, act === 'allow'); } catch { /* toast ya mostrado */ }
+});
+$('#dlg-card').addEventListener('submit', async e => {
+  if (!e.target.matches('[data-side-reply]')) return;
+  e.preventDefault();
+  const ta = e.target.querySelector('textarea'), t = ta.value.trim(), name = st.side;
+  if (!t || !name) return;
+  ta.value = '';
+  try { await api('POST', `/api/robots/${name}/say`, {text: t}); } catch { ta.value = t; }
+});
+$('#dlg-card').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && e.target.closest('[data-side-reply]')) { e.preventDefault(); e.target.form.requestSubmit(); }
+});
+
+/* ---------- mensajes de un robot: fijar para enviar y pasar a otro robot ---------- */
+// Cada globo sabe de qué conversación viene (data-src del log) y su posición (data-i).
+function entryOf(el) {
+  const row = el.closest('[data-i]'), box = el.closest('[data-src]');
+  if (!row || !box) return null;
+  const i = +row.dataset.i, src = box.dataset.src;
+  if (src.startsWith('@sala:')) { const s = st.salas.find(x => x.id === src.slice(6)), m = s?.thread[i]; return m ? {robot: m.from, text: m.text, at: m.at, title: `Sala «${s.name}»`} : null; }
+  const a = st.robots.get(src), l = a?.log[i];
+  return l ? {robot: src, text: l.text, at: l.at, title: titleOf(a.data)} : null;
+}
+const pinKey = p => `${p.robot}|${p.at}`;
+const pinOf = e => e && st.pins.find(p => pinKey(p) === pinKey(e));
+function markPins(root = document) {
+  root.querySelectorAll('[data-pin]').forEach(b => { const on = !!pinOf(entryOf(b)); b.classList.toggle('on', on); b.title = on ? 'Quitar de «Para enviar»' : 'Guardar en «Para enviar» para pegarlo después'; });
+}
+function renderPinsBadge() {
+  const n = st.pins.length, b = $('#pins-n');
+  b.textContent = n; b.hidden = !n;
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-pin]'); if (!b) return;
+  const en = entryOf(b); if (!en) return;
+  const p = pinOf(en);
+  try {
+    if (p) await api('DELETE', `/api/pins/${p.id}`);
+    else { await api('POST', '/api/pins', {robot: en.robot, title: en.title, at: en.at, text: unwrapPaste(en.text)}); toast('Guardado en «Para enviar» (tecla P)'); }
+  } catch { /* toast ya mostrado */ }
+});
+function pinsPanel() {
+  const list = st.pins.slice().reverse();
+  const row = p => {
+    const live = st.robots.has(p.robot);
+    return `<div class="lg agent has-av pin-item" style="--c:${avColor(p.robot)}"><span class="w">${avatarOf(p.robot)}${esc(p.robot)}${p.title ? ` · ${esc(p.title)}` : ''} · ${hhmm(p.at)}${live ? '' : ' · ya se fue'}</span>
+      <span class="lg-acts"><button type="button" class="cp-btn" data-copy="msg" title="Copiar con formato de chat (Google Chat, Slack)">📋 Copiar</button>${live ? `<button type="button" class="cp-btn" data-pin-go="${esc(p.id)}" title="Abrir la conversación en este mensaje">Ver</button>` : ''}<button type="button" class="cp-btn" data-pin-done="${esc(p.id)}" title="Ya lo enviaste: lo quita de la lista">✓ Enviado</button></span>
+      <div class="x md-chat">${copyable(mdHtml(p.text))}</div></div>`;
+  };
+  return `<div class="dlg-head"><h3>📌 Para enviar <small>${list.length || ''}</small></h3><p>Mensajes que guardaste con 📌 para pegarlos en Google Chat o Slack. Se quedan aunque el robot se vaya; marca «✓ Enviado» cuando ya los mandaste.</p></div>
+    <div class="log pins-log" id="pins-log">${list.length ? list.map(row).join('') : '<div class="lg sys"><span class="x">No hay nada guardado. Pasa el mouse por un mensaje de un robot y toca 📌.</span></div>'}</div>`;
+}
+document.addEventListener('click', async e => {
+  const done = e.target.closest('[data-pin-done]');
+  if (done) { try { await api('DELETE', `/api/pins/${done.dataset.pinDone}`); } catch { /* toast ya mostrado */ } return; }
+  const go = e.target.closest('[data-pin-go]'); if (!go) return;
+  const p = st.pins.find(x => x.id === go.dataset.pinGo), a = p && st.robots.get(p.robot);
+  if (!a) return toast('Ese robot ya no está en la oficina');
+  const i = a.log.findIndex(l => l.at === p.at);
+  st.jump = {sel: p.robot, i}; select(p.robot);
+});
+
+// Pasar a otro robot: el mensaje va citado, con quién lo dijo, y lo que quieras que haga con él.
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-fwd]'); if (!b) return;
+  const row = b.closest('.lg'), en = entryOf(b); if (!row || !en) return;
+  const open = row.querySelector('.fwd'); if (open) return open.remove();
+  const targets = [...st.robots.values()].filter(x => x.data.name !== en.robot);
+  if (!targets.length) return toast('No hay otro robot en la oficina a quien pasárselo');
+  row.insertAdjacentHTML('beforeend', `<form class="fwd" data-fwd-form><label>Pasar a <select>${targets.map(x => `<option value="${esc(x.data.name)}"${st.side === x.data.name ? ' selected' : ''}>${esc(x.data.name)} · ${esc(stateLabel(x.data))}${titleOf(x.data) ? ' · ' + esc(titleOf(x.data).slice(0, 36)) : ''}</option>`).join('')}</select></label>
+    <textarea rows="2" placeholder="Qué quieres que haga con esto (opcional). Ej.: revisa si esto afecta tu PR"></textarea>
+    <div class="row"><button class="btn primary sm">Enviar</button><button type="button" class="btn sm" data-fwd-x>Cancelar</button></div></form>`);
+  row.querySelector('.fwd textarea').focus();
+});
+document.addEventListener('click', e => { if (e.target.closest('[data-fwd-x]')) e.target.closest('.fwd').remove(); });
+document.addEventListener('keydown', e => {
+  if (e.target.closest?.('.fwd') && e.key === 'Escape') { e.stopImmediatePropagation(); e.target.closest('.fwd').remove(); }
+  else if (e.target.matches?.('.fwd textarea') && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.target.form.requestSubmit(); }
+}, true);
+document.addEventListener('submit', async e => {
+  if (!e.target.matches('[data-fwd-form]')) return;
+  e.preventDefault();
+  const f = e.target, en = entryOf(f), to = f.querySelector('select').value, note = f.querySelector('textarea').value.trim();
+  if (!en || !to) return;
+  const text = `${note || `Te paso este mensaje de ${en.robot} para que lo tengas en cuenta.`}\n\n--- Mensaje de ${en.robot}${en.title ? ` (${en.title})` : ''} ---\n${unwrapPaste(en.text)}`;
+  f.querySelector('button').disabled = true;
+  try { await api('POST', `/api/robots/${to}/say`, {text}); f.remove(); toast(`Enviado a ${to}`); } catch { f.querySelector('button').disabled = false; }
+});
+
 /* ---------- atajos de teclado ---------- */
 // No actúan mientras escribes. J/K recorren los robots en el orden de las tarjetas (primero los que te necesitan).
-const KEYS = [['J / K', 'Siguiente / anterior robot'], ['A', 'Aprobar el permiso del robot abierto'], ['R', 'Escribirle al robot abierto'],
-  ['N', 'Nuevo encargo'], ['B', 'Bandeja'], ['Esc', 'Cerrar'], ['?', 'Esta ayuda']];
+const KEYS = [['J / K', 'Siguiente / anterior robot'], ['S', 'Siguiente robot que te espera'], ['A / D', 'Aprobar / denegar el permiso (y pasa al siguiente que espera)'],
+  ['R', 'Escribirle al robot abierto'], ['F', 'Seguir en el mapa al robot abierto'], ['/', 'Buscar en las conversaciones'], ['P', 'Para enviar (mensajes fijados)'],
+  ['+ / − / 0', 'Acercar / alejar / ver todo el mapa'], ['N', 'Nuevo encargo'], ['B', 'Bandeja'], ['Esc', 'Cerrar'], ['?', 'Esta ayuda']];
 function keysHelp() {
   let box = $('#keys');
   if (!box) {
@@ -2369,16 +2671,24 @@ document.addEventListener('keydown', async e => {
   } else if (k === 'n') select('@new');
   else if (k === 'b') select('@inbox');
   else if (k === 'r' && a) { e.preventDefault(); $('#chat-in')?.focus(); }
-  else if (k === 'a' && a) {
-    const d = a.data;
+  else if ((k === 'a' || k === 'd') && a) {
+    e.preventDefault();
+    const d = a.data, allow = k === 'a';
     try {
-      if (d.hold) await api('POST', `/api/decision/${d.hold.id}`, {decision: 'allow'});
-      else if (d.needsPermission) await api('POST', `/api/robots/${d.name}/permission`, {decision: 'approve'});
-      else if (d.ask) return $('#rp-alert input')?.focus();
-      else return toast(`${d.name} no está pidiendo permiso`);
-      toast(`Aprobado: ${d.name}`);
+      if (!await decide(d, allow)) return d.ask ? $('#rp-alert input')?.focus() : toast(`${d.name} no está pidiendo permiso`);
+      const nx = nextWaiting(d.name);
+      toast(`${allow ? 'Aprobado' : 'Denegado'}: ${d.name}${nx ? ` · sigue ${nx}` : ' · nadie más te espera'}`);
+      if (nx && nx !== d.name) setTimeout(() => select(nx), 250);
     } catch { /* toast ya mostrado */ }
-  } else if (e.key === '?') keysHelp();
+  } else if (k === 's') goNextWaiting();
+  else if (k === 'f' && a) { select(null); follow(a.data.name); }
+  else if (k === 'f' && hover.name) follow(hover.name);
+  else if (e.key === '/') { select('@search'); setTimeout(() => $('#search-in')?.focus(), 0); }
+  else if (k === 'p') select('@pins');
+  else if (e.key === '+' || e.key === '=') setZoom(zoom.z * 1.35);
+  else if (e.key === '-' || e.key === '_') setZoom(zoom.z / 1.35);
+  else if (e.key === '0') setZoom(1);
+  else if (e.key === '?') keysHelp();
   else return;
   e.preventDefault();
 });
