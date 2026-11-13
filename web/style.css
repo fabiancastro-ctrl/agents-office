@@ -966,8 +966,9 @@ html[data-theme=light] .sub-row{background:#ece9fb;color:#3b2f86}
 .desk .clutter{position:absolute;inset:0;pointer-events:none;z-index:1;display:none}
 .desk[data-cl="1"] .clutter,.desk[data-cl="2"] .clutter,.desk[data-cl="3"] .clutter{display:block}
 .desk .clutter{background:
-  linear-gradient(#f4efe2,#f4efe2) 86% 74%/13% 30% no-repeat,
-  linear-gradient(#ddd5c3,#ddd5c3) 88% 70%/13% 30% no-repeat}
+  linear-gradient(#f4efe2,#f4efe2) 86% 74%/15% 34% no-repeat,linear-gradient(#ddd5c3,#ddd5c3) 88% 68%/15% 34% no-repeat,linear-gradient(#f4efe2,#f4efe2) 90% 62%/15% 34% no-repeat,
+  radial-gradient(circle,#5a3a26 0 38%,#e8edf4 40% 62%,transparent 64%) 97% 14%/10% 38% no-repeat,
+  radial-gradient(circle,#f4efe2 0 40%,#cfc6b3 42% 55%,transparent 58%) 60% 88%/8% 30% no-repeat}
 .desk[data-cl="2"] .clutter,.desk[data-cl="3"] .clutter{background:
   linear-gradient(#f4efe2,#f4efe2) 86% 74%/13% 30% no-repeat,linear-gradient(#ddd5c3,#ddd5c3) 88% 70%/13% 30% no-repeat,
   linear-gradient(#f4efe2,#f4efe2) 6% 80%/12% 28% no-repeat,linear-gradient(#e8e0cc,#e8e0cc) 8% 74%/12% 28% no-repeat,
@@ -1044,12 +1045,12 @@ html.tab-hidden .map *{animation-play-state:paused!important}
 .map-wrap.zoomed .map{transform-origin:0 0;transition:none}
 .map-wrap.zoomed.dragging{cursor:grabbing}
 .map-wrap.zoomed.dragging *{cursor:grabbing!important}
-.zoom-ui{position:sticky;top:0;left:0;height:0;z-index:3000;pointer-events:none}
-.zoom-ui .zu{position:absolute;right:8px;top:8px;display:flex;gap:4px;align-items:center;pointer-events:auto;background:rgba(17,23,34,.82);border:1px solid var(--line);border-radius:8px;padding:3px;backdrop-filter:blur(3px)}
+.zoom-ui{position:sticky;bottom:0;left:0;height:0;z-index:3000;pointer-events:none}
+.zoom-ui .zu{position:absolute;right:8px;bottom:8px;display:flex;gap:4px;align-items:center;pointer-events:auto;background:rgba(17,23,34,.82);border:1px solid var(--line);border-radius:8px;padding:3px;backdrop-filter:blur(3px)}
 .zoom-ui button{background:transparent;border:0;color:var(--ink);min-width:24px;height:22px;border-radius:5px;font:600 13px/1 var(--body);cursor:pointer;padding:0 6px}
 .zoom-ui button:hover{background:var(--panel-2)}
 .zoom-ui #zoom-n{font:600 11px/1 var(--mono);color:#c3cdda;min-width:38px;text-align:center}
-.zoom-ui .zf{position:absolute;left:8px;top:8px;pointer-events:auto;background:var(--sky);color:#0b1a2b;border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;font-weight:600;display:flex;gap:6px;align-items:center;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.zoom-ui .zf{position:absolute;left:8px;bottom:8px;pointer-events:auto;background:var(--sky);color:#0b1a2b;border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;font-weight:600;display:flex;gap:6px;align-items:center;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .zoom-ui .zf button{color:#0b1a2b;min-width:18px;height:18px}
 .zoom-ui .zf button:hover{background:rgba(255,255,255,.4)}
 .map-wrap.iso .zoom-ui{display:none}
@@ -1121,3 +1122,20 @@ html[data-theme=light] .qbar .qk{color:#5a6678}
 html[data-theme=light] .sr-w{color:#5a6678}
 html[data-theme=light] .fwd label{color:#3b475a}
 .pin-item>.w{padding-right:17em}
+
+/* ---------- crecimiento: plantas que aparecen por nivel ---------- */
+.growth .gp{display:none;animation:sprout .8s ease-out}
+.map.grow-1 .gl-1,.map.grow-2 .gl-1,.map.grow-2 .gl-2,.map.grow-3 .gl-1,.map.grow-3 .gl-2,.map.grow-3 .gl-3,.map.grow-4 .gp{display:block}
+.growth .gp.big{background:radial-gradient(circle at 50% 22%,#6cbf7a 0 30%,transparent 32%),radial-gradient(circle at 22% 42%,#4c9a5c 0 26%,transparent 28%),radial-gradient(circle at 78% 42%,#4c9a5c 0 26%,transparent 28%),radial-gradient(circle at 50% 50%,#5fae6e 0 24%,transparent 26%),linear-gradient(transparent 66%,#8a5a3c 66%)}
+@keyframes sprout{from{transform:scale(.2);opacity:0}}
+.map-wrap.iso .growth .gp{transform-origin:50% 100%;transform:rotateZ(calc(-1 * var(--rz))) rotateX(calc(-1 * var(--rx)))}
+.tboard{pointer-events:auto;cursor:default}
+
+/* ---------- medidor de contexto: un relojito en la esquina del escritorio que se llena ---------- */
+.desk .ctxm{display:none;position:absolute;left:5%;bottom:10%;width:12px;aspect-ratio:1;border-radius:50%;z-index:2;--cc:#5fcbb9;
+  background:radial-gradient(circle,#1b2430 0 36%,transparent 38%),conic-gradient(var(--cc) var(--ctx,0%),rgba(20,14,8,.4) 0);
+  box-shadow:0 0 0 1.5px #e8edf4,0 1px 2px rgba(0,0,0,.5)}
+.desk .ctxm b{display:none}
+.desk[data-ctx] .ctxm{display:block}
+.desk[data-ctx=mid] .ctxm{--cc:#f3b74f}
+.desk[data-ctx=hi] .ctxm{--cc:#ef7f8a}

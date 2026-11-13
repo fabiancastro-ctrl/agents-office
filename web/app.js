@@ -24,6 +24,11 @@ const CY = 35.5, CX = 77;
 const COLS = 4, ROW_H = 26, BASE_ROWS = 2;
 // Salas temporales de rutinas: debajo de los escritorios, una por rutina con robots en la oficina.
 const ROOM_COLS = 6, SEAT_ROW_H = 17, ROOM_X = 3, ROOM_W = 69, RIGHT_LANE = 74.5;
+// Plantas que aparecen al crecer la oficina (renderGrowth). Van aquí arriba porque layout() las ubica al arrancar.
+const GROW_AT = [5, 15, 40, 100];
+// [nivel desde el que aparece, x, y, ancho, alto, ¿sigue a las filas extra de escritorios?, clase extra]
+const GROW_PLANTS = [[1, 51.6, 20.5, 1.7, 4.5], [1, 3.2, 20, 1.7, 4.5], [2, 57.5, 27.6, 1.9, 5], [2, 95.4, 56, 1.9, 5], [2, 31.5, 91.6, 1.9, 5, true],
+  [3, 45.4, 91.6, 1.9, 5, true], [3, 3.2, 90.6, 2.4, 6.4, true, 'big'], [3, 79.2, 56, 1.9, 5], [4, 72.4, 89.6, 2.8, 7.4, true, 'big'], [4, 96, 89, 2.4, 6.4, true, 'big']];
 const geo = {rows: BASE_ROWS, H: 100, rooms: [], roomOrder: [], roomEls: new Map(), sig: ''};
 const extra = () => geo.H - 100;
 const py = y => (y / geo.H * 100) + '%';
@@ -49,7 +54,7 @@ function ensureDesks(n) {
     el.className = 'desk'; el.dataset.desk = i;
     // Silla y algún objeto (taza o planta) para que los escritorios no sean todos iguales.
     const item = i % 3 === 1 ? '<i class="mug"></i>' : i % 4 === 2 ? '<i class="dplant"></i>' : '';
-    el.innerHTML = `<i class="chair"></i><div class="mon"><i></i></div><div class="mon m2"><i></i></div><div class="kb"></div><i class="mpad"></i><i class="mouse"></i>${item}<i class="clutter"></i><div class="paper" hidden></div><span class="dn">${String(i + 1).padStart(2, '0')}</span>`;
+    el.innerHTML = `<i class="ctxm" aria-hidden="true"><b></b></i><i class="chair"></i><div class="mon"><i></i></div><div class="mon m2"><i></i></div><div class="kb"></div><i class="mpad"></i><i class="mouse"></i>${item}<i class="clutter"></i><div class="paper" hidden></div><span class="dn">${String(i + 1).padStart(2, '0')}</span>`;
     MAP.appendChild(el);
     deskEls.push({el, paper: el.querySelector('.paper')});
   }
@@ -109,6 +114,8 @@ function layout(incoming) {
   setRect($('.deco.plant.p1'), 2.9, 27.8, 1.7, 4.5);
   setRect($('.deco.coffee'), 54.25, 27.5, 1.5, 5.5);
   setRect($('.deco.plant.p2'), 76.15, 28.5, 1.7, 4.5);
+  placeGrowth(e);
+  setRect($('#trophies'), 79.6, 89.2 + e); // repisa al pie de tu escritorio, debajo de la bandeja
   ensureDesks(rows * COLS);
   // Mesas un poco más chicas que su lugar (13 × 10): mismo centro y mismo borde de abajo, así los robots no se mueven.
   deskEls.forEach((d, i) => { const p = deskPos(i); setRect(d.el, p.x + 1, p.y + 1.5, null, 8.5); d.el.hidden = i >= rows * COLS; });
@@ -294,7 +301,7 @@ function upsert(d, fromSnapshot = false) {
 
 function vacate(place, a) {
   const desk = deskFor(place);
-  if (desk) { desk.el.classList.remove('on', 'deleg'); desk.paper.hidden = true; desk.el.dataset.cl = 0; desk.el.title = ''; }
+  if (desk) { desk.el.classList.remove('on', 'deleg'); desk.paper.hidden = true; desk.el.dataset.cl = 0; desk.el.title = ''; delete desk.el.dataset.ctx; }
   for (const el of a.subEls.values()) el.remove();
   a.subEls.clear();
   a.extraEl?.remove(); a.extraEl = null;
@@ -394,7 +401,8 @@ function paint(a) {
     desk.el.dataset.tool = busy ? tool : '';
     // Desorden del escritorio según qué tan lleno tiene el contexto: hojas, tazas y bolas de papel.
     const pct = d.ctx?.pct ?? 0;
-    desk.el.dataset.cl = pct >= 80 ? 3 : pct >= 55 ? 2 : pct >= 30 ? 1 : 0;
+    desk.el.dataset.cl = pct >= 75 ? 3 : pct >= 50 ? 2 : pct >= 25 ? 1 : 0;
+    if (d.ctx) { desk.el.dataset.ctx = pct >= 75 ? 'hi' : pct >= 50 ? 'mid' : 'lo'; desk.el.style.setProperty('--ctx', Math.min(100, pct) + '%'); } else delete desk.el.dataset.ctx;
     desk.el.title = d.ctx ? `${d.name} · contexto ${pct}% lleno (${fmtTok(d.ctx.tokens)} tokens)` : '';
     desk.paper.hidden = !pend;
     desk.paper.dataset.count = pend > 1 ? pend : '';
@@ -995,18 +1003,26 @@ const TDECO = {
   biblioteca: '<i class="td-shelf" style="left:3%;top:88.4%;width:13%;height:7%"></i><i class="td-shelf" style="left:61%;top:88.4%;width:13%;height:7%"></i><i class="td-lamp" style="left:18%;top:90%"></i><i class="td-lamp" style="left:58%;top:90%"></i>',
   cafeteria: '<i class="td-bar" style="left:3%;top:90.6%;width:16%;height:4.6%"></i><i class="td-menu" style="left:31%;top:33.2%;width:7%;height:4.4%"></i>'
 };
-// Decoración que crece con el trabajo: plantas más grandes y con flores, un trofeo cada 10 reviews en tu escritorio
-// y la pizarra de la sala de descanso con lo terminado hoy. Sin textos de alerta: solo premio visual.
+// Decoración que crece con el trabajo: en cada nivel aparecen plantas nuevas (y las de siempre crecen y florecen),
+// un trofeo cada 10 tareas en tu escritorio y la pizarra de la sala de descanso con lo terminado hoy.
+// Una «tarea» es cada vez que un robot termina lo que le pediste (cada respuesta final de su turno).
+function placeGrowth(e) {
+  const box = $('#growth');
+  if (box.children.length !== GROW_PLANTS.length) box.innerHTML = GROW_PLANTS.map(([lvl, , , , , , cls]) => `<i class="deco plant gp gl-${lvl}${cls ? ' ' + cls : ''}"></i>`).join('');
+  GROW_PLANTS.forEach(([, x, y, w, h, low], k) => setRect(box.children[k], x, y + (low ? e : 0), w, h));
+}
 function renderGrowth() {
   const s = st.config?.stats || {total: 0, reviews: 0, today: 0};
-  const lvl = s.total >= 100 ? 4 : s.total >= 40 ? 3 : s.total >= 15 ? 2 : s.total >= 5 ? 1 : 0;
+  const lvl = GROW_AT.filter(n => s.total >= n).length;
   for (let i = 0; i <= 4; i++) MAP.classList.toggle(`grow-${i}`, i === lvl);
-  const n = Math.floor(s.reviews / 10), shown = Math.min(n, 6);
+  const n = Math.floor(s.total / 10), shown = Math.min(n, 6);
   const tr = $('#trophies');
   tr.innerHTML = Array.from({length: shown}, (_, i) => `<i class="cup${i % 3 === 2 ? ' big' : ''}"></i>`).join('') + (n > shown ? `<b>+${n - shown}</b>` : '');
-  tr.title = n ? `${n} trofeo${n === 1 ? '' : 's'}: uno cada 10 reviews entregados (${s.reviews} en total)` : '';
+  tr.title = n ? `${n} trofeo${n === 1 ? '' : 's'}: uno cada 10 tareas terminadas (${s.total} en total)` : '';
   tr.hidden = !n;
-  $('#tboard').innerHTML = `<small>HOY</small><b>${s.today}</b><small>listos</small>`;
+  $('#tboard').innerHTML = `<small>HOY</small><b>${s.today}</b><small>tareas</small>`;
+  const next = GROW_AT[lvl];
+  $('#tboard').title = `Oficina nivel ${lvl} de 4 · ${s.total} tareas terminadas en total${next ? ` · el siguiente nivel (más plantas) llega a las ${next}` : ' · nivel máximo'}. Hoy: ${s.today}.`;
 }
 function setMapTheme(t) {
   t = TDECO[t] || t === 'moderna' ? t : 'moderna';
