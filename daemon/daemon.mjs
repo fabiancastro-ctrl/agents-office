@@ -141,6 +141,7 @@ function view(r, withLog = false) {
     state: r.state, place: r.place, subs: r.subs, pendingSubs: r.pendingSubs,
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
+    parent: r.parent || null, spawnReq: r.spawnReq || null, kids: kidsOf(r.name),
     permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null
   };
   if (withLog) v.log = r.log.slice(-150);
@@ -396,8 +397,10 @@ function saveState() {
       robots: [...robots.values()].map(r => ({
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
-        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt
-      }))
+        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt,
+        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported
+      })),
+      spawnQueue
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
   }, 500);
@@ -409,6 +412,7 @@ async function restore() {
   inbox.push(...(saved.inbox || []).map(i => ({ status: 'nuevo', ...i })));
   if (!process.env.OFFICE_MAX_ROBOTS && Number.isInteger(saved.maxRobots)) maxRobots = saved.maxRobots;
   colorSeq = saved.colorSeq || 0;
+  spawnQueue.push(...(saved.spawnQueue || []));
   let windows = [];
   try { windows = (await run('tmux', ['list-windows', '-t', SESSION, '-F', '#{window_name}'])).stdout.split('\n'); } catch { /* sin sesion */ }
   const used = new Set();
@@ -509,6 +513,78 @@ function roomSeat(room, name, extra = {}) {
   return { type: 'room', room, name, slot, ...extra };
 }
 
+/* ---------- robots que lanza un robot ---------- */
+// Un robot puede pedirle a la oficina robots nuevos (cada uno con su consola y su contexto) en vez de subagentes.
+// La petición queda en r.spawnReq hasta que la apruebas; los aprobados entran si hay cupo y si no esperan en
+// spawnQueue. Cuando un hijo termina su primer encargo, su respuesta final se le escribe al padre en su consola.
+const SPAWN_MAX = 6;
+const spawnQueue = []; // [{ parent, title, text, at }]
+const kidsOf = name => [
+  ...[...robots.values()].filter(x => x.parent === name).map(x => ({ name: x.name, state: x.state, title: x.title || '' })),
+  ...spawnQueue.filter(q => q.parent === name).map(q => ({ name: null, state: 'queued', title: q.title, qid: q.id }))
+];
+function requestSpawn(r, body) {
+  const list = Array.isArray(body) ? body : body?.encargos || body?.robots || [];
+  const items = list.map(x => ({ title: cleanTitle(x.titulo ?? x.title ?? ''), text: String(x.encargo ?? x.text ?? x.tarea ?? '').trim().slice(0, 20000) })).filter(x => x.text);
+  if (!items.length) throw new Error('Manda {"encargos":[{"titulo":"…","encargo":"…"}]} con al menos un encargo.');
+  if (items.length > SPAWN_MAX) throw new Error(`Máximo ${SPAWN_MAX} robots por petición.`);
+  r.spawnReq = { id: crypto.randomBytes(3).toString('hex'), at: now(), items };
+  log(r, 'sys', `Pidió ${items.length} robot${items.length === 1 ? '' : 's'} nuevo${items.length === 1 ? '' : 's'}: espera tu aprobación`);
+  console_(r.name, 'pide robots', items.map(i => i.title || trunc(i.text, 40)).join(' · '));
+  emit(r);
+  return r.spawnReq;
+}
+const KID_PREAMBLE = parent => `\n\n(Te lanzó el robot ${parent} desde la Oficina de Agentes. Arrancas sin su contexto: lo que necesitas está en este encargo. Cuando termines, tu respuesta final se le envía a ${parent}, así que hazla completa y autosuficiente: resultado, archivos que tocaste o creaste y pendientes.)`;
+async function decideSpawn(r, id, approve, edited) {
+  if (!r.spawnReq || r.spawnReq.id !== id) throw new Error('Esa petición ya no está pendiente.');
+  const items = Array.isArray(edited) ? edited.map(x => ({ title: cleanTitle(x.title ?? ''), text: String(x.text ?? '').trim() })).filter(x => x.text) : r.spawnReq.items;
+  r.spawnReq = null;
+  if (!approve || !items.length) {
+    log(r, 'sys', 'No aprobaste los robots que pidió');
+    emit(r);
+    await say(r, '[Oficina] El usuario no aprobó lanzar los robots que pediste. Sigue tú con el trabajo o pregúntale cómo prefiere hacerlo.').catch(() => {});
+    return { launched: [], queued: 0 };
+  }
+  for (const it of items) spawnQueue.push({ id: crypto.randomBytes(3).toString('hex'), parent: r.name, title: it.title, text: it.text, at: now() });
+  log(r, 'sys', `Aprobaste ${items.length} robot${items.length === 1 ? '' : 's'}`);
+  const launched = await drainSpawnQueue();
+  emit(r);
+  return { launched, queued: spawnQueue.filter(q => q.parent === r.name).length };
+}
+// Lanza los que esperan mientras haya cupo; se llama al aprobar, cuando un robot termina o se va, y cada tanto.
+let draining = false;
+async function drainSpawnQueue() {
+  if (draining) return [];
+  draining = true;
+  const launched = [];
+  try {
+    while (spawnQueue.length && [...robots.values()].filter(x => x.state !== 'done').length < maxRobots) {
+      const q = spawnQueue.shift();
+      try {
+        const kid = await launch({ kind: 'libre', text: q.text + KID_PREAMBLE(q.parent), label: q.title || trunc(q.text, 80), title: q.title, parent: q.parent,
+          origin: `Lanzado por el robot ${q.parent} (lo aprobaste en la oficina)` });
+        launched.push(kid.name);
+        const p = robots.get(q.parent); if (p) emit(p);
+      } catch (e) {
+        if (/escritorios libres|tope/i.test(e.message)) { spawnQueue.unshift(q); break; }
+        const p = robots.get(q.parent); if (p) log(p, 'sys', `No se pudo lanzar «${q.title || trunc(q.text, 40)}»: ${e.message}`);
+      }
+    }
+  } finally { draining = false; saveState(); }
+  return launched;
+}
+setInterval(() => { if (spawnQueue.length) drainSpawnQueue(); }, 5000);
+function reportToParent(r, lastMessage) {
+  const p = r.parent && robots.get(r.parent);
+  if (r.reported || !p || !String(lastMessage ?? '').trim()) return;
+  r.reported = true;
+  const head = `[Oficina] Resultado del robot ${r.name}${r.title ? ` («${r.title}»)` : ''}:`;
+  say(p, `${head}\n\n${String(lastMessage).slice(0, 20000)}`).catch(() => {});
+  log(p, 'sys', `${r.name} terminó: su resultado te llegó a la consola`);
+  emit(p);
+  setTimeout(drainSpawnQueue, 500);
+}
+
 /* ---------- ciclo de vida del turno ---------- */
 
 function finishTurn(r, lastMessage) {
@@ -529,6 +605,7 @@ function finishTurn(r, lastMessage) {
   }
   // Ningún robot se va solo: queda con el cartel LISTO y su conversación hasta que lo des de baja.
   if (r.state !== 'done') bumpStats(r);
+  reportToParent(r, lastMessage);
   setState(r, 'done');
   emit(r);
 }
@@ -593,7 +670,13 @@ function savePins() { fs.writeFileSync(PIN_FILE, JSON.stringify(pins, null, 2));
 
 // Indicaciones que la oficina le suma a cada robot nuevo: los mensajes para enviar van en una cita (>) para que la
 // oficina les ponga «📋 Copiar»; al copiar se convierten al formato del chat, así que el robot escribe Markdown normal.
-const ROBOT_HINTS = 'Trabajas dentro de la Oficina de Agentes, que muestra tus respuestas en una página web. Cuando te pidan redactar un mensaje para enviar a otra persona (Google Chat, WhatsApp, Slack, correo), entrega el texto del mensaje completo dentro de una cita Markdown (cada línea empieza con «> »), sin comentarios tuyos adentro; lo que quieras decirme a mí va fuera de la cita. Dentro de la cita usa Markdown normal (**negrita**, _cursiva_, listas con -, enlaces): la oficina lo convierte al formato del chat al copiarlo. Si son varios mensajes, usa una cita por mensaje.';
+const ROBOT_HINTS = 'Trabajas dentro de la Oficina de Agentes, que muestra tus respuestas en una página web. Cuando te pidan redactar un mensaje para enviar a otra persona (Google Chat, WhatsApp, Slack, correo), entrega el texto del mensaje completo dentro de una cita Markdown (cada línea empieza con «> »), sin comentarios tuyos adentro; lo que quieras decirme a mí va fuera de la cita. Dentro de la cita usa Markdown normal (**negrita**, _cursiva_, listas con -, enlaces): la oficina lo convierte al formato del chat al copiarlo. Si son varios mensajes, usa una cita por mensaje. '
+  + 'Si te piden repartir trabajo en ROBOTS (robots nuevos, robots independientes, otras consolas), no uses subagentes: pídele robots a la oficina. '
+  + 'Escribe un archivo JSON {"encargos":[{"titulo":"título corto","encargo":"qué debe hacer"}]} (máximo 6) y envíalo con: '
+  + 'curl -s -X POST "http://127.0.0.1:$OFFICE_PORT/api/robots/$OFFICE_ROBOT/encargos" -H "Content-Type: application/json" --data-binary @<archivo>. '
+  + 'Cada robot nuevo arranca sin tu contexto: el encargo debe ser autosuficiente (objetivo, repos y rutas, documentos de entrada, restricciones, qué entregar y en qué formato). '
+  + 'El usuario los aprueba en la oficina; mientras tanto sigue con tu trabajo. Cuando cada uno termine, su resultado te llegará como un mensaje «[Oficina] Resultado del robot …»: intégralo. '
+  + 'Si te piden agentes o subagentes, usa la herramienta de agentes como siempre.';
 
 const cleanTitle = t => String(t ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
 
@@ -641,6 +724,8 @@ async function removeRobot(r, reason) {
   try { fs.unlinkSync(convFile(r.name)); } catch { /* no tenía */ }
   broadcast({ type: 'left', name: r.name });
   saveState();
+  const p = r.parent && robots.get(r.parent); if (p) emit(p);
+  setTimeout(drainSpawnQueue, 500);
 }
 
 /* ---------- transcript ---------- */
@@ -940,7 +1025,7 @@ async function guardSession() {
   await run('tmux', ['set-option', '-t', SESSION, '@office_port', String(PORT)]).catch(() => {});
 }
 
-async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, title, leaveWhenDone, attachments, routine, sala: salaId }) {
+async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, title, leaveWhenDone, attachments, routine, sala: salaId, parent }) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
   const active = [...robots.values()].filter(x => x.state !== 'done');
   if (active.length >= maxRobots) throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
@@ -979,7 +1064,7 @@ async function launch({ kind, skill, args, text, permissionMode, name, origin, l
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
     sessionId, transcript: null, offset: 0, partial: '', msgUsage: new Map(), startedAt: now(),
     alive: true, state: 'walking', timeline: [{ at: now(), s: 'walking' }], subs: [], pendingSubs: 0, bubble: '', activity: '',
-    needsPermission: false, hold: null, docs: [], log: []
+    needsPermission: false, hold: null, docs: [], log: [], parent: parent || null
   };
   robots.set(name, r);
   // env -u: si ANTHROPIC_API_KEY esta en el entorno, `claude` la usa en vez del login de la suscripcion.
@@ -1559,6 +1644,24 @@ const server = http.createServer(async (req, res) => {
         const { text, attachments } = await readBody(req);
         if (!String(text || '').trim() && !validAttachments(attachments).length) return send(res, 400, { error: 'Mensaje vacío.' });
         await say(r, text, attachments);
+        return send(res, 200, { ok: true });
+      }
+      // Un robot pide robots nuevos (curl desde su consola) y tú decides desde la oficina.
+      if (req.method === 'POST' && action === 'encargos' && !parts[4]) {
+        try { const q = requestSpawn(r, await readBody(req)); return send(res, 202, { ok: true, id: q.id, mensaje: 'Petición enviada. El usuario la aprueba en la oficina; sigue con tu trabajo. Los resultados te llegarán como mensajes «[Oficina] Resultado del robot …».' }); }
+        catch (e) { return send(res, 400, { error: e.message }); }
+      }
+      if (req.method === 'POST' && action === 'encargos' && parts[4]) {
+        const b = await readBody(req);
+        try { return send(res, 200, { ok: true, ...(await decideSpawn(r, parts[4], b.decision === 'approve', b.items)) }); }
+        catch (e) { return send(res, 409, { error: e.message }); }
+      }
+      if (req.method === 'POST' && action === 'cola' && parts[4]) { // quitar uno que espera cupo en la puerta
+        const i = spawnQueue.findIndex(q => q.id === parts[4] && q.parent === r.name);
+        if (i < 0) return send(res, 404, { error: 'Ese robot ya entró o no estaba en la cola.' });
+        const [q] = spawnQueue.splice(i, 1);
+        log(r, 'sys', `Quitaste de la cola «${q.title || trunc(q.text, 40)}»`);
+        emit(r);
         return send(res, 200, { ok: true });
       }
       if (req.method === 'POST' && action === 'permission') {

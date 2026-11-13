@@ -726,6 +726,8 @@ function renderMeta() {
 // necesitan), una línea por robot trabajando y los terminados plegados, para que con muchos robots no sature.
 const CARDS = $('#cards'), KPIS = $('#kpis');
 const GROUP_OF = {input: 'need', working: 'work', walking: 'work', delegating: 'work', idle: 'work', done: 'done'};
+// Un robot que pide robots nuevos te necesita aunque siga trabajando.
+const groupOf = d => d.spawnReq ? 'need' : GROUP_OF[d.state] || 'work';
 const fmtDur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
 const tokOf = d => (d.usage?.out || 0) + (d.usage?.in || 0) + (d.usage?.cacheWrite || 0);
 const runningSubs = d => d.subs.filter(s => s.status !== 'done').length;
@@ -763,8 +765,8 @@ setInterval(scheduleCards, 30000); // «sin actividad» cambia con el reloj, no 
 // Avisos: contador en el título de la pestaña (siempre) y, si los activas, sonido y notificación del sistema.
 st.inboxTemp = prefGet('inboxTemp', '0') === '1';
 const notif = {on: prefGet('notify', '0') === '1', known: null, ctx: null, base: document.title};
-const alertOf = d => d.state === 'input' ? (d.needsPermission || d.hold ? 'perm' : 'ask') : isStuck(d) ? 'stuck' : '';
-const ALERT_TXT = {perm: 'pide permiso', ask: 'tiene una pregunta para ti', stuck: 'lleva más de 10 min sin actividad'};
+const alertOf = d => d.spawnReq ? 'spawn' : d.state === 'input' ? (d.needsPermission || d.hold ? 'perm' : 'ask') : isStuck(d) ? 'stuck' : '';
+const ALERT_TXT = {spawn: 'quiere lanzar robots nuevos', perm: 'pide permiso', ask: 'tiene una pregunta para ti', stuck: 'lleva más de 10 min sin actividad'};
 function updateTitle(n) { document.title = (n ? `(${n}) ` : '') + notif.base; drawFavicon(n); }
 // Ícono de la pestaña: la inicial de la oficina y, si alguien te necesita, un círculo rojo con cuántos.
 const fav = {hue: 174, letter: 'O', n: -1};
@@ -820,7 +822,7 @@ syncNotifyBtn();
 
 function renderKpis() {
   const ds = [...st.robots.values()].map(a => a.data);
-  const count = g => ds.filter(d => GROUP_OF[d.state] === g).length;
+  const count = g => ds.filter(d => groupOf(d) === g).length;
   const need = count('need'), work = count('work'), done = count('done');
   const subs = ds.reduce((k, d) => k + runningSubs(d), 0);
   const live = ds.reduce((k, d) => k + tokOf(d), 0);
@@ -878,18 +880,20 @@ document.addEventListener('click', async e => {
 });
 
 function cardHtml(a) {
-  const d = a.data, g = GROUP_OF[d.state] || 'work';
+  const d = a.data, g = groupOf(d);
   const subs = runningSubs(d), docs = d.docs.length, tok = tokOf(d);
   const pill = d.state === 'input' && d.inputAt
     ? `<span class="pill p-input">espera <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></span>`
     : `<span class="pill p-${d.state}">${d.state === 'done' && d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : esc(stateLabel(d))}</span>`;
   const perm = d.hold || d.needsPermission;
-  const line = d.ask ? `Te hizo ${d.ask.questions.length === 1 ? 'una pregunta' : `${d.ask.questions.length} preguntas`}: ${d.ask.questions.map(q => q.header || q.question).join(' · ')}`
+  const line = d.spawnReq ? `Quiere lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: ${d.spawnReq.items.map(i => i.title || plainMd(i.text).slice(0, 40)).join(' · ')}`
+    : d.ask ? `Te hizo ${d.ask.questions.length === 1 ? 'una pregunta' : `${d.ask.questions.length} preguntas`}: ${d.ask.questions.map(q => q.header || q.question).join(' · ')}`
     : d.state === 'input'
     ? (perm ? `Pide permiso: ${d.hold ? d.hold.tool : (d.activity || 'una herramienta')}` : (plainMd(d.bubble) || 'Tiene una pregunta para ti'))
     : d.state === 'done' ? (plainMd(d.bubble) || 'Terminó su turno') : (d.activity || (d.state === 'walking' ? 'Llegando a su escritorio' : 'Pensando…'));
   let actions = '';
-  if (d.ask) actions = askForm(d, 'c');
+  if (d.spawnReq) actions = `<button class="btn primary sm" data-card-act="open">Revisar y lanzar</button>`;
+  else if (d.ask) actions = askForm(d, 'c');
   else if (d.hold) actions = `<button class="btn primary sm" data-card-act="hold-allow">Aprobar</button><button class="btn danger sm" data-card-act="hold-deny">Denegar</button><button class="btn sm" data-card-act="open">Ver</button>`;
   else if (d.needsPermission) actions = `<button class="btn primary sm" data-card-act="perm-approve">Aprobar</button><button class="btn danger sm" data-card-act="perm-reject">Rechazar</button><button class="btn sm" data-card-act="open">Ver consola</button>`;
   else if (d.state === 'input') actions = `<form class="rc-reply" data-card-reply><input id="reply-${esc(d.name)}" placeholder="Responder a ${esc(d.name)}…" autocomplete="off"><button class="btn primary sm">Enviar</button></form>`;
@@ -910,7 +914,7 @@ function cardHtml(a) {
 function renderCards() {
   const all = [...st.robots.values()];
   const by = {need: [], work: [], done: []};
-  for (const a of all) by[GROUP_OF[a.data.state] || 'work'].push(a);
+  for (const a of all) by[groupOf(a.data)].push(a);
   const t = (a, k) => Date.parse(a.data[k] || 0) || 0;
   by.need.sort((x, y) => t(x, 'inputAt') - t(y, 'inputAt')); // el que más lleva esperando, primero
   by.work.sort((x, y) => t(x, 'startedAt') - t(y, 'startedAt'));
@@ -1092,7 +1096,7 @@ function renderTimeline() {
       segs += `<i class="tl-seg ts-${cls}" style="left:${pct(s)}%;width:${Math.max(0.15, (end - s) / span * 100).toFixed(3)}%" title="${esc(STATE_LABEL[e.s] || e.s)} · ${hhmm(Date.parse(e.at))}–${i + 1 < tl.length ? hhmm(end) : 'ahora'} (${fmtDur(end - Date.parse(e.at))})"></i>`;
     });
     const docs = d.docs.filter(x => Date.parse(x.at) >= t0).map(x => `<b class="tl-doc" style="left:${pct(Date.parse(x.at))}%" title="${esc(x.path.split('/').pop())} · ${hhmm(Date.parse(x.at))}">▤</b>`).join('');
-    const cls = ['tl-row', `g-${GROUP_OF[d.state] || 'work'}`, cardUi.hl === d.name ? 'hl' : '', st.selected === d.name ? 'sel' : ''].filter(Boolean).join(' ');
+    const cls = ['tl-row', `g-${groupOf(d)}`, cardUi.hl === d.name ? 'hl' : '', st.selected === d.name ? 'sel' : ''].filter(Boolean).join(' ');
     return `<div class="${cls}" id="tl-${esc(d.name)}" data-card="${esc(d.name)}"><span class="tl-name" style="--c:${COLORS[d.color % 8]}">${esc(d.name)}</span><div class="tl-track">${segs}${docs}</div></div>`;
   }).join('');
   TL.innerHTML = `<div class="tl-axis"><span class="tl-name"></span><div class="tl-track">${ticks}<span class="tl-tick now" style="left:100%">ahora</span></div></div>${rows}`;
@@ -1634,6 +1638,31 @@ PANEL.addEventListener('submit', async e => {
   try { await api('POST', `/api/robots/${name}/title`, {title}); titleUi.editing = null; renderPanel(); } catch { /* toast ya mostrado */ }
 });
 
+/* ---------- robots que pide un robot ---------- */
+// Te muestra los encargos que escribió (puedes corregirlos o quitar alguno) y los lanza al aprobar.
+function spawnBox(d) {
+  const q = d.spawnReq, n = q.items.length;
+  const max = st.config.maxRobots || 3, active = [...st.robots.values()].filter(a => a.data.state !== 'done').length, free = Math.max(0, max - active);
+  return `<form class="alert spawn-box" id="rp-alert" data-spawn="${esc(q.id)}"><b>Quiere lanzar ${n} robot${n === 1 ? '' : 's'} nuevo${n === 1 ? '' : 's'}</b>
+    <span class="note">Cada uno con su propia consola y su propio contexto. Revisa o corrige los encargos; al terminar, el resultado de cada uno le llega a ${esc(d.name)}. ${free >= n ? '' : `Hay ${free} cupo${free === 1 ? '' : 's'} libre${free === 1 ? '' : 's'}: los demás esperan en la puerta hasta que se libere uno.`}</span>
+    ${q.items.map((it, i) => `<fieldset class="sp-it"><label class="sp-on"><input type="checkbox" checked data-sp-on="${i}"> Lanzar</label><input class="sp-t" data-sp-t="${i}" maxlength="60" value="${esc(it.title)}" placeholder="Título"><textarea class="sp-x" data-sp-x="${i}" rows="4">${esc(it.text)}</textarea></fieldset>`).join('')}
+    <div class="row"><button class="btn primary sm" data-act="spawn-ok">Lanzar</button><button type="button" class="btn danger sm" data-act="spawn-no">No, gracias</button></div></form>`;
+}
+PANEL.addEventListener('click', e => { const b = e.target.closest('[data-unqueue]'); if (b && st.selected) api('POST', `/api/robots/${st.selected}/cola/${b.dataset.unqueue}`).catch(() => {}); });
+async function decideSpawn(d, allow) {
+  const f = PANEL.querySelector(`form[data-spawn="${CSS.escape(d.spawnReq.id)}"]`);
+  const items = f ? d.spawnReq.items.map((it, i) => ({title: f.querySelector(`[data-sp-t="${i}"]`).value, text: f.querySelector(`[data-sp-x="${i}"]`).value, on: f.querySelector(`[data-sp-on="${i}"]`).checked})).filter(x => x.on && x.text.trim()) : d.spawnReq.items;
+  const r = await api('POST', `/api/robots/${d.name}/encargos/${d.spawnReq.id}`, {decision: allow && items.length ? 'approve' : 'reject', items});
+  if (allow) toast(r.launched?.length ? `Entraron ${r.launched.join(', ')}${r.queued ? ` · ${r.queued} esperan cupo` : ''}` : r.queued ? `${r.queued} esperan cupo en la puerta` : 'No lanzaste ninguno');
+}
+PANEL.addEventListener('submit', e => { if (e.target.matches('form[data-spawn]')) e.preventDefault(); });
+function kidsBlock(d) {
+  if (!d.kids?.length && !d.parent) return '';
+  const KS = {queued: 'en la puerta, esperando cupo'};
+  const kid = k => k.name ? `<button type="button" class="kid" data-pick="${esc(k.name)}"><b>${esc(k.name)}</b>${k.title ? ` · ${esc(k.title)}` : ''}<span class="pill p-${esc(k.state)}">${esc(STATE_LABEL[k.state] || k.state)}</span></button>` : `<span class="kid q">${esc(k.title || 'robot')}<span class="pill">${KS.queued}</span><button type="button" class="btn sm ghost" data-unqueue="${esc(k.qid)}" title="No lanzarlo">✕</button></span>`;
+  return `<div class="rp-block kids" id="kids"><h4>${d.parent ? `Lo lanzó <button type="button" class="kid inline" data-pick="${esc(d.parent)}">${esc(d.parent)}</button>` : 'Robots que lanzó'}</h4>${d.kids?.length ? `<div class="kid-l">${d.kids.map(kid).join('')}</div>` : ''}</div>`;
+}
+
 function robotPanel(a) {
   const d = a.data;
   const u = d.usage || {};
@@ -1642,7 +1671,8 @@ function robotPanel(a) {
   const subRow = s => `<div class="sub-row${s.status === 'done' ? ' ok' : ''}" title="${esc(s.desc || s.activity || '')}"><i></i><b>${esc(shortType(s.type))}</b><span>${s.status === 'done' ? 'listo' : esc(s.activity || 'trabajando')}</span></div>`;
   const subs = d.subs.length ? `<div class="rp-block"><h4>Subagentes <small>${running.length ? `${running.length} trabajando` : ''}${running.length && finished.length ? ' · ' : ''}${finished.length ? `${finished.length} listo${finished.length === 1 ? '' : 's'}` : ''}</small></h4><div class="subs-list" id="subs-list">${[...running, ...finished].map(subRow).join('')}</div></div>` : '';
   let alert = '';
-  if (d.ask) alert = `<div class="alert ask-box" id="rp-alert"><b>Te pregunta</b>${askForm(d, 'p')}</div>`;
+  if (d.spawnReq) alert = spawnBox(d);
+  else if (d.ask) alert = `<div class="alert ask-box" id="rp-alert"><b>Te pregunta</b>${askForm(d, 'p')}</div>`;
   else if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission) alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
@@ -1659,6 +1689,7 @@ function robotPanel(a) {
         </form>
       </div>
       <div class="rp-col" style="--extra:${(d.subs.length ? 150 : 0) + (d.docs.length ? 205 : 0)}px">
+        ${kidsBlock(d)}
         ${subs}
         ${docsBlock(d)}
         <h4>Consola en vivo</h4>
@@ -2211,6 +2242,7 @@ PANEL.addEventListener('click', async e => {
   try {
     if (b.dataset.act === 'follow' && a) { select(null); return follow(name); }
     if (b.dataset.act === 'qnext') return goNextWaiting();
+    if ((b.dataset.act === 'spawn-ok' || b.dataset.act === 'spawn-no') && a?.data.spawnReq) { b.disabled = true; await decideSpawn(a.data, b.dataset.act === 'spawn-ok'); return; }
     if (b.dataset.act === 'console') await api('POST', `/api/robots/${name}/console`);
     if (b.dataset.act === 'again' && a) return launchAgain(a.data);
     if (b.dataset.act === 'fav' && a) { await api('POST', '/api/favorites', {...a.data.request, title: a.data.title}); toast('Guardado en frecuentes: lo ves arriba de «Nuevo encargo»'); }
@@ -2457,7 +2489,7 @@ MAP.addEventListener('click', e => {
 
 /* ---------- cola de los que te esperan ---------- */
 // Del que lleva más esperando al más reciente. S salta al siguiente; tras aprobar o denegar con A/D pasa solo.
-const waitingList = () => [...st.robots.values()].map(a => a.data).filter(d => d.state === 'input')
+const waitingList = () => [...st.robots.values()].map(a => a.data).filter(d => d.state === 'input' || d.spawnReq)
   .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0)).map(d => d.name);
 function nextWaiting(from) {
   const l = waitingList(); if (!l.length) return null;
@@ -2475,6 +2507,7 @@ function queueBar(d) {
   return `<div class="qbar" id="qbar"><b>${pos >= 0 ? `${pos + 1} de ${l.length}` : `${others}`}</b> ${pos >= 0 ? 'te esperan' : others === 1 ? 'robot más te espera' : 'robots más te esperan'}<span class="qk"><kbd>A</kbd> aprobar · <kbd>D</kbd> denegar · <kbd>S</kbd> siguiente</span><button type="button" class="btn sm" data-act="qnext">Siguiente ›</button></div>`;
 }
 async function decide(d, allow) {
+  if (d.spawnReq) { await decideSpawn(d, allow); return true; }
   if (d.hold) await api('POST', `/api/decision/${d.hold.id}`, {decision: allow ? 'allow' : 'deny'});
   else if (d.needsPermission) await api('POST', `/api/robots/${d.name}/permission`, {decision: allow ? 'approve' : 'reject'});
   else return false;
