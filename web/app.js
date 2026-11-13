@@ -718,7 +718,7 @@ function renderMeta() {
   $('#meta').textContent = '';
   const done = n - active;
   $('#btn-dismiss').hidden = !done;
-  if (!$('#btn-dismiss').classList.contains('armed')) $('#btn-dismiss').textContent = `Despedir terminados (${done})`;
+  if (!$('#btn-dismiss').classList.contains('armed')) $('#btn-dismiss').textContent = `Despedir listos (${done})`;
   scheduleCards();
 }
 
@@ -998,7 +998,7 @@ KPIS.addEventListener('click', e => {
 function setView(iso) {
   $('.map-wrap').classList.toggle('iso', iso);
   $('#btn-view').setAttribute('aria-pressed', String(iso));
-  $('#btn-view').textContent = iso ? 'Vista 2D' : 'Vista 2.5D';
+  $('#btn-view').textContent = iso ? '2D' : '2.5D';
   prefSet('mapView', iso ? 'iso' : '2d');
 }
 $('#btn-view').addEventListener('click', () => { setZoom(1); setView(!$('.map-wrap').classList.contains('iso')); });
@@ -1045,7 +1045,7 @@ $('#map-theme').addEventListener('change', async e => {
 function setCompact(on) {
   document.body.classList.toggle('compact', on);
   $('#btn-compact').setAttribute('aria-pressed', String(on));
-  $('#btn-compact').textContent = on ? 'Ver mapa' : 'Vista compacta';
+  $('#btn-compact').textContent = on ? 'Ver mapa' : 'Compacta';
   $('#btn-view').hidden = on;
   const t = $('#toast'); (on ? document.body : MAP).appendChild(t);
   prefSet('compact', on ? '1' : '0');
@@ -1312,7 +1312,7 @@ const busySpots = () => new Set([...brk.bots.values()].map(x => x.spot));
 const spotPos = k => ({x: BREAK_SPOTS[k][0], y: BREAK_SPOTS[k][1]});
 function breakTarget() {
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done').length;
-  return Math.max(3, Math.min(10, 10 - active));
+  return Math.max(2, Math.min(7, 7 - active)); // de 2 a 7: más cuando hay poco trabajo, sin llenar la sala
 }
 function spawnBreakBot() {
   const free = BREAK_SPOTS.map((_, k) => k).filter(k => !busySpots().has(k));
@@ -1896,8 +1896,8 @@ function renderPanel() {
   const sameView = !wasHidden && PANEL.dataset.view === sel;
   $('#dialog').hidden = false;
   $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war');
-  $('#dlg-card').classList.toggle('tall', !!a || !!sala);
-  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@pins' ? pinsPanel() : newPanel();
+  $('#dlg-card').classList.toggle('tall', !!a || !!sala || sel === '@arch');
+  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@arch' ? archPanel(st.archView) : sel === '@pins' ? pinsPanel() : newPanel();
   if (sameView) {
     if (html === PANEL._html) { tickRoutines(); return; }
     const tpl = document.createElement('template'); tpl.innerHTML = html;
@@ -1923,6 +1923,7 @@ function renderPanel() {
   syncKind();
   if (a) { refreshPane(a.data.name); paneTimer = setInterval(() => refreshPane(a.data.name), 2000); }
   renderSide(); markPins(PANEL); doJump();
+  if (sel === '@search') searchArchive();
   if (wasHidden) (PANEL.querySelector('#search-in, #rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();
 }
 
@@ -2244,6 +2245,7 @@ PANEL.addEventListener('click', async e => {
   try {
     if (b.dataset.act === 'follow' && a) { select(null); return follow(name); }
     if (b.dataset.act === 'qnext') return goNextWaiting();
+    if (b.dataset.act === 'arch-back') { select('@search'); return; }
     if ((b.dataset.act === 'spawn-ok' || b.dataset.act === 'spawn-no') && a?.data.spawnReq) { b.disabled = true; await decideSpawn(a.data, b.dataset.act === 'spawn-ok'); return; }
     if (b.dataset.act === 'console') await api('POST', `/api/robots/${name}/console`);
     if (b.dataset.act === 'again' && a) return launchAgain(a.data);
@@ -2546,12 +2548,49 @@ function searchResults(q) {
 function searchPanel() {
   return `<div class="dlg-head"><h3>🔎 Buscar en las conversaciones</h3></div>
     <form class="srch" id="search-form" role="search"><input id="search-in" type="search" placeholder="wallet#32, crítico, el nombre de un PR…" autocomplete="off" spellcheck="false"></form>
-    <div class="sr" id="search-res">${searchResults(searchUi.q)}</div>`;
+    <div class="sr" id="search-res">${searchResults(searchUi.q)}</div>
+    <div class="sr" id="search-arch"></div>`;
+}
+// Robots que ya se fueron: el daemon guarda su resumen al darlos de baja y busca ahí (sin tildes ni mayúsculas).
+async function searchArchive() {
+  const box = $('#search-arch', PANEL); if (!box) return;
+  const q = searchUi.q.trim();
+  try {
+    const r = await (await fetch(q.length >= 2 ? `/api/despedidos?q=${encodeURIComponent(q)}` : '/api/despedidos')).json();
+    if ($('#search-arch', PANEL) !== box || searchUi.q.trim() !== q) return;
+    const av = a => robotHead(COLORS[(a.color || 0) % 8], lookOf(a.name, null, {look: a.look}));
+    const when = a => new Date(a.leftAt).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+    if (!q || q.length < 2) {
+      box.innerHTML = r.recent?.length ? `<section class="sr-g"><h4>Se fueron hace poco <small>${r.total} en el archivo</small></h4>${r.recent.slice(0, 12).map(a => `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-w">${av(a)}${esc(a.name)} · se fue ${when(a)}</span><span class="sr-t">${esc(a.title || a.label)}</span></button>`).join('')}</section>` : '';
+      return;
+    }
+    const qn = norm(q);
+    box.innerHTML = r.results.length ? `<h4 class="sr-sep">Robots que ya se fueron</h4>` + r.results.map(a => `<section class="sr-g"><h4>${av(a)}<b>${esc(a.name)}</b><small>${a.title ? `📌 ${esc(a.title)} · ` : ''}se fue ${when(a)}</small></h4>${a.hits.length ? a.hits.map(h => `<button type="button" class="sr-hit" data-arch="${esc(a.id)}" data-i="${h.i}"><span class="sr-w">${esc(h.who || (h.kind === 'user' ? 'Tú' : a.name))} · ${hhmm(h.at)}</span><span class="sr-t">${snippet(h.text, qn) || esc(plainMd(h.text).slice(0, 160))}</span></button>`).join('') : `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-t">${esc(a.label)}</span></button>`}</section>`).join('') : '';
+  } catch { /* sin archivo: solo no se muestra */ }
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-arch]'); if (!b) return;
+  try {
+    const res = await fetch(`/api/despedidos/${b.dataset.arch}`);
+    if (!res.ok) return toast('Ese robot ya no está en el archivo');
+    st.archView = await res.json();
+    if (b.dataset.i != null) st.jump = {sel: '@arch', i: +b.dataset.i};
+    PANEL.dataset.view = ''; select('@arch');
+  } catch { toast('No se pudo abrir'); }
+});
+// Conversación de un robot que ya se fue (solo lectura): sus mensajes y los tuyos, y sus documentos.
+function archPanel(a) {
+  if (!a) return '<p class="muted">Abre un robot desde el buscador.</p>';
+  const L = lookOf(a.name, null, {look: a.look});
+  const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+  return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % 8], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>📌 ${esc(a.title)}</b></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="arch-back">← Buscar</button></div>
+    <div class="rp-grid"><div class="rp-col"><h4>Conversación <small class="muted">(sin herramientas)</small></h4><div class="log" id="arch-log" data-src="@arch" style="--c:${COLORS[(a.color || 0) % 8]}">${renderLog(a.log, a.name)}</div></div>
+    <div class="rp-col">${a.docs.length ? `<h4>Documentos (${a.docs.length})</h4><div class="list doclist">${a.docs.slice().reverse().map(p => `<div class="item" data-docpath="${esc(p)}" title="${esc(p)}"><div class="meta-i"><b>${esc(fileName(p))}</b><div>${esc(shortPath(p))}</div></div></div>`).join('')}</div>` : '<p class="muted">No entregó documentos.</p>'}</div></div>`;
 }
 PANEL.addEventListener('input', e => {
   if (e.target.id !== 'search-in') return;
   searchUi.q = e.target.value;
-  clearTimeout(searchUi.t); searchUi.t = setTimeout(() => { const r = $('#search-res', PANEL); if (r) r.innerHTML = searchResults(searchUi.q); }, 120);
+  clearTimeout(searchUi.t); searchUi.t = setTimeout(() => { const r = $('#search-res', PANEL); if (r) r.innerHTML = searchResults(searchUi.q); searchArchive(); }, 160);
 });
 PANEL.addEventListener('submit', e => { if (e.target.id === 'search-form') { e.preventDefault(); $('.sr-hit', PANEL)?.click(); } });
 document.addEventListener('click', e => {
@@ -2625,6 +2664,7 @@ function entryOf(el) {
   const row = el.closest('[data-i]'), box = el.closest('[data-src]');
   if (!row || !box) return null;
   const i = +row.dataset.i, src = box.dataset.src;
+  if (src === '@arch') { const a = st.archView, l = a?.log[i]; return l ? {robot: a.name, text: l.text, at: l.at, title: a.title} : null; }
   if (src.startsWith('@sala:')) { const s = st.salas.find(x => x.id === src.slice(6)), m = s?.thread[i]; return m ? {robot: m.from, text: m.text, at: m.at, title: `Sala «${s.name}»`} : null; }
   const a = st.robots.get(src), l = a?.log[i];
   return l ? {robot: src, text: l.text, at: l.at, title: titleOf(a.data)} : null;

@@ -166,7 +166,7 @@ function knownDoc(p) {
   if (!p) return null;
   const abs = path.resolve(WORKSPACE, String(p));
   const known = inbox.some(i => i.path === abs) || [...robots.values()].some(r => r.docs.some(d => d.path === abs))
-    || salas.some(s => contextPath(s) === abs || threadPath(s) === abs);
+    || salas.some(s => contextPath(s) === abs || threadPath(s) === abs) || archive.some(a => a.docs.includes(abs));
   return known ? abs : null;
 }
 
@@ -539,6 +539,12 @@ function requestSpawn(r, body) {
   emit(r);
   return r.spawnReq;
 }
+// Aspecto que el robot muestra: el que le elegiste o el que sale de su nombre (misma cuenta que lookOf en web/robot-art.js).
+function lookFromName(name) {
+  let h = 7;
+  for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return { ant: h % 4, visor: (h >>> 3) % 3, acc: (h >>> 6) % 4 };
+}
 const KID_PREAMBLE = parent => `\n\n(Te lanzó el robot ${parent} desde la Oficina de Agentes. Arrancas sin su contexto: lo que necesitas está en este encargo. Cuando termines, tu respuesta final se le envía a ${parent}, así que hazla completa y autosuficiente: resultado, archivos que tocaste o creaste y pendientes.)`;
 async function decideSpawn(r, id, approve, edited) {
   if (!r.spawnReq || r.spawnReq.id !== id) throw new Error('Esa petición ya no está pendiente.');
@@ -566,7 +572,9 @@ async function drainSpawnQueue() {
     while (spawnQueue.length && [...robots.values()].filter(x => x.state !== 'done').length < maxRobots) {
       const q = spawnQueue.shift();
       try {
+        const par = robots.get(q.parent); // los hijos salen con el mismo diseño que el padre: color, antena, visor y accesorio
         const kid = await launch({ kind: 'libre', text: q.text + KID_PREAMBLE(q.parent), label: q.title || trunc(q.text, 80), title: q.title, parent: q.parent,
+          color: par?.color, look: par ? { ...lookFromName(par.name), ...(par.look || {}) } : null,
           origin: `Lanzado por el robot ${q.parent} (lo aprobaste en la oficina)` });
         launched.push(kid.name);
         const p = robots.get(q.parent); if (p) emit(p);
@@ -719,8 +727,42 @@ function trackDoc(r, tool, file) {
   emit(r);
 }
 
+// Archivo de despedidos: al dar de baja a un robot se guarda su resumen (encargo, título, documentos y sus
+// mensajes y los tuyos, sin herramientas) para encontrarlo después con el buscador. Se guardan los últimos 200.
+const ARCH_FILE = path.join(RUNS, 'despedidos.json');
+const ARCH_MAX = 200;
+let archive = [];
+try { archive = JSON.parse(fs.readFileSync(ARCH_FILE, 'utf8')); } catch { /* sin despedidos */ }
+const normText = t => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function archiveRobot(r, reason) {
+  const log = r.log.filter(l => ['user', 'agent', 'bg', 'doc'].includes(l.kind)).slice(-80)
+    .map(l => ({ kind: l.kind, at: l.at, text: String(l.text ?? '').slice(0, 6000), ...(l.who ? { who: l.who } : {}) }));
+  if (!log.length && !r.docs.length) return; // no hizo nada que valga la pena buscar
+  archive.push({ id: crypto.randomBytes(4).toString('hex'), name: r.name, title: r.title || '', label: r.label, kind: r.kind, skill: r.skill,
+    origin: r.origin, color: r.color, look: { ...lookFromName(r.name), ...(r.look || {}) }, parent: r.parent || null,
+    startedAt: r.startedAt, leftAt: now(), reason, docs: r.docs.map(d => d.path), log });
+  if (archive.length > ARCH_MAX) archive = archive.slice(-ARCH_MAX);
+  fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+}
+const archMeta = a => ({ id: a.id, name: a.name, title: a.title, label: a.label, color: a.color, look: a.look, startedAt: a.startedAt, leftAt: a.leftAt, docs: a.docs.length });
+// Busca en el archivo (sin tildes ni mayúsculas): devuelve por robot las posiciones de los mensajes que coinciden.
+function searchArchive(q) {
+  const qn = normText(q).trim();
+  if (qn.length < 2) return [];
+  const out = [];
+  for (const a of archive.slice().reverse()) {
+    const hits = [];
+    a.log.forEach((l, i) => { if (hits.length < 25 && normText(l.text).includes(qn)) hits.push({ i, at: l.at, kind: l.kind, who: l.who || null, text: l.text.slice(0, 1500) }); });
+    const inMeta = !hits.length && normText(`${a.name} ${a.title} ${a.label}`).includes(qn);
+    if (hits.length || inMeta) out.push({ ...archMeta(a), hits });
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
 async function removeRobot(r, reason) {
   deliver(r); // si se da de baja con documentos sin entregar, no se pierden
+  try { archiveRobot(r, reason); } catch { /* el archivo es un extra: no frena la baja */ }
   r.alive = false;
   try { await run('tmux', ['kill-window', '-t', `${SESSION}:${r.name}`]); } catch { /* ya cerrada */ }
   const u = usage(r);
@@ -1039,7 +1081,7 @@ async function guardSession() {
   await run('tmux', ['set-option', '-t', SESSION, '@office_port', String(PORT)]).catch(() => {});
 }
 
-async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, title, leaveWhenDone, attachments, routine, sala: salaId, parent }) {
+async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, title, leaveWhenDone, attachments, routine, sala: salaId, parent, color, look }) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
   const active = [...robots.values()].filter(x => x.state !== 'done');
   if (active.length >= maxRobots) throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
@@ -1073,7 +1115,7 @@ async function launch({ kind, skill, args, text, permissionMode, name, origin, l
   await ensureSession();
   const sessionId = crypto.randomUUID();
   const r = {
-    name, kind, skill, label, title: cleanTitle(title), prompt, color: colorSeq++ % 8, place,
+    name, kind, skill, label, title: cleanTitle(title), prompt, color: Number.isInteger(color) ? color : colorSeq++ % 8, look: look || null, place,
     request: { kind, skill, args: kind === 'skill' ? String(args || '') : '', text: kind === 'libre' ? String(text || '').trim() : '', permissionMode: permissionMode || '' }, permissionMode: permissionMode || '', leaveWhenDone: !!leaveWhenDone,
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
     sessionId, transcript: null, offset: 0, partial: '', msgUsage: new Map(), startedAt: now(),
@@ -1628,6 +1670,14 @@ const server = http.createServer(async (req, res) => {
       favorites = favorites.filter(f => f.id !== parts[2]);
       saveFavorites();
       return send(res, 200, { ok: true });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/despedidos') {
+      const q = url.searchParams.get('q');
+      return send(res, 200, q ? { results: searchArchive(q) } : { recent: archive.slice(-30).reverse().map(archMeta), total: archive.length });
+    }
+    if (req.method === 'GET' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) {
+      const a = archive.find(x => x.id === parts[2]);
+      return a ? send(res, 200, a) : send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
     }
     if (req.method === 'POST' && url.pathname === '/api/pins') {
       const b = await readBody(req);

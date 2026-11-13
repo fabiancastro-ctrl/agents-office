@@ -49,7 +49,8 @@ table.usage th:first-child,table.usage td:first-child{text-align:left}
 table.usage th{color:var(--muted);font-weight:500}
 table.usage tr.cur td{color:var(--ink);font-weight:600}
 
-.toolbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding-block:12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px 8px;align-items:center;padding-block:12px}
+.toolbar>.btn,.toolbar>.mt-sel{padding-inline:10px}
 .stepper{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:3px 4px 3px 10px}
 .stepper b{font-family:var(--display);font-size:16px;color:var(--ink);min-width:20px;text-align:center}
 .stepper .btn{width:26px;padding:2px 0}
@@ -1157,3 +1158,5 @@ html[data-theme=light] .fwd label{color:#3b475a}
 .kid.inline{display:inline-flex;width:auto;padding:1px 8px;font:600 12px var(--mono)}
 /* robot que pide robots nuevos: cartel violeta que se mueve, también si ya terminó su turno */
 .robot.spawn .sign{display:block;background:var(--violet);color:#1b1240;border-color:#4b3d8f;animation:wave 1s ease-in-out infinite;box-shadow:0 0 10px rgba(169,156,242,.6)}
+.sr-sep{margin:6px 0 0;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;border-top:1px dashed var(--line);padding-top:10px}
+.sr-w .rhead{width:16px;height:16px;vertical-align:-3px;margin-right:4px}
