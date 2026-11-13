@@ -125,12 +125,22 @@ function usage(r) {
   return s;
 }
 
+// Qué tan lleno tiene el contexto: tokens del último mensaje (entrada + caché) sobre su ventana (200k, o 1M si ya la pasó).
+function ctxOf(r) {
+  let last = null;
+  for (const u of r.msgUsage.values()) last = u;
+  if (!last) return null;
+  const t = (last.input_tokens || 0) + (last.cache_read_input_tokens || 0) + (last.cache_creation_input_tokens || 0);
+  const lim = t > 200000 ? 1000000 : 200000;
+  return { tokens: t, pct: Math.min(100, Math.round(t * 100 / lim)) };
+}
+
 function view(r, withLog = false) {
   const v = {
     name: r.name, kind: r.kind, skill: r.skill, label: r.label, color: r.color,
     state: r.state, place: r.place, subs: r.subs, pendingSubs: r.pendingSubs,
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
-    hold: r.hold, ask: r.ask || null, request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '',
+    hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
     permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null
   };
   if (withLog) v.log = r.log.slice(-150);
@@ -154,7 +164,22 @@ function knownDoc(p) {
   return known ? abs : null;
 }
 
-function configView() { return { maxRobots, maxRobotsLimit: MAX_ROBOTS_LIMIT, approval: APPROVAL, name: officeName, session: SESSION }; }
+const MAP_THEMES = ['moderna', 'garaje', 'nave', 'biblioteca', 'cafeteria'];
+// Contadores de la oficina para la decoración que crece: trabajos terminados (total y hoy) y reviews.
+const STATS_FILE = path.join(RUNS, 'estadisticas.json');
+let stats = { total: 0, reviews: 0, day: '', today: 0 };
+try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch { /* oficina nueva */ }
+const localDay = () => new Date().toLocaleDateString('sv'); // AAAA-MM-DD en hora local
+function statsView() { return { total: stats.total, reviews: stats.reviews, today: stats.day === localDay() ? stats.today : 0 }; }
+function bumpStats(r) {
+  const d = localDay();
+  if (stats.day !== d) { stats.day = d; stats.today = 0; }
+  stats.total++; stats.today++;
+  if (/review|audit|security/i.test(String(r.skill || ''))) stats.reviews++;
+  try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
+  broadcast({ type: 'config', config: configView() });
+}
+function configView() { return { maxRobots, maxRobotsLimit: MAX_ROBOTS_LIMIT, approval: APPROVAL, name: officeName, session: SESSION, stats: statsView(), mapTheme: MAP_THEMES.includes(readConfig().mapTheme) ? readConfig().mapTheme : 'moderna' }; }
 
 /* ---------- uso de tokens de toda la oficina, por semana ---------- */
 // Se calcula desde los transcripts de las sesiones que lanzó la oficina (el hook SessionStart queda en
@@ -371,7 +396,7 @@ function saveState() {
       robots: [...robots.values()].map(r => ({
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
-        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', request: r.request, timeline: r.timeline, lastEventAt: r.lastEventAt
+        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt
       }))
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
@@ -503,6 +528,7 @@ function finishTurn(r, lastMessage) {
     return;
   }
   // Ningún robot se va solo: queda con el cartel LISTO y su conversación hasta que lo des de baja.
+  if (r.state !== 'done') bumpStats(r);
   setState(r, 'done');
   emit(r);
 }
@@ -1411,6 +1437,10 @@ const server = http.createServer(async (req, res) => {
         officeName = String(body.name ?? '').replace(/\s+/g, ' ').trim().slice(0, OFFICE_NAME_MAX);
         saveConfig({ name: officeName });
       }
+      if (body.mapTheme !== undefined) {
+        if (!MAP_THEMES.includes(body.mapTheme)) return send(res, 400, { error: 'Estilo de oficina desconocido.' });
+        saveConfig({ mapTheme: body.mapTheme }); // estilo del mapa: es de la oficina, no del navegador
+      }
       if (body.maxRobots !== undefined) {
         const n = Number(body.maxRobots);
         if (!Number.isInteger(n) || n < 1 || n > MAX_ROBOTS_LIMIT) return send(res, 400, { error: `El tope debe estar entre 1 y ${MAX_ROBOTS_LIMIT}.` });
@@ -1517,6 +1547,19 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST' && action === 'ask') {
         const { id, answers, console: toConsole } = await readBody(req);
         return answerAsk(r, id, answers, !!toConsole) ? send(res, 200, { ok: true }) : send(res, 404, { error: 'Esas preguntas ya no están pendientes.' });
+      }
+      // Aspecto que le eliges al robot: color (0-7), antena (0-3), visor (0-2) y accesorio (0-3). reset vuelve al de su nombre.
+      if (req.method === 'POST' && action === 'look') {
+        const b = await readBody(req);
+        if (b.reset) { r.look = null; if (Number.isInteger(r.baseColor)) r.color = r.baseColor; }
+        else {
+          const lim = { ant: 4, visor: 3, acc: 4 }, look = { ...(r.look || {}) };
+          for (const [k, n] of Object.entries(lim)) if (b[k] !== undefined) { const v = Number(b[k]); if (!Number.isInteger(v) || v < 0 || v >= n) return send(res, 400, { error: `Valor inválido para ${k}.` }); look[k] = v; }
+          if (b.color !== undefined) { const c = Number(b.color); if (!Number.isInteger(c) || c < 0 || c > 7) return send(res, 400, { error: 'Color inválido.' }); if (!Number.isInteger(r.baseColor)) r.baseColor = r.color; r.color = c; }
+          r.look = Object.keys(look).length ? look : null;
+        }
+        emit(r);
+        return send(res, 200, { ok: true });
       }
       if (req.method === 'POST' && action === 'title') {
         r.title = cleanTitle((await readBody(req)).title);

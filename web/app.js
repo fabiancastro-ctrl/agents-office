@@ -49,7 +49,7 @@ function ensureDesks(n) {
     el.className = 'desk'; el.dataset.desk = i;
     // Silla y algún objeto (taza o planta) para que los escritorios no sean todos iguales.
     const item = i % 3 === 1 ? '<i class="mug"></i>' : i % 4 === 2 ? '<i class="dplant"></i>' : '';
-    el.innerHTML = `<i class="chair"></i><div class="mon"><i></i></div><div class="mon m2"><i></i></div><div class="kb"></div><i class="mpad"></i><i class="mouse"></i>${item}<div class="paper" hidden></div><span class="dn">${String(i + 1).padStart(2, '0')}</span>`;
+    el.innerHTML = `<i class="chair"></i><div class="mon"><i></i></div><div class="mon m2"><i></i></div><div class="kb"></div><i class="mpad"></i><i class="mouse"></i>${item}<i class="clutter"></i><div class="paper" hidden></div><span class="dn">${String(i + 1).padStart(2, '0')}</span>`;
     MAP.appendChild(el);
     deskEls.push({el, paper: el.querySelector('.paper')});
   }
@@ -257,7 +257,7 @@ function createRobot(d, fromSnapshot) {
   el.style.setProperty('--d', `-${(Math.random() * 3).toFixed(2)}s`);
   el.style.setProperty('--d2', `-${(Math.random() * 5).toFixed(2)}s`);
   el.style.setProperty('--sp', (0.85 + Math.random() * 0.3).toFixed(2));
-  el.innerHTML = `<i class="shadow"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
+  el.innerHTML = `<i class="shadow"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
   MAP.appendChild(el);
   const a = {data: d, el, bubble: el.querySelector('.bubble'), sign: el.querySelector('.sign'), carry: el.querySelector('.carry'),
     pos: door(), queueSlot: null, q: Promise.resolve(), subEls: new Map(), log: d.log || [], lastBubble: ''};
@@ -268,6 +268,7 @@ function createRobot(d, fromSnapshot) {
   return a;
 }
 
+const artSig = d => JSON.stringify([d.color, d.look || null, d.skill || d.request?.skill || '', d.place?.type, d.place?.sala]);
 function upsert(d, fromSnapshot = false) {
   layout(d.place); // agrega una fila de escritorios o la sala de su rutina si este robot la necesita
   let a = st.robots.get(d.name);
@@ -279,6 +280,9 @@ function upsert(d, fromSnapshot = false) {
   }
   if (d.log) a.log = d.log;
   a.data = {...d, log: undefined};
+  const sig = artSig(d);
+  if (a.artSig !== undefined && a.artSig !== sig) a.el.querySelector(':scope > svg')?.replaceWith(Object.assign(document.createElement('template'), {innerHTML: robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}).content.firstElementChild);
+  a.artSig = sig;
   paint(a);
   tickWaiting();
   renderSalaChips();
@@ -289,7 +293,7 @@ function upsert(d, fromSnapshot = false) {
 
 function vacate(place, a) {
   const desk = deskFor(place);
-  if (desk) { desk.el.classList.remove('on', 'deleg'); desk.paper.hidden = true; }
+  if (desk) { desk.el.classList.remove('on', 'deleg'); desk.paper.hidden = true; desk.el.dataset.cl = 0; desk.el.title = ''; }
   for (const el of a.subEls.values()) el.remove();
   a.subEls.clear();
   a.extraEl?.remove(); a.extraEl = null;
@@ -387,6 +391,10 @@ function paint(a) {
     desk.el.classList.toggle('on', busy);
     desk.el.classList.toggle('deleg', d.state === 'delegating');
     desk.el.dataset.tool = busy ? tool : '';
+    // Desorden del escritorio según qué tan lleno tiene el contexto: hojas, tazas y bolas de papel.
+    const pct = d.ctx?.pct ?? 0;
+    desk.el.dataset.cl = pct >= 80 ? 3 : pct >= 55 ? 2 : pct >= 30 ? 1 : 0;
+    desk.el.title = d.ctx ? `${d.name} · contexto ${pct}% lleno (${fmtTok(d.ctx.tokens)} tokens)` : '';
     desk.paper.hidden = !pend;
     desk.paper.dataset.count = pend > 1 ? pend : '';
   }
@@ -524,7 +532,8 @@ function onLeft(name) {
   if (!a) return;
   vacate(a.data.place, a);
   st.robots.delete(name);
-  queue(a, async () => { a.el.classList.remove('sel'); await walkTo(a, door()); a.el.remove(); layout(); });
+  // Se va con una caja con sus cosas (planta, taza y papeles), como quien deja la oficina.
+  queue(a, async () => { a.el.classList.remove('sel'); a.el.classList.add('leaving'); a.el.insertAdjacentHTML('beforeend', '<div class="lbox" aria-hidden="true"><i class="lb-plant"></i><i class="lb-mug"></i><i class="lb-paper"></i></div>'); await walkTo(a, door()); a.el.remove(); layout(); });
   paneCache.delete(name);
   if (st.selected === name) { select(null); toast(`${name} salió de la oficina.`); }
   renderSalaChips();
@@ -542,7 +551,7 @@ function connect() {
     if (m.type === 'snapshot') {
       for (const a of st.robots.values()) { vacate(a.data.place, a); a.el.remove(); }
       st.robots.clear();
-      st.config = m.config; st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || [];
+      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || [];
       setSetup(m.setup);
       renderInboxBadge();
       m.robots.forEach(r => upsert(r, true));
@@ -552,7 +561,7 @@ function connect() {
       notif.known = null; st.ready = true; // el siguiente checkAlerts toma esto como punto de partida
     } else if (m.type === 'robot') upsert(m.robot);
     else if (m.type === 'setup') onSetupSaved(m);
-    else if (m.type === 'config') { st.config = m.config; renderMeta(); if (st.selected === '@new') schedulePanel(); }
+    else if (m.type === 'config') { st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); renderMeta(); if (st.selected === '@new') schedulePanel(); }
     else if (m.type === 'salas') { st.salas = m.salas; renderSalaChips(); if (st.selected === '@war' || st.selected?.startsWith('@sala:')) schedulePanel(); }
     else if (m.type === 'routines') { st.routines = m.routines; renderRoutineChips(); renderMeta(); if (st.selected === '@cron') schedulePanel(); }
     else if (m.type === 'log') {
@@ -720,7 +729,7 @@ function renderMini() {
   const at = new Map(), rooms = [];
   for (const a of st.robots.values()) { const p = a.data.place; if (p?.type === 'desk') at.set(p.idx, a.data); else if (p?.type === 'room') rooms.push(a.data); }
   const cell = (d, i) => d
-    ? `<button type="button" class="mm-c mm-${d.state}${urgency(d) ? ` urg-${urgency(d)}` : ''}${st.selected === d.name ? ' sel' : ''}" data-mini="${esc(d.name)}" style="--c:${COLORS[d.color % 8]}" title="${esc(`${d.name} · ${stateLabel(d)}${titleOf(d) ? ' · ' + titleOf(d) : ''}`)}">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place))}<span>${esc(d.name)}</span></button>`
+    ? `<button type="button" class="mm-c mm-${d.state}${urgency(d) ? ` urg-${urgency(d)}` : ''}${st.selected === d.name ? ' sel' : ''}" data-mini="${esc(d.name)}" style="--c:${COLORS[d.color % 8]}" title="${esc(`${d.name} · ${stateLabel(d)}${titleOf(d) ? ' · ' + titleOf(d) : ''}`)}">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}<span>${esc(d.name)}</span></button>`
     : `<span class="mm-c mm-free" title="Escritorio ${String(i + 1).padStart(2, '0')} libre"><i>${String(i + 1).padStart(2, '0')}</i></span>`;
   const n = Math.max(deskEls.length, ...[...at.keys()].map(i => i + 1), 1);
   const html = `<span class="mm-h">Escritorios</span><div class="mm-row">${Array.from({length: n}, (_, i) => cell(at.get(i), i)).join('')}</div>${rooms.length ? `<span class="mm-h">Rutinas y salas</span><div class="mm-row">${rooms.map(d => cell(d)).join('')}</div>` : ''}`;
@@ -876,7 +885,7 @@ function cardHtml(a) {
   const stuck = isStuck(d), urg = urgency(d);
   const cls = ['rc', `g-${g}`, `s-${d.state}`, urg ? `urg-${urg}` : '', stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
   return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % 8]}">
-    <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place))}</span>
+    <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</span>
       <div class="rc-t"><b>${esc(d.name)}</b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">📌 ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small></div>${pill}</div>
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
     <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
@@ -975,6 +984,36 @@ function setView(iso) {
   prefSet('mapView', iso ? 'iso' : '2d');
 }
 $('#btn-view').addEventListener('click', () => setView(!$('.map-wrap').classList.contains('iso')));
+// Estilo de la oficina (lo guarda el daemon en la configuración de esta oficina). «Moderna» es el de siempre.
+const TDECO = {
+  garaje: '<i class="td-box" style="left:3%;top:89%"></i><i class="td-box" style="left:5.8%;top:89%"></i><i class="td-box" style="left:4.4%;top:84.6%"></i><i class="td-box" style="left:71%;top:90%"></i><i class="td-board" style="left:31%;top:33.4%;width:8%;height:4.2%"></i>',
+  nave: '<i class="td-pipe" style="left:3%;top:96.2%;width:72%"></i><i class="td-light" style="left:3.2%;top:39.6%"></i><i class="td-light" style="left:74%;top:39.6%"></i><i class="td-light" style="left:3.2%;top:94%"></i><i class="td-light" style="left:74%;top:94%"></i>',
+  biblioteca: '<i class="td-shelf" style="left:3%;top:88.4%;width:13%;height:7%"></i><i class="td-shelf" style="left:61%;top:88.4%;width:13%;height:7%"></i><i class="td-lamp" style="left:18%;top:90%"></i><i class="td-lamp" style="left:58%;top:90%"></i>',
+  cafeteria: '<i class="td-bar" style="left:3%;top:90.6%;width:16%;height:4.6%"></i><i class="td-menu" style="left:31%;top:33.2%;width:7%;height:4.4%"></i>'
+};
+// Decoración que crece con el trabajo: plantas más grandes y con flores, un trofeo cada 10 reviews en tu escritorio
+// y la pizarra de la sala de descanso con lo terminado hoy. Sin textos de alerta: solo premio visual.
+function renderGrowth() {
+  const s = st.config?.stats || {total: 0, reviews: 0, today: 0};
+  const lvl = s.total >= 100 ? 4 : s.total >= 40 ? 3 : s.total >= 15 ? 2 : s.total >= 5 ? 1 : 0;
+  for (let i = 0; i <= 4; i++) MAP.classList.toggle(`grow-${i}`, i === lvl);
+  const n = Math.floor(s.reviews / 10), shown = Math.min(n, 6);
+  const tr = $('#trophies');
+  tr.innerHTML = Array.from({length: shown}, (_, i) => `<i class="cup${i % 3 === 2 ? ' big' : ''}"></i>`).join('') + (n > shown ? `<b>+${n - shown}</b>` : '');
+  tr.title = n ? `${n} trofeo${n === 1 ? '' : 's'}: uno cada 10 reviews entregados (${s.reviews} en total)` : '';
+  tr.hidden = !n;
+  $('#tboard').innerHTML = `<small>HOY</small><b>${s.today}</b><small>listos</small>`;
+}
+function setMapTheme(t) {
+  t = TDECO[t] || t === 'moderna' ? t : 'moderna';
+  $('.map-wrap').dataset.mt = t;
+  $('#tdeco').innerHTML = TDECO[t] || '';
+  $('#map-theme').value = t;
+}
+$('#map-theme').addEventListener('change', async e => {
+  const t = e.target.value; setMapTheme(t);
+  try { await api('POST', '/api/config', {mapTheme: t}); } catch { setMapTheme(st.config.mapTheme || 'moderna'); }
+});
 // Vista compacta: sin mapa; las tarjetas pasan a columnas (te necesitan · trabajando · listos). El aviso
 // flotante (toast) vive dentro del mapa: en compacta se muda al cuerpo de la página para seguir viéndose.
 function setCompact(on) {
@@ -1478,7 +1517,7 @@ document.addEventListener('click', async e => {
 
 // Avatar del robot en sus globos: su cabeza con su color y accesorio (en salas, el de cada robot que habla).
 const avColor = name => { const d = st.robots.get(name)?.data; return d ? COLORS[d.color % 8] : COLORS[[...String(name)].reduce((h, c) => h + c.charCodeAt(0), 0) % 8]; };
-const avatarOf = name => name ? robotHead(avColor(name), lookOf(name, st.robots.get(name)?.data.place)) : '';
+const avatarOf = name => name ? robotHead(avColor(name), lookOf(name, st.robots.get(name)?.data.place, st.robots.get(name)?.data)) : '';
 function logRow(l, robot) {
   if (l.kind === 'tool') return toolRow(l);
   if (l.kind === 'user' && /^\s*<task-notification>/.test(l.text)) l = {...l, kind: 'bg', text: taskNoteWeb(l.text)};
@@ -1535,6 +1574,23 @@ PANEL.addEventListener('click', e => {
 
 // Título del robot: lo pones tú para saber de un vistazo qué hace. Se edita en la cabecera de su panel.
 const titleUi = {editing: null};
+// Apariencia del robot: color, antena, visor y accesorio (se guarda en el daemon; «Restablecer» vuelve al de su nombre).
+const lookUi = {open: null};
+function lookEditor(d) {
+  if (lookUi.open !== d.name) return `<button type="button" class="btn sm ghost lk-open" data-look="open" title="Cambiar color, antena, visor y accesorio">🎨 Apariencia</button>`;
+  const L = lookOf(d.name, d.place, d);
+  const cyc = (k, n, label) => `<span class="lk-c"><small>${label}</small><button type="button" data-look="${k}" data-dir="-1" aria-label="${label} anterior">◀</button><b>${L[k] + 1}/${n}</b><button type="button" data-look="${k}" data-dir="1" aria-label="${label} siguiente">▶</button></span>`;
+  return `<div class="lk" id="look-ed"><span class="lk-sw">${COLORS.map((c, i) => `<button type="button" class="${d.color % 8 === i ? 'on' : ''}" style="background:${c}" data-look="color" data-v="${i}" aria-label="Color ${i + 1}"></button>`).join('')}</span>${cyc('ant', 4, 'Antena')}${cyc('visor', 3, 'Visor')}${cyc('acc', 4, 'Accesorio')}<button type="button" class="btn sm ghost" data-look="reset">Restablecer</button><button type="button" class="btn sm ghost" data-look="close">Listo</button></div>`;
+}
+PANEL.addEventListener('click', async e => {
+  const b = e.target.closest('[data-look]'); if (!b) return;
+  const d = st.robots.get(st.selected)?.data; if (!d) return;
+  const k = b.dataset.look;
+  if (k === 'open' || k === 'close') { lookUi.open = k === 'open' ? d.name : null; return renderPanel(); }
+  const L = lookOf(d.name, d.place, d), N = {ant: 4, visor: 3, acc: 4};
+  const body = k === 'reset' ? {reset: true} : k === 'color' ? {color: +b.dataset.v} : {[k]: (L[k] + +b.dataset.dir + N[k]) % N[k]};
+  try { await api('POST', `/api/robots/${d.name}/look`, body); } catch { /* toast ya mostrado */ }
+});
 // El título que pusiste o, si no hay, uno sugerido a partir del encargo (se ve más tenue).
 const titleOf = d => d.title || suggestTitle(d.request);
 function titleEditor(d) {
@@ -1569,7 +1625,7 @@ function robotPanel(a) {
   else if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission) alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
-    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}<div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
+    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}${lookEditor(d)}<div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
     ${alert}
     <div class="rp-grid" id="rp-grid">
       <div class="rp-col">
@@ -1675,7 +1731,7 @@ function inboxPanel() {
     const live = st.robots.get(robot);
     const nNew = list.filter(i => i.status !== 'visto').length;
     return `<section class="ib-g">
-      <div class="ib-gh">${live ? `<span class="ib-av">${robotSVG(COLORS[live.data.color % 8], lookOf(robot, live.data.place))}</span>` : ''}<b>${esc(robot)}</b><span class="ib-lbl" title="${esc(list[0].label)}">${esc(list[0].label)}</span><small>${list.length} doc${list.length === 1 ? '' : 's'}${nNew && filter !== 'nuevos' ? ` · ${nNew} nuevo${nNew === 1 ? '' : 's'}` : ''}${live ? '' : ' · ya se fue'}</small></div>
+      <div class="ib-gh">${live ? `<span class="ib-av">${robotSVG(COLORS[live.data.color % 8], lookOf(robot, live.data.place, live.data))}</span>` : ''}<b>${esc(robot)}</b><span class="ib-lbl" title="${esc(list[0].label)}">${esc(list[0].label)}</span><small>${list.length} doc${list.length === 1 ? '' : 's'}${nNew && filter !== 'nuevos' ? ` · ${nNew} nuevo${nNew === 1 ? '' : 's'}` : ''}${live ? '' : ' · ya se fue'}</small></div>
       ${list.map(row).join('')}
     </section>`;
   }).join('');
@@ -1908,7 +1964,7 @@ function renderHover() {
     ${titleOf(d) ? `<div class="hc-title${d.title ? '' : ' auto'}">📌 ${esc(titleOf(d))}</div>` : ''}
     <div class="hc-act">${esc(hoverActivity(d).slice(0, 120))}</div>
     ${d.state === 'input' && d.inputAt ? `<div class="hc-wait">Esperando tu respuesta hace <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></div>` : ''}
-    <div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
+    ${d.ctx ? `<div class="hc-org">Contexto ${d.ctx.pct}% lleno</div>` : ''}<div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
     ${hover.line ? `<div class="hc-con">› ${esc(hover.line)}</div>` : ''}`;
   hover.el.style.left = a.pos.x + '%';
   hover.el.style.top = py(a.pos.y);
@@ -2332,6 +2388,39 @@ fetch('/api/skills').then(r => r.json()).then(({skills}) => setSkills(skills)).c
 
 renderPanel();
 connect();
+
+/* ---------- la gata de la oficina ---------- */
+// Pasea entre los escritorios y la sala de descanso; a veces se sienta y, si un robot lleva mucho trabajando,
+// se echa a dormir a su lado. No informa nada: es compañía.
+const CAT_SVG = `<svg viewBox="0 0 34 22" aria-hidden="true"><path class="c-tail" d="M28 12q5-1 5-8" stroke="#2b2f38" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <g class="c-legs" fill="#23262e"><rect class="l1" x="9" y="14" width="2.6" height="7" rx="1"/><rect class="l2" x="13" y="14" width="2.6" height="7" rx="1"/><rect class="l3" x="21" y="14" width="2.6" height="7" rx="1"/><rect class="l4" x="25" y="14" width="2.6" height="7" rx="1"/></g>
+  <ellipse cx="18" cy="13" rx="11" ry="5.4" fill="#2b2f38"/><circle cx="7" cy="8.4" r="5" fill="#2b2f38"/><path d="M3.4 5.6l.4-4.6 3.4 3zM7.6 3.8l2.6-3.4.8 4.4z" fill="#2b2f38"/>
+  <g class="c-eyes"><circle cx="5.4" cy="8" r=".95" fill="#ffd27a"/><circle cx="8.6" cy="8" r=".95" fill="#ffd27a"/></g><path class="c-shut" d="M4.4 8.4h2M7.6 8.4h2" stroke="#ffd27a" stroke-width=".7"/></svg><b class="zzz">z<i>z</i><i>z</i></b>`;
+const cat = {el: Object.assign(document.createElement('div'), {className: 'ocat', innerHTML: CAT_SVG}), x: 40, y: 92, timer: 0};
+cat.el.title = 'Michi, la gata de la oficina';
+MAP.appendChild(cat.el);
+cat.el.style.left = cat.x + '%'; cat.el.style.top = cat.y + '%';
+function catGo(x, y, then) {
+  const dist = Math.hypot((x - cat.x) * 1.6, y - cat.y), ms = Math.max(800, dist * 110);
+  cat.el.classList.remove('sit', 'sleep'); cat.el.classList.add('walk');
+  cat.el.classList.toggle('left', x < cat.x);
+  cat.el.style.transition = `left ${ms}ms linear, top ${ms}ms linear`;
+  cat.el.style.left = x + '%'; cat.el.style.top = y + '%';
+  cat.x = x; cat.y = y;
+  clearTimeout(cat.timer); cat.timer = setTimeout(() => { cat.el.classList.remove('walk'); then(); }, ms);
+}
+function catLife() {
+  const r = Math.random();
+  // ¿Alguien lleva más de 20 min trabajando? Se le echa a dormir al lado.
+  const busy = [...st.robots.values()].filter(a => (a.data.state === 'working' || a.data.state === 'delegating') && Date.now() - (Date.parse(a.data.startedAt || '') || Date.now()) > 20 * 60e3);
+  if (busy.length && r < .35) {
+    const a = busy[Math.random() * busy.length | 0], x = parseFloat(a.el.style.left) + 3.2, y = parseFloat(a.el.style.top) + 1;
+    if (Number.isFinite(x) && Number.isFinite(y)) return catGo(Math.min(x, 74), y, () => { cat.el.classList.add('sleep'); cat.timer = setTimeout(catLife, 20000 + Math.random() * 15000); });
+  }
+  const spot = Math.random() < .7 ? [4 + Math.random() * 70, 44 + Math.random() * 50] : [5 + Math.random() * 46, 12 + Math.random() * 17];
+  catGo(spot[0], spot[1], () => { if (Math.random() < .6) cat.el.classList.add('sit'); cat.timer = setTimeout(catLife, 4000 + Math.random() * 8000); });
+}
+setTimeout(catLife, 3000);
 
 /* ---------- mientras no estabas ---------- */
 // Si sales de la pestaña (u otra ventana tapa la oficina) más de AWAY_MS, al volver ves un solo resumen

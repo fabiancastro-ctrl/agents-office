@@ -1,12 +1,33 @@
 // Dibujo de los robots, compartido por la oficina (web/app.js) y el edificio (edificio/index.html).
 // Script clásico: estas constantes quedan en el ámbito global y app.js las usa desde su IIFE.
 const ROBOT_COLORS = ['#5fcbb9','#f3b74f','#ef8f7a','#7cb6f0','#b9d06a','#d99ad6','#9fd3f0','#f0c38f'];
-// Aspecto por nombre: antena, visor y accesorio salen de un hash del nombre (cada robot siempre se ve igual).
-// Los de una rutina o sala llevan pañoleta del color de su sala.
-function lookOf(name, place) {
+// Aspecto por nombre: antena, visor y accesorio salen de un hash del nombre (cada robot siempre se ve igual),
+// salvo que le elijas otro (d.look). Los de una rutina o sala llevan pañoleta del color de su sala; el uniforme
+// depende de su trabajo (outfitOf) y el gorro de la temporada sale solo según la fecha (seasonNow).
+function lookOf(name, place, d) {
   let h = 7;
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return {ant: h % 4, visor: (h >>> 3) % 3, acc: (h >>> 6) % 4, uniform: place?.type === 'room' ? (place.sala ? '#ef8f7a' : '#a99cf2') : ''};
+  const o = d?.look || {}, pick = (v, n, def) => Number.isInteger(v) ? ((v % n) + n) % n : def;
+  return {ant: pick(o.ant, 4, h % 4), visor: pick(o.visor, 3, (h >>> 3) % 3), acc: pick(o.acc, 4, (h >>> 6) % 4),
+    uniform: place?.type === 'room' ? (place.sala ? '#ef8f7a' : '#a99cf2') : '', outfit: outfitOf(d, place), season: seasonNow()};
+}
+// Uniforme según el trabajo: inspector (reviews y auditorías), escritor (documentación) o casco (rutinas).
+function outfitOf(d, place) {
+  if (place?.type === 'room' && !place.sala) return 'hardhat';
+  const sk = String(d?.skill || d?.request?.skill || '');
+  if (/review|audit|security|inspect|scan|validat/i.test(sk)) return 'inspector';
+  if (/doc|create-hu|overview|adr|spec|readme|write|redact/i.test(sk)) return 'writer';
+  return '';
+}
+// Gorro de temporada: Navidad en diciembre, bruja la última semana de octubre y cono de fiesta en Año Nuevo.
+function seasonNow(t = new Date()) {
+  const q = typeof location !== 'undefined' && new URLSearchParams(location.search).get('temporada'); // ?temporada=santa para verlo antes
+  if (q) return q;
+  const m = t.getMonth(), day = t.getDate();
+  if ((m === 11 && day === 31) || (m === 0 && day === 1)) return 'party';
+  if (m === 11) return 'santa';
+  if (m === 9 && day >= 24) return 'witch';
+  return '';
 }
 const ANTENNAS = [
   `<line x1="20" y1="2" x2="20" y2="9" stroke="#8b98ad" stroke-width="2"/><circle class="ant" cx="20" cy="3" r="3" fill="#97a5ba"/>`,
@@ -44,24 +65,44 @@ const VISOR_GLARE = `<path d="M12.4 13.4h4.2" stroke="#fff" stroke-width=".9" st
 const FACES = `<g class="f f-happy" stroke="#bdf7ee" stroke-width="1.5" fill="none" stroke-linecap="round"><path d="M13.6 17q1.9-2.6 3.8 0M22.6 17q1.9-2.6 3.8 0"/></g>
   <g class="f f-ask" font-family="Arial,sans-serif" font-weight="700" font-size="6.2" fill="#ffd27a" text-anchor="middle"><text x="15.5" y="18.3">?</text><text x="24.5" y="18.3">?</text></g>
   <g class="f f-sweat"><path d="M32.6 9.5q2.2 3.3 0 4.6q-2.2-1.3 0-4.6z" fill="#9fd3f0" stroke="#5c8fb3" stroke-width=".5"/></g>`;
+const HATS = {
+  santa: `<path d="M8.6 10.6Q11 2 22 1.6q9 .3 12.6 6.8L31.4 10.6z" fill="#d23b45" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="7.6" y="8.8" width="25" height="3.4" rx="1.7" fill="#f4efe2"/><circle cx="35" cy="8.4" r="2.3" fill="#f4efe2"/>`,
+  witch: `<ellipse cx="20" cy="9.6" rx="15" ry="2.4" fill="#3b2a55"/><path d="M12.6 9.4L19 -4.4l7.6 13.8z" fill="#4a3570" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="13.4" y="6.6" width="13" height="2.2" fill="#f3b74f"/>`,
+  party: `<path d="M14 10.2L20 -3l6 13.2z" fill="#a99cf2" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><path d="M16.4 5l7.2 0M15 8l10 0" stroke="#ffd36b" stroke-width="1.2"/><circle cx="20" cy="-3.4" r="1.8" fill="#ef7f8a"/>`,
+  hardhat: `<path d="M8.6 11.6q0-8.4 11.4-8.4t11.4 8.4z" fill="#f3c33b" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="6.6" y="10.4" width="26.8" height="2.4" rx="1.2" fill="#e0ab21"/><rect x="18.8" y="3.6" width="2.4" height="7" rx="1" fill="#ffd96b"/>`,
+  inspector: `<path d="M8.4 11.4q0-8.2 11.6-8.2t11.6 8.2z" fill="#8a6447" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><path d="M10 7q10-5 20 0" stroke="#6b4b33" stroke-width=".9" fill="none"/><rect x="18" y="10.2" width="17" height="2.2" rx="1.1" fill="#6b4b33"/><circle cx="20" cy="3.6" r="1.2" fill="#6b4b33"/>`
+};
+// Lo que el uniforme lleva en la mano izquierda (siempre visible).
+const OUTFIT_HAND = {
+  inspector: `<g class="o-hand"><line x1="5.6" y1="38.5" x2="4.4" y2="41.4" stroke="#6b5340" stroke-width="1.6" stroke-linecap="round"/><circle cx="3.6" cy="43.6" r="2.7" fill="rgba(189,247,238,.3)" stroke="#cfe3f7" stroke-width="1.1"/></g>`,
+  writer: `<g class="o-hand"><rect x="1.6" y="35.6" width="6.4" height="8.4" rx=".8" fill="#8a6447"/><rect x="2.4" y="37" width="4.8" height="6.4" fill="#f4efe2"/><rect x="3.4" y="35" width="2.8" height="1.4" rx=".4" fill="#97a5ba"/><path d="M3.2 39h3.2M3.2 40.6h3.2M3.2 42.2h2" stroke="#9aa3b0" stroke-width=".5"/></g>`,
+  hardhat: `<g class="o-hand"><path d="M5.4 38.6l-2 5.4" stroke="#97a5ba" stroke-width="1.8" stroke-linecap="round"/><path d="M2.2 43.2a2 2 0 1 0 2.6 1.4" stroke="#97a5ba" stroke-width="1.4" fill="none"/></g>`
+};
+const BOLTS = `<circle cx="7.4" cy="16" r="2" fill="#8b98ad" ${OUT}/><circle cx="32.6" cy="16" r="2" fill="#8b98ad" ${OUT}/><circle cx="7" cy="15.5" r=".6" fill="#fff" opacity=".5"/><circle cx="32.2" cy="15.5" r=".6" fill="#fff" opacity=".5"/>`;
+const VENTS = `<path d="M24.6 10.6h4M25.4 12h3.2" stroke="#0b1018" stroke-width=".7" stroke-linecap="round" opacity=".25"/>`;
+const CHEST = `<rect x="14.4" y="29.4" width="11.2" height="6.2" rx="1.6" fill="#0f141c" opacity=".55"/><circle class="led l1" cx="17" cy="32.5" r=".95" fill="#5fcbb9"/><circle class="led l2" cx="20" cy="32.5" r=".95" fill="#f3b74f"/><circle class="led l3" cx="23" cy="32.5" r=".95" fill="#ef7f8a"/><rect x="10.4" y="36.6" width="19.2" height="1.3" fill="#0b1018" opacity=".22"/>`;
+const leg = (cls, x) => `<g class="${cls}"><rect x="${x}" y="40" width="5" height="6" rx="2" fill="#56627a" ${OUT}/><rect x="${x + .6}" y="43.6" width="3.8" height="1.6" rx=".8" fill="#0b1018" opacity=".25"/><rect x="${x - 1}" y="45" width="7" height="3" rx="1.3" fill="#3b4252" ${OUT}/></g>`;
+const arm = (cls, x, color, extra = '') => `<g class="${cls}"><rect x="${x}" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect x="${x + .4}" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/><circle cx="${x + 2.5}" cy="28.4" r="2.1" fill="#8b98ad" ${OUT}/><circle cx="${x + 2.5}" cy="38.6" r="1.9" fill="#56627a" ${OUT}/>${cls === 'arm-l' ? `<rect x="${x + 1}" y="29.4" width="1.4" height="3.4" rx=".7" fill="#fff" opacity=".35"/>` : ''}${extra}</g>`;
+function hatOf(look) { return HATS[look.season] || HATS[look.outfit] || ''; }
 function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
-  const u = look.uniform;
+  const u = look.uniform, hat = hatOf(look);
   return `<svg viewBox="0 0 40 48" aria-hidden="true">
-    <g class="legs"><g class="leg-l"><rect x="13" y="40" width="5" height="7" rx="2" fill="#56627a" ${OUT}/><rect x="13.6" y="44.6" width="3.8" height="2" rx="1" fill="#0b1018" opacity=".25"/></g><g class="leg-r"><rect x="22" y="40" width="5" height="7" rx="2" fill="#56627a" ${OUT}/><rect x="22.6" y="44.6" width="3.8" height="2" rx="1" fill="#0b1018" opacity=".25"/></g></g>
-    <g class="arm-l"><rect x="4" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect x="4.4" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/><rect x="5" y="28" width="1.4" height="4" rx=".7" fill="#fff" opacity=".35"/></g>
-    <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}" ${OUT}/>${SHADE_BODY}
-    <rect x="15" y="30" width="10" height="5" rx="1.5" fill="#0f141c" opacity=".45"/>
+    <g class="legs">${leg('leg-l', 13)}${leg('leg-r', 22)}</g>
+    ${arm('arm-l', 4, color, OUTFIT_HAND[look.outfit] || '')}
+    <rect x="16.5" y="22.6" width="7" height="4.4" rx="1.2" fill="#3a4558"/>
+    <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}" ${OUT}/>${SHADE_BODY}${CHEST}
     ${u ? `<path d="M10.5 26.4h19v3h-19z" fill="${u}"/><path d="M23.5 29l3.4 6-4.4-1.2z" fill="${u}"/>` : ''}
     ${look.acc === 3 ? BOWTIE : ''}
     ${PROPS_BODY}
-    <g class="arm-r"><rect x="31" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect x="31.4" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/>${PROPS_HAND}</g>
-    <g class="head">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VISORS[look.visor]}${VISOR_GLARE}${FACES}${HEAD_ACC[look.acc]}</g>
+    ${arm('arm-r', 31, color, PROPS_HAND)}
+    <g class="head">${hat ? '' : ANTENNAS[look.ant]}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${FACES}${hat || HEAD_ACC[look.acc]}</g>
   </svg>`;
 }
 
-// Solo la cabeza (antena, visor y accesorio): avatar pequeño para el chat.
+// Solo la cabeza (antena, visor y accesorio o gorro): avatar pequeño para el chat.
 function robotHead(color, look = {ant: 0, visor: 0, acc: 0}) {
-  return `<svg class="rhead" viewBox="5 -1 30 27" aria-hidden="true">${ANTENNAS[look.ant]}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VISORS[look.visor]}${VISOR_GLARE}${HEAD_ACC[look.acc]}</svg>`;
+  const hat = hatOf(look);
+  return `<svg class="rhead" viewBox="4 -5 32 31" aria-hidden="true">${hat ? '' : ANTENNAS[look.ant]}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${hat || HEAD_ACC[look.acc]}</svg>`;
 }
 
 // Título sugerido para un robot sin título: sale del encargo con reglas simples (sin preguntarle a Claude).

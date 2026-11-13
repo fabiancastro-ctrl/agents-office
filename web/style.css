@@ -4,6 +4,7 @@
   --ink:#e8edf4; --muted:#97a5ba; --line:#2d394c;
   --amber:#f3b74f; --teal:#5fcbb9; --rose:#ef7f8a; --violet:#a99cf2; --sky:#7cb6f0;
   --git:#242b42; --jira:#1d2d44; --cron:#2a263d; --war:#352830; --coord:#27301f; --open:#1c2534;
+  --desk-a:#a3825f; --desk-b:#8a6c50; --desk-e:#5b4433; --brk:#2b2a23;
   --display:"Pixelify Sans","Courier New",monospace;
   --body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
@@ -92,7 +93,7 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 .room-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:5px 8px;font-family:var(--display);font-size:14px}
 .room-h small{font-family:var(--body);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .room-b{padding:0 8px;font-size:11px;color:var(--muted)}
-.r-break{background:#2b2a23;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.03) 0 6px,transparent 6px 12px)!important;background-size:auto!important}
+.r-break{background:var(--brk);background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.03) 0 6px,transparent 6px 12px)!important;background-size:auto!important}
 .r-break .room-h small{color:var(--amber)}
 .sofa{background:linear-gradient(#7c4f5e,#5e3a47);border-radius:8px 8px 4px 4px;box-shadow:inset 0 6px 0 #8d5f6e,0 4px 0 #43293a,0 8px 10px rgba(0,0,0,.35)}
 .btable{background:radial-gradient(ellipse at 50% 40%,#a3825f,#7d6048);border-radius:50%;box-shadow:0 4px 0 #5b4433,0 8px 10px rgba(0,0,0,.35)}
@@ -115,8 +116,8 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 #sala-chips .rchip:hover span{color:var(--amber)}
 .rdesk .paper{width:30%;height:120%;top:-30%}
 
-.desk{position:absolute;width:11%;height:10%;background:repeating-linear-gradient(90deg,rgba(0,0,0,.035) 0 2px,transparent 2px 14px),linear-gradient(#a3825f,#8a6c50 75%);border-radius:4px;cursor:pointer;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 7px 0 #5b4433,0 14px 16px rgba(0,0,0,.4)}
+.desk{position:absolute;width:11%;height:10%;background:repeating-linear-gradient(90deg,rgba(0,0,0,.035) 0 2px,transparent 2px 14px),linear-gradient(var(--desk-a),var(--desk-b) 75%);border-radius:4px;cursor:pointer;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 7px 0 var(--desk-e),0 14px 16px rgba(0,0,0,.4)}
 .desk .chair{position:absolute;left:35%;top:122%;width:30%;height:58%;background:linear-gradient(#3a4558,#2a3342);border-radius:7px 7px 3px 3px;box-shadow:0 4px 5px rgba(0,0,0,.35)}
 /* Luz del monitor sobre el piso cuando el robot trabaja */
 .desk .mug{position:absolute;left:5%;top:62%;width:6%;height:22%;background:#e8edf4;border-radius:1px 1px 3px 3px}
@@ -904,3 +905,109 @@ html[data-theme=light] .sub-row{background:#ece9fb;color:#3b2f86}
 .pbub{position:absolute;left:50%;bottom:calc(100% + 30px);transform:translateX(-50%);background:#ffd36b;color:#2a1d05;font:500 13px/1 var(--display);letter-spacing:.04em;padding:5px 9px;border-radius:9px;white-space:nowrap;z-index:6000;box-shadow:0 4px 12px rgba(0,0,0,.4);animation:pbub 1.5s ease-out forwards}
 .pbub::after{content:"";position:absolute;top:100%;left:50%;margin-left:-5px;border:5px solid transparent;border-top-color:#ffd36b}
 @keyframes pbub{0%{opacity:0;transform:translate(-50%,8px) scale(.6)}15%{opacity:1;transform:translate(-50%,0) scale(1.08)}25%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-10px)}}
+/* apariencia del robot */
+.lk-open{margin:2px 0}
+.lk{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:4px 0 6px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}
+.lk-sw{display:inline-flex;gap:4px}
+.lk-sw button{width:18px;height:18px;border-radius:50%;border:2px solid transparent;padding:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+.lk-sw button.on{border-color:var(--ink)}
+.lk-c{display:inline-flex;align-items:center;gap:4px;font-size:12px}
+.lk-c small{color:var(--muted)} .lk-c b{font-family:var(--mono);font-size:11px;min-width:24px;text-align:center}
+.lk-c button{background:none;border:1px solid var(--line);border-radius:4px;color:var(--ink);font-size:10px;padding:1px 5px}
+.lk-c button:hover{border-color:var(--amber)}
+.robot .led{animation:led 1.6s steps(2) infinite} .robot .led.l2{animation-delay:.5s} .robot .led.l3{animation-delay:1s}
+@keyframes led{50%{opacity:.35}}
+
+/* ---------- estilos de oficina (selector «Estilo»; se guarda por oficina) ---------- */
+/* «Moderna» es la de siempre. Cada estilo cambia piso, paredes, salas y madera, y suma un par de detalles (#tdeco). */
+.map-wrap[data-mt=garaje]{--floor:#34332f;--tile:#3f3e39;--wall:#7a6247;--open:#2f2d29;--cron:#3a3328;--war:#40302a;--coord:#353124;--desk-a:#d2ad74;--desk-b:#b48d55;--desk-e:#7a5c33;--brk:#3a2f25}
+.map-wrap[data-mt=garaje] .r-open{background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 2px,transparent 2px 40px),repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 2px,transparent 2px 80px),var(--open)}
+.map-wrap[data-mt=nave]{--floor:#0d1422;--tile:#173048;--wall:#5f86b3;--open:#0f1a2b;--cron:#171d3a;--war:#1d1b36;--coord:#122a2e;--desk-a:#a9bccf;--desk-b:#7e93a8;--desk-e:#4b5d73;--brk:#141a2e}
+.map-wrap[data-mt=nave] .r-open{background:repeating-linear-gradient(0deg,rgba(95,203,185,.08) 0 1px,transparent 1px 32px),repeating-linear-gradient(90deg,rgba(95,203,185,.08) 0 1px,transparent 1px 32px),var(--open)}
+.map-wrap[data-mt=nave] .room{border-top-color:#8fb4dd;box-shadow:inset 0 0 18px rgba(95,203,185,.12),0 4px 0 rgba(0,0,0,.28)}
+.map-wrap[data-mt=nave] .map .win{background:radial-gradient(circle at 20% 30%,#fff 0 1px,transparent 1.5px),radial-gradient(circle at 70% 65%,#fff 0 1px,transparent 1.5px),radial-gradient(circle at 45% 50%,#cfe 0 .8px,transparent 1.2px),linear-gradient(#050914,#121c3a);box-shadow:0 0 10px rgba(95,203,185,.3)}
+.map-wrap[data-mt=biblioteca]{--floor:#2a1d15;--tile:#35251b;--wall:#7a5236;--open:#33231a;--cron:#2f2230;--war:#3a2421;--coord:#2c2a1a;--desk-a:#7a5338;--desk-b:#5f3f29;--desk-e:#3b2617;--brk:#2e2219}
+.map-wrap[data-mt=biblioteca] .r-open{background:repeating-linear-gradient(90deg,rgba(0,0,0,.14) 0 1px,transparent 1px 22px),repeating-linear-gradient(0deg,rgba(255,220,170,.03) 0 1px,transparent 1px 11px),var(--open)}
+.map-wrap[data-mt=cafeteria]{--floor:#5a3528;--tile:#6a4031;--wall:#b98a5e;--open:#4a2e24;--cron:#3d2a2c;--war:#4a2a26;--coord:#3c3522;--desk-a:#e2cba5;--desk-b:#c8ab80;--desk-e:#8f7350;--brk:#3e2a22}
+.map-wrap[data-mt=cafeteria] .r-open{background:conic-gradient(rgba(0,0,0,.14) 25%,transparent 0 50%,rgba(0,0,0,.14) 0 75%,transparent 0) 0 0/28px 28px,var(--open)}
+/* detalles de cada estilo */
+#tdeco{position:absolute;inset:0;pointer-events:none;z-index:2}
+#tdeco i{position:absolute;display:block}
+.td-box{width:2.6%;aspect-ratio:1;background:linear-gradient(#c79a5f,#a77d45);border:1px solid #7a5a30;border-radius:2px;box-shadow:inset 0 30% 0 -30% transparent,0 3px 0 rgba(0,0,0,.3)}
+.td-box::after{content:"";position:absolute;left:44%;top:0;bottom:0;width:12%;background:#e8d29f}
+.td-board{background:#e9edf2;border:3px solid #8b98ad;border-radius:3px;box-shadow:0 3px 0 rgba(0,0,0,.3)}
+.td-board::before{content:"";position:absolute;inset:18% 12%;background:linear-gradient(#5d8fd1,#5d8fd1) 0 0/60% 2px no-repeat,linear-gradient(#d1585d,#d1585d) 0 30%/40% 2px no-repeat,linear-gradient(#13806f,#13806f) 0 60%/70% 2px no-repeat}
+.td-shelf{background:repeating-linear-gradient(90deg,#d1585d 0 6%,#5d8fd1 6% 11%,#f3b74f 11% 16%,#13806f 16% 21%,#a99cf2 21% 25%,#7a5236 25% 27%) 0 12%/100% 34% no-repeat,repeating-linear-gradient(90deg,#5d8fd1 0 5%,#f3b74f 5% 11%,#d1585d 11% 15%,#7a5236 15% 17%,#a99cf2 17% 22%) 0 62%/100% 34% no-repeat,#5a3a26;border:2px solid #3b2617;border-radius:2px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.td-lamp{width:1.4%;aspect-ratio:1;border-radius:50% 50% 30% 30%;background:#2f8f5b;box-shadow:0 0 14px 6px rgba(255,214,130,.25)}
+.td-bar{background:linear-gradient(#8a5a3c,#6b4430);border-radius:4px;box-shadow:inset 0 3px 0 rgba(255,255,255,.12),0 5px 0 #4a2e1f}
+.td-bar::before{content:"";position:absolute;left:8%;top:-60%;width:10%;height:60%;background:#3a4251;border-radius:2px 2px 0 0;box-shadow:inset 0 3px 0 #f3b74f}
+.td-menu{background:#1f2620;border:3px solid #8a5a3c;border-radius:3px}
+.td-menu::before{content:"";position:absolute;inset:20% 14%;background:repeating-linear-gradient(#e8edf4 0 2px,transparent 2px 7px)}
+.td-pipe{height:.6%;background:linear-gradient(#8fb4dd,#5f86b3);border-radius:3px;box-shadow:0 0 8px rgba(95,203,185,.35)}
+.td-light{width:1%;aspect-ratio:1;border-radius:50%;background:#5fcbb9;box-shadow:0 0 10px 3px rgba(95,203,185,.6);animation:led 2s steps(2) infinite}
+.mt-sel{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--ink);font-size:13px}
+/* decoración que crece: plantas (más grandes y con flores), trofeos cada 10 reviews y la pizarra de hoy */
+.deco.plant,.desk .dplant{transform-origin:50% 100%;transition:scale 1s}
+.map.grow-1 .deco.plant,.map.grow-1 .desk .dplant{scale:1.15}
+.map.grow-2 .deco.plant,.map.grow-2 .desk .dplant{scale:1.3}
+.map.grow-3 .deco.plant,.map.grow-3 .desk .dplant{scale:1.45}
+.map.grow-4 .deco.plant,.map.grow-4 .desk .dplant{scale:1.6}
+.map.grow-3 .deco.plant::after,.map.grow-4 .deco.plant::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 25%,#ef8fb0 0 6%,transparent 7%),radial-gradient(circle at 68% 30%,#ffd36b 0 6%,transparent 7%),radial-gradient(circle at 50% 12%,#f4efe2 0 5%,transparent 6%)}
+.map.grow-4 .deco.plant::after{background:radial-gradient(circle at 30% 25%,#ef8fb0 0 6%,transparent 7%),radial-gradient(circle at 68% 30%,#ffd36b 0 6%,transparent 7%),radial-gradient(circle at 50% 12%,#f4efe2 0 5%,transparent 6%),radial-gradient(circle at 22% 45%,#a99cf2 0 5%,transparent 6%),radial-gradient(circle at 78% 48%,#ef8fb0 0 5%,transparent 6%)}
+.trophies{position:absolute;left:79.6%;top:72%;display:flex;align-items:flex-end;gap:2px;padding:0 3px 2px;border-bottom:3px solid #7a5a3c;z-index:3;pointer-events:auto;cursor:default}
+.trophies[hidden]{display:none}
+.trophies .cup{width:9px;height:12px;background:linear-gradient(90deg,#d9a531,#ffe08a 40%,#d9a531);clip-path:polygon(0 0,100% 0,88% 42%,62% 55%,62% 74%,86% 80%,86% 100%,14% 100%,14% 80%,38% 74%,38% 55%,12% 42%);filter:drop-shadow(0 0 3px rgba(255,214,107,.5))}
+.trophies .cup.big{width:12px;height:15px}
+.trophies b{font:600 10px/1 var(--mono);color:#ffd36b;margin-left:2px}
+.tboard{position:absolute;left:42.6%;top:5.2%;width:5.6%;height:8.4%;background:#e9edf2;border:3px solid #8b98ad;border-radius:3px;display:grid;place-items:center;align-content:center;gap:0;color:#1b2430;z-index:3;pointer-events:none;box-shadow:0 3px 0 rgba(0,0,0,.3)}
+.tboard small{font:600 7.5px/1.1 var(--mono);letter-spacing:.08em;color:#55637a}
+.tboard b{font:500 17px/1 var(--display);color:#13806f}
+/* escritorio desordenado según el contexto del robot: 1) unas hojas, 2) más hojas, post-its y café, 3) caos */
+.desk .clutter{position:absolute;inset:0;pointer-events:none;z-index:1;display:none}
+.desk[data-cl="1"] .clutter,.desk[data-cl="2"] .clutter,.desk[data-cl="3"] .clutter{display:block}
+.desk .clutter{background:
+  linear-gradient(#f4efe2,#f4efe2) 86% 74%/13% 30% no-repeat,
+  linear-gradient(#ddd5c3,#ddd5c3) 88% 70%/13% 30% no-repeat}
+.desk[data-cl="2"] .clutter,.desk[data-cl="3"] .clutter{background:
+  linear-gradient(#f4efe2,#f4efe2) 86% 74%/13% 30% no-repeat,linear-gradient(#ddd5c3,#ddd5c3) 88% 70%/13% 30% no-repeat,
+  linear-gradient(#f4efe2,#f4efe2) 6% 80%/12% 28% no-repeat,linear-gradient(#e8e0cc,#e8e0cc) 8% 74%/12% 28% no-repeat,
+  radial-gradient(circle,#5a3a26 0 38%,#e8edf4 40% 62%,transparent 64%) 97% 14%/9% 34% no-repeat}
+.desk[data-cl="2"] .clutter::before,.desk[data-cl="3"] .clutter::before{content:"";position:absolute;left:16%;top:-38%;width:7%;height:24%;background:#ffd96b;box-shadow:3px 2px 0 -1px #ef8fb0,14px 0 0 -1px #9fd3f0;transform:rotate(-6deg)} /* post-its en el monitor */
+.desk[data-cl="3"] .clutter::after{content:"";position:absolute;left:-10%;right:-10%;top:96%;height:60%;background:
+  radial-gradient(circle,#f4efe2 0 40%,#cfc6b3 42% 55%,transparent 58%) 8% 20%/9% 34% no-repeat,
+  radial-gradient(circle,#f4efe2 0 40%,#cfc6b3 42% 55%,transparent 58%) 92% 40%/8% 30% no-repeat,
+  radial-gradient(circle,#f4efe2 0 40%,#cfc6b3 42% 55%,transparent 58%) 75% 80%/7% 26% no-repeat,
+  linear-gradient(#f4efe2,#f4efe2) 20% 70%/12% 22% no-repeat} /* bolas de papel y hojas en el piso */
+.desk[data-cl="3"] .clutter{background:
+  linear-gradient(#f4efe2,#f4efe2) 86% 74%/13% 30% no-repeat,linear-gradient(#ddd5c3,#ddd5c3) 88% 70%/13% 30% no-repeat,linear-gradient(#f4efe2,#f4efe2) 90% 64%/13% 30% no-repeat,
+  linear-gradient(#f4efe2,#f4efe2) 6% 80%/12% 28% no-repeat,linear-gradient(#e8e0cc,#e8e0cc) 8% 74%/12% 28% no-repeat,linear-gradient(#f4efe2,#f4efe2) 10% 68%/12% 28% no-repeat,
+  radial-gradient(circle,#5a3a26 0 38%,#e8edf4 40% 62%,transparent 64%) 97% 14%/9% 34% no-repeat,
+  radial-gradient(circle,#5a3a26 0 38%,#e8edf4 40% 62%,transparent 64%) 2% 14%/9% 34% no-repeat,
+  radial-gradient(circle,#f4efe2 0 40%,#cfc6b3 42% 55%,transparent 58%) 62% 92%/7% 26% no-repeat}
+/* robot que se va: con su caja de cosas */
+.robot.leaving .sign,.robot.leaving .bubble,.robot.leaving .kill-x,.robot.leaving .carry{display:none!important}
+.lbox{position:absolute;left:50%;top:60%;width:30px;height:19px;transform:translateX(-50%);background:linear-gradient(#c99a5c,#a77d45);border:1px solid #7a5a30;border-radius:2px;z-index:3;box-shadow:0 2px 0 rgba(0,0,0,.3)}
+.lbox::before,.lbox::after{content:"";position:absolute;top:-4px;width:46%;height:5px;background:#b98a4f;border:1px solid #7a5a30}
+.lbox::before{left:-2px;transform:rotate(-14deg);transform-origin:right bottom} .lbox::after{right:-2px;transform:rotate(14deg);transform-origin:left bottom}
+.lbox i{position:absolute;bottom:100%}
+.lbox .lb-plant{left:3px;width:9px;height:11px;border-radius:50% 50% 40% 40%;background:#4f9a62}
+.lbox .lb-mug{left:13px;width:6px;height:6px;background:#e8edf4;border-radius:1px}
+.lbox .lb-paper{right:3px;width:7px;height:9px;background:#f4efe2;transform:rotate(10deg)}
+/* la gata de la oficina */
+.ocat{position:absolute;width:30px;height:20px;margin:-20px 0 0 -15px;z-index:480;pointer-events:auto;cursor:default}
+.ocat svg{width:100%;height:100%;overflow:visible}
+.ocat.left svg{transform:scaleX(-1)}
+.ocat .c-shut{display:none}
+.ocat.walk .l1,.ocat.walk .l3{animation:catstep .26s ease-in-out infinite alternate}
+.ocat.walk .l2,.ocat.walk .l4{animation:catstep .26s .13s ease-in-out infinite alternate}
+@keyframes catstep{from{transform:translateY(-1.5px)}to{transform:translateY(0)}}
+.ocat .c-tail{transform-origin:28px 12px;animation:cattail 2.4s ease-in-out infinite}
+@keyframes cattail{50%{transform:rotate(18deg)}}
+.ocat.sit .c-legs{transform:translateY(-3px) scaleY(.6);transform-origin:center 14px}
+.ocat.sleep .c-legs{display:none} .ocat.sleep svg{transform:translateY(3px)} .ocat.sleep.left svg{transform:translateY(3px) scaleX(-1)}
+.ocat.sleep .c-eyes{display:none} .ocat.sleep .c-shut{display:inline}
+.ocat.sleep .c-tail{animation-duration:5s}
+.ocat .zzz{display:none;position:absolute;left:2px;top:-14px;font:600 10px/1 var(--mono);color:#cfe3fb}
+.ocat .zzz i{font-style:normal;font-size:8px;position:relative;top:-5px}
+.ocat.sleep .zzz{display:block;animation:zzz 2.4s ease-in-out infinite}
+@keyframes zzz{0%{opacity:0;transform:translateY(4px)}30%,70%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}

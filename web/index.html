@@ -22,6 +22,7 @@
   <button class="btn" id="btn-inbox">Bandeja</button>
   <button class="btn" id="btn-usage">Uso y estado Claude</button>
   <button class="btn" id="btn-compact" aria-pressed="false" title="Esconde el mapa y deja métricas, tarjetas (en columnas) y línea de tiempo: para el portátil o media pantalla">Vista compacta</button>
+  <select class="mt-sel" id="map-theme" title="Estilo de esta oficina: se guarda en la oficina, así se ve igual en cualquier navegador" aria-label="Estilo de la oficina"><option value="moderna">Estilo: Moderna</option><option value="garaje">Estilo: Garaje</option><option value="nave">Estilo: Nave</option><option value="biblioteca">Estilo: Biblioteca</option><option value="cafeteria">Estilo: Cafetería</option></select>
   <button class="btn" id="btn-view" aria-pressed="false" title="Alterna entre el plano 2D y la vista en perspectiva 2.5D">Vista 2.5D</button>
   <button class="btn" id="btn-notify" aria-pressed="false" title="Sonido y notificación del sistema cuando un robot te necesita o se queda sin actividad. El título de la pestaña siempre muestra cuántos te necesitan.">Avisos: no</button>
   <button class="btn" id="btn-dismiss" hidden></button>
@@ -66,6 +67,9 @@
       <div class="win"></div><div class="win"></div><div class="win"></div>
       <div class="deco plant p1"></div><div class="deco coffee"></div><div class="deco plant p2"></div>
       <div class="toast" id="toast" hidden></div>
+      <div id="tdeco" aria-hidden="true"></div>
+      <div class="trophies" id="trophies"></div>
+      <div class="tboard" id="tboard" aria-hidden="true"></div>
     </div>
   </div>
   <section class="tl" id="tl" aria-label="Línea de tiempo de los robots">
