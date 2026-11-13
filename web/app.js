@@ -383,9 +383,10 @@ function paint(a) {
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
   const tool = shownTool(a), urg = urgency(d);
-  a.el.className = ['robot', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
-  a.sign.textContent = d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
-  const text = d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
+  a.el.className = ['robot', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : ''].filter(Boolean).join(' ');
+  // Pide robots nuevos: cartel propio (no «LISTO») para que se vea que espera tu aprobación.
+  a.sign.textContent = d.spawnReq ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?` : d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
+  const text = d.spawnReq ? `Quiero lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: apruébalo en mi ventana` : d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
   if (text && text !== a.lastBubble) {
     a.lastBubble = text;
     a.bubble.textContent = text; a.bubble.title = text; a.bubble.hidden = false;
@@ -460,7 +461,7 @@ function tickWaiting() {
   for (const a of st.robots.values()) {
     const since = a.data.state === 'input' && a.data.inputAt ? Date.parse(a.data.inputAt) : null;
     const ms = since ? nowMs - since : 0;
-    if (since) a.sign.textContent = `? ${fmtWait(ms)}`;
+    if (since && !a.data.spawnReq) a.sign.textContent = `? ${fmtWait(ms)}`;
     a.el.classList.toggle('dance', !!since && ms >= WAIT_DANCE_MS);
     a.el.classList.toggle('impatient', !!since && ms >= 60e3);
     if (since && ms >= WAIT_QUEUE_MS) line.push([since, a]);
@@ -882,7 +883,8 @@ document.addEventListener('click', async e => {
 function cardHtml(a) {
   const d = a.data, g = groupOf(d);
   const subs = runningSubs(d), docs = d.docs.length, tok = tokOf(d);
-  const pill = d.state === 'input' && d.inputAt
+  const pill = d.spawnReq ? `<span class="pill p-input">pide ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}</span>`
+    : d.state === 'input' && d.inputAt
     ? `<span class="pill p-input">espera <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></span>`
     : `<span class="pill p-${d.state}">${d.state === 'done' && d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : esc(stateLabel(d))}</span>`;
   const perm = d.hold || d.needsPermission;

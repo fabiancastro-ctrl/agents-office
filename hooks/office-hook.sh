@@ -7,11 +7,14 @@
 
 PORT="${OFFICE_PORT:-4777}"
 
-# --max-time por debajo del timeout de 600s del hook PreToolUse en office-settings.json
-RESP=$(curl -s --max-time 590 -X POST \
+# --max-time por debajo del timeout del hook en office-settings.json: 600 s el general y 8 h el de las
+# preguntas («ask»), que la oficina puede retener hasta que contestes.
+MAX=590; VIA=""
+[ "$1" = "ask" ] && MAX=28700 && VIA="&via=ask"
+RESP=$(curl -s --max-time "$MAX" -X POST \
   -H 'Content-Type: application/json' \
   --data-binary @- \
-  "http://127.0.0.1:${PORT}/hook?robot=${OFFICE_ROBOT}") || exit 0
+  "http://127.0.0.1:${PORT}/hook?robot=${OFFICE_ROBOT}${VIA}") || exit 0
 
 [ -n "$RESP" ] && printf '%s' "$RESP"
 exit 0

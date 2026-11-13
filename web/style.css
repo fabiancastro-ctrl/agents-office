@@ -1155,3 +1155,5 @@ html[data-theme=light] .fwd label{color:#3b475a}
 .kid .pill{margin-left:auto;font-size:10.5px}
 .kid.q{cursor:default;color:var(--muted)}
 .kid.inline{display:inline-flex;width:auto;padding:1px 8px;font:600 12px var(--mono)}
+/* robot que pide robots nuevos: cartel violeta que se mueve, también si ya terminó su turno */
+.robot.spawn .sign{display:block;background:var(--violet);color:#1b1240;border-color:#4b3d8f;animation:wave 1s ease-in-out infinite;box-shadow:0 0 10px rgba(169,156,242,.6)}

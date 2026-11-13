@@ -47,6 +47,8 @@ const HOLD_TOOLS = new Set(['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit'
 // igual ganan sobre el allow del hook (verificado en el paso 1); esta lista es una segunda barrera.
 const NEVER_ALLOW = [/\brm\s+-[a-z]*r/i, /\bmv\s/, /\bgit\s+push\b/, /--force\b/, /--no-verify\b/, /\bgit\s+commit\b.*--amend\b/];
 const APPROVAL_TIMEOUT_MS = 9 * 60 * 1000;
+// Las preguntas (AskUserQuestion) tienen su propio hook de 8 h: puedes contestarlas cuando vuelvas, no en 9 minutos.
+const ASK_HOOK_S = 8 * 60 * 60, ASK_TIMEOUT_MS = (ASK_HOOK_S - 120) * 1000;
 const PERMISSION_MODES = new Set(['default', 'acceptEdits', 'plan', 'auto']);
 const NAMES = ['rex', 'nova', 'bolt', 'atlas', 'pixel', 'kiro', 'lumo', 'zeta', 'orbi', 'juno', 'milo', 'vega', 'ciro', 'indi', 'brio'];
 const ROUTINE_TICK_MS = 15000;
@@ -59,8 +61,11 @@ fs.mkdirSync(RUNS, { recursive: true });
 {
   const hook = { type: 'command', command: path.join(ROOT, 'hooks', 'office-hook.sh') };
   const ev = (timeout, matcher) => [{ ...(matcher ? { matcher } : {}), hooks: [{ ...hook, timeout }] }];
+  // PreToolUse: el hook general (10 min, para los permisos retenidos) y uno solo para las preguntas, de 8 h.
+  // Los dos le llegan al daemon con AskUserQuestion; el general se hace a un lado (ver onHook, via).
+  const askHook = { type: 'command', command: `"${hook.command}" ask`, timeout: ASK_HOOK_S };
   const settings = { hooks: {
-    SessionStart: ev(10), UserPromptSubmit: ev(10), PreToolUse: ev(600, '*'), PostToolUse: ev(10, '*'),
+    SessionStart: ev(10), UserPromptSubmit: ev(10), PreToolUse: [...ev(600, '*'), { matcher: 'AskUserQuestion', hooks: [askHook] }], PostToolUse: ev(10, '*'),
     SubagentStop: ev(10), Notification: ev(10), Stop: ev(10)
   } };
   fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + '\n');
@@ -671,6 +676,7 @@ function savePins() { fs.writeFileSync(PIN_FILE, JSON.stringify(pins, null, 2));
 // Indicaciones que la oficina le suma a cada robot nuevo: los mensajes para enviar van en una cita (>) para que la
 // oficina les ponga «📋 Copiar»; al copiar se convierten al formato del chat, así que el robot escribe Markdown normal.
 const ROBOT_HINTS = 'Trabajas dentro de la Oficina de Agentes, que muestra tus respuestas en una página web. Cuando te pidan redactar un mensaje para enviar a otra persona (Google Chat, WhatsApp, Slack, correo), entrega el texto del mensaje completo dentro de una cita Markdown (cada línea empieza con «> »), sin comentarios tuyos adentro; lo que quieras decirme a mí va fuera de la cita. Dentro de la cita usa Markdown normal (**negrita**, _cursiva_, listas con -, enlaces): la oficina lo convierte al formato del chat al copiarlo. Si son varios mensajes, usa una cita por mensaje. '
+  + 'Esos mensajes los firmo yo: escríbelos en primera persona del singular (yo hice, revisé, encontré, necesito), nunca en plural (hicimos, revisamos, encontramos), y no menciones a Claude ni a la IA salvo que te lo pida; el plural solo vale cuando de verdad incluye al destinatario o a su equipo ("necesitamos validar juntos"). '
   + 'Si te piden repartir trabajo en ROBOTS (robots nuevos, robots independientes, otras consolas), no uses subagentes: pídele robots a la oficina. '
   + 'Escribe un archivo JSON {"encargos":[{"titulo":"título corto","encargo":"qué debe hacer"}]} (máximo 6) y envíalo con: '
   + 'curl -s -X POST "http://127.0.0.1:$OFFICE_PORT/api/robots/$OFFICE_ROBOT/encargos" -H "Content-Type: application/json" --data-binary @<archivo>. '
@@ -806,7 +812,7 @@ function hold(r, body) {
 // Cuestionarios (AskUserQuestion): la oficina retiene el hook y te muestra las preguntas con sus opciones.
 // Lo que respondas vuelve como `answers` en updatedInput y el robot lo recibe como si contestaras en su consola.
 // «Responder en la consola», el reinicio de la oficina o el tiempo límite sueltan el hook y la consola muestra su menú.
-function askHold(r, body) {
+function askHold(r, body, timeoutMs = APPROVAL_TIMEOUT_MS) {
   const id = crypto.randomBytes(3).toString('hex');
   const questions = body.tool_input.questions.slice(0, 8).map(q => ({
     question: String(q.question ?? ''), header: trunc(q.header, 30), multiSelect: !!q.multiSelect,
@@ -819,7 +825,7 @@ function askHold(r, body) {
   emit(r);
   return new Promise(resolve => {
     const release = (out, note) => { clearTimeout(timer); pending.delete(id); if (r.ask?.id === id) r.ask = null; if (robots.get(r.name) === r) { if (note) log(r, 'sys', note); emit(r); } resolve(out); };
-    const timer = setTimeout(() => release(null, 'Las preguntas pasaron a su consola (nadie respondió en la oficina)'), APPROVAL_TIMEOUT_MS);
+    const timer = setTimeout(() => release(null, 'Las preguntas pasaron a su consola (nadie respondió en la oficina)'), timeoutMs);
     pending.set(id, { r, ask: true, input: body.tool_input, release });
   });
 }
@@ -866,7 +872,15 @@ function subFor(r, body) {
   return s;
 }
 
-async function onHook(name, body) {
+async function onHook(name, body, via = '') {
+  // Pregunta: la atiende el hook largo (via=ask). Si llega por el general, espera un momento por si llega el largo;
+  // los robots lanzados antes de este cambio solo tienen el general y siguen como antes (9 minutos).
+  if (body.hook_event_name === 'PreToolUse' && body.tool_name === 'AskUserQuestion') {
+    const r0 = robots.get(name);
+    if (via === 'ask') { if (r0) r0.longAsk = true; }
+    else if (r0?.longAsk) return null;
+    else { await new Promise(res => setTimeout(res, 1500)); if (robots.get(name)?.longAsk) return null; }
+  }
   fs.appendFileSync(EVENTS_FILE, JSON.stringify({ at: now(), robot: name, ...body }) + '\n');
   if (body.hook_event_name === 'SessionStart') registerSession({ robot: name, ...body });
   const r = robots.get(name);
@@ -918,7 +932,7 @@ async function onHook(name, body) {
         }
         emit(r);
       }
-      if (!sub && body.tool_name === 'AskUserQuestion' && Array.isArray(body.tool_input?.questions)) return askHold(r, body);
+      if (!sub && body.tool_name === 'AskUserQuestion' && Array.isArray(body.tool_input?.questions)) return askHold(r, body, via === 'ask' ? ASK_TIMEOUT_MS : APPROVAL_TIMEOUT_MS);
       if (APPROVAL && HOLD_TOOLS.has(body.tool_name)) return hold(r, body);
       break;
     }
@@ -1500,7 +1514,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/hook') {
       const name = url.searchParams.get('robot') || 'desconocido';
-      return send(res, 200, await onHook(name, await readBody(req)));
+      return send(res, 200, await onHook(name, await readBody(req), url.searchParams.get('via') || ''));
     }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
