@@ -1258,3 +1258,51 @@ html[data-theme=light] .lg.shell pre.x{background:#1d2533}
 @keyframes poweron{0%{filter:grayscale(1) brightness(.68);transform:rotate(-14deg) translateY(4px) scaleY(.9)}55%{filter:grayscale(.3);transform:rotate(3deg) translateY(-3px) scaleY(1.04)}75%{filter:brightness(1.5)}100%{filter:none;transform:none}}
 .robot.poweron .eye{animation:eyeon 1.2s!important}
 @keyframes eyeon{0%,30%{opacity:.06}40%{opacity:1}50%{opacity:.2}62%,100%{opacity:1}}
+
+/* ---------- ventana del robot: encabezado compacto y la conversación llena lo que sobra ---------- */
+.ph-main{flex:1;min-width:0}
+.ph-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:3px 0 4px}
+.ph-row>*{margin:0!important}
+.ph-row .rt-note.edit,.ph-row .lk{flex-basis:100%}
+.ph-row .rt-note>span{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ph-row .rc-sleep{margin:0 4px}
+.ph-what{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph-what .origin{font-family:var(--body);margin:0}
+/* En la ventana alta (robot, sala, despedido) el panel es una columna: encabezado, avisos y, debajo, las dos
+   columnas que se estiran. La conversación y la consola toman el alto que quede, sin importar cuántas
+   etiquetas tenga el encabezado, así la caja para escribir siempre queda a la vista. */
+.dlg-card.tall>.panel{display:flex;flex-direction:column;overflow:auto}
+.dlg-card.tall>.panel>*{flex:none}
+.dlg-card.tall>.panel>.rp-grid{flex:1 1 auto;min-height:360px}
+.dlg-card.tall .rp-col{display:flex;flex-direction:column;min-height:0}
+.dlg-card.tall .rp-col>*{flex:none}
+.dlg-card.tall .rp-col>.log{flex:1 1 0;height:auto;min-height:140px;max-height:none}
+.dlg-card.tall .rp-col>.term{flex:1 1 0;height:auto;min-height:100px;max-height:none}
+.dlg-card.split.tall .rp-col>.log{flex:none;height:calc(100vh - 380px);min-height:200px}
+.dlg-card.split.tall .rp-col>.term{flex:none;height:220px}
+@media (max-width:900px){.dlg-card.tall>.panel{display:grid}.dlg-card.tall .rp-col>.log,.dlg-card.tall .rp-col>.term{flex:none;height:auto;max-height:45vh}}
+
+/* ---------- archivo de despedidos: archivador en tu escritorio y lista con sus resúmenes ---------- */
+.archivador{position:absolute;z-index:4;cursor:pointer;display:grid;grid-template-rows:repeat(3,1fr);gap:2px;padding:3px;border-radius:3px;
+  background:linear-gradient(90deg,#6b7586,#8792a5 45%,#6b7586);border:1px solid #3d4554;box-shadow:0 3px 0 rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.25)}
+.archivador i{display:block;border-radius:2px;background:linear-gradient(#9aa5b7,#7d889b);box-shadow:inset 0 -1px 0 rgba(0,0,0,.25);position:relative}
+.archivador i::after{content:"";position:absolute;left:35%;right:35%;top:42%;height:2px;border-radius:1px;background:#3d4554}
+.archivador:hover{filter:brightness(1.15)}
+.archivador b{position:absolute;top:-8px;right:-9px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--violet);color:#1b1240;font:700 10px/17px var(--mono);text-align:center;box-shadow:0 0 0 2px #1b2433}
+.archivador b[hidden]{display:none}
+.map-wrap.iso .archivador{transform-origin:50% 100%;transform:rotateZ(calc(-1 * var(--rz))) rotateX(calc(-1 * var(--rx)))}
+.arch-q{width:100%;padding:8px 12px;font-size:14px;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:8px}
+.arch-list{display:grid;gap:10px;align-content:start}
+.ac-item{border:1px solid var(--line);border-left:3px solid var(--c);border-radius:10px;padding:10px 12px;display:grid;gap:6px;background:color-mix(in srgb,var(--c) 5%,var(--panel-2))}
+.ac-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ac-h .rhead{width:26px;height:26px}
+.ac-h b{font-family:var(--mono);font-size:13px}
+.ac-title{color:var(--amber);font-weight:600;font-size:13px}
+.ac-by{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted)}
+.ac-by.r{color:var(--teal);border-color:color-mix(in srgb,var(--teal) 45%,var(--line))}
+.ac-h small{margin-left:auto;color:var(--muted);font-size:11.5px}
+.ac-note{font-size:12.5px;color:#f6e7b0}
+.ac-x{margin:0;font-size:13px;line-height:1.45;color:#c9d3e0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ac-item .btn.ghost.armed{color:var(--rose);border-color:var(--rose)}
+html[data-theme=light] .ac-x{color:#3b475a}
+html[data-theme=light] .ac-note{color:#7a5f12}

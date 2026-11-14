@@ -116,6 +116,7 @@ function layout(incoming) {
   setRect($('.deco.plant.p2'), 76.15, 28.5, 1.7, 4.5);
   placeGrowth(e);
   setRect($('#trophies'), 79.6, 89.2 + e); // repisa al pie de tu escritorio, debajo de la bandeja
+  setRect($('#archivador'), 88.4, 81.6 + e, 2.8, 8); // archivador: robots despedidos con su resumen
   ensureDesks(rows * COLS);
   // Mesas un poco más chicas que su lugar (13 × 10): mismo centro y mismo borde de abajo, así los robots no se mueven.
   deskEls.forEach((d, i) => { const p = deskPos(i); setRect(d.el, p.x + 1, p.y + 1.5, null, 8.5); d.el.hidden = i >= rows * COLS; });
@@ -567,7 +568,7 @@ function connect() {
     if (m.type === 'snapshot') {
       for (const a of st.robots.values()) { vacate(a.data.place, a); a.el.remove(); }
       st.robots.clear();
-      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || []; st.pins = m.pins || []; renderPinsBadge();
+      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || []; st.pins = m.pins || []; renderPinsBadge(); setArchCount(m.archiveCount || 0);
       setSetup(m.setup);
       renderInboxBadge();
       m.robots.forEach(r => upsert(r, true));
@@ -600,6 +601,7 @@ function connect() {
     } else if (m.type === 'deliver') onDeliver(m.name, m.items);
     else if (m.type === 'inbox') { st.inbox = m.inbox; renderInboxBadge(); renderMeta(); if (st.selected === '@inbox') schedulePanel(); }
     else if (m.type === 'left') onLeft(m.name);
+    else if (m.type === 'archive') { setArchCount(m.count); if (st.selected === '@archivo') loadArchivo(); }
     else if (m.type === 'pins') { st.pins = m.pins; renderPinsBadge(); markPins(); if (st.selected === '@pins') schedulePanel(); }
     else if (m.type === 'favorites') { st.favorites = m.favorites; if (st.selected === '@new') schedulePanel(); }
   };
@@ -1766,7 +1768,7 @@ function robotPanel(a) {
   else if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission) alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
-    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}${noteEditor(d)}${lookEditor(d)}<div class="ph-tools" id="ph-tools">${canCompact(d) ? `<button type="button" class="btn sm" data-act="compact" title="Contexto al ${d.ctx.pct} %: le manda /compact para resumir su conversación y liberar espacio">🧹 Compactar (${d.ctx.pct} %)</button>` : ''}${isSleepy(d) ? `<span class="rc-sleep">💤 ${fmtDur(sleepMs(d))} sin actividad</span>` : ''}<button type="button" class="btn sm ghost" data-act="follow" title="Cierra esta ventana y la cámara del mapa sigue a este robot (tecla F, o Mayús + clic en el robot)">📍 Seguir en el mapa</button>${sidePicker(d)}</div><div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
+    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</div><div class="ph-main"><h3>${esc(d.name)}</h3>${titleEditor(d)}<div class="ph-row" id="ph-row">${noteEditor(d)}${lookEditor(d)}${canCompact(d) ? `<button type="button" class="btn sm" data-act="compact" title="Contexto al ${d.ctx.pct} %: le manda /compact para resumir su conversación y liberar espacio">🧹 Compactar (${d.ctx.pct} %)</button>` : ''}${isSleepy(d) ? `<span class="rc-sleep">💤 ${fmtDur(sleepMs(d))} sin actividad</span>` : ''}<button type="button" class="btn sm ghost" data-act="follow" title="Cierra esta ventana y la cámara del mapa sigue a este robot (tecla F, o Mayús + clic en el robot)">📍 Seguir en el mapa</button>${sidePicker(d)}</div><div class="sub-h ph-what" title="${esc(d.label)}">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)} <span class="origin">· ${esc(d.origin || 'Origen desconocido')}</span></div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
     ${queueBar(d)}${alert}
     <div class="rp-grid" id="rp-grid">
       <div class="rp-col">
@@ -1998,7 +2000,7 @@ function renderPanel() {
   $('#dialog').hidden = false;
   $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war');
   $('#dlg-card').classList.toggle('tall', !!a || !!sala || sel === '@arch');
-  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@arch' ? archPanel(st.archView) : sel === '@pins' ? pinsPanel() : newPanel();
+  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@arch' ? archPanel(st.archView) : sel === '@archivo' ? archivoPanel() : sel === '@pins' ? pinsPanel() : newPanel();
   if (sameView) {
     if (html === PANEL._html) { tickRoutines(); return; }
     const tpl = document.createElement('template'); tpl.innerHTML = html;
@@ -2025,6 +2027,8 @@ function renderPanel() {
   if (a) { refreshPane(a.data.name); paneTimer = setInterval(() => refreshPane(a.data.name), 2000); }
   renderSide(); markPins(PANEL); doJump();
   if (sel === '@search') searchArchive();
+  if (sel === '@archivo') loadArchivo();
+  if (sel === '@arch' && st.focusRetake) { st.focusRetake = false; const t = $('#retake-in'); t?.scrollIntoView({block: 'center'}); t?.focus(); }
   if (wasHidden) (PANEL.querySelector('#search-in, #rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();
 }
 
@@ -2356,7 +2360,7 @@ PANEL.addEventListener('click', async e => {
     if (b.dataset.act === 'compact' && a) return compact(name);
     if (b.dataset.act === 'revive' && a) return revive(name, b);
     if (b.dataset.act === 'sumkill' && a) return sumKill(name);
-    if (b.dataset.act === 'arch-back') { select('@search'); return; }
+    if (b.dataset.act === 'arch-back') { select(st.archFrom || '@archivo'); return; }
     if ((b.dataset.act === 'spawn-ok' || b.dataset.act === 'spawn-no') && a?.data.spawnReq) { b.disabled = true; await decideSpawn(a.data, b.dataset.act === 'spawn-ok'); return; }
     if (b.dataset.act === 'console') await api('POST', `/api/robots/${name}/console`);
     if (b.dataset.act === 'again' && a) return launchAgain(a.data);
@@ -2681,6 +2685,8 @@ async function searchArchive() {
 }
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-arch]'); if (!b) return;
+  if (st.selected === '@search' || st.selected === '@archivo') st.archFrom = st.selected;
+  st.focusRetake = b.hasAttribute('data-retake');
   try {
     const res = await fetch(`/api/despedidos/${b.dataset.arch}`);
     if (!res.ok) return toast('Ese robot ya no está en el archivo');
@@ -2698,14 +2704,44 @@ PANEL.addEventListener('submit', async e => {
   try { const {name} = await api('POST', `/api/despedidos/${e.target.dataset.archId}/retomar`, {text: $('#retake-in').value}); toast(`${name} retoma la tarea con el resumen`); st.archView = null; select(name); }
   catch { b.disabled = false; }
 });
+// Archivo: todos los robots despedidos con su super resumen, para verlos o retomar su tarea (archivador del mapa, tecla H).
+const archUi = {list: null, q: ''};
+function setArchCount(n) { const b = $('#arch-n'); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; }
+function archivoPanel() {
+  return `<div class="dlg-head"><h3>🗄 Archivo de despedidos</h3><p>Cada robot que despides deja aquí su <b>super resumen</b> (el que escribió él con «📝 Despedir con su resumen» o el que armó la oficina). Con «↻ Retomar» entra un robot nuevo solo con ese resumen y lo que le digas. Cada resumen también queda como documento en <code>docs/resumenes-robots/</code> de tu carpeta de trabajo: puedes borrar esa carpeta cuando quieras (el archivo guarda su propia copia para retomar).</p></div>
+    <input class="arch-q" id="arch-q" type="search" placeholder="Filtrar por nombre, título, nota o resumen…" autocomplete="off">
+    <div class="arch-list" id="arch-list"><p class="muted">Cargando…</p></div>`;
+}
+async function loadArchivo() {
+  try { archUi.list = (await (await fetch('/api/despedidos?all=1')).json()).recent || []; } catch { archUi.list = []; }
+  drawArchivo();
+}
+function drawArchivo() {
+  const box = $('#arch-list', PANEL); if (!box || !archUi.list) return;
+  const q = norm(($('#arch-q', PANEL)?.value || '').trim());
+  const list = archUi.list.filter(a => !q || norm(`${a.name} ${a.title} ${a.note} ${a.label} ${a.excerpt}`).includes(q));
+  const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+  box.innerHTML = !archUi.list.length ? '<p class="muted">Todavía no despides a ningún robot. Cuando lo hagas, su resumen queda aquí.</p>'
+    : !list.length ? '<p class="muted">Nada coincide con el filtro.</p>'
+    : list.map(a => `<article class="ac-item" style="--c:${COLORS[(a.color || 0) % 8]}"><div class="ac-h">${robotHead(COLORS[(a.color || 0) % 8], lookOf(a.name, null, {look: a.look}))}<b>${esc(a.name)}</b>${a.title ? `<span class="ac-title">📌 ${esc(a.title)}</span>` : ''}<span class="ac-by ${a.summaryBy === 'robot' ? 'r' : ''}">📝 ${a.summaryBy === 'robot' ? 'resumen del robot' : 'resumen de la oficina'}</span><small>se fue ${when(a.leftAt)}</small></div>
+      ${a.note ? `<div class="ac-note">🗒 ${esc(a.note)}</div>` : ''}<p class="ac-x">${esc(a.excerpt || a.label)}</p>
+      <div class="row"><button type="button" class="btn primary sm" data-arch="${esc(a.id)}" data-retake>↻ Retomar</button><button type="button" class="btn sm" data-arch="${esc(a.id)}">Ver resumen</button><button type="button" class="btn sm ghost" data-arch-del="${esc(a.id)}" title="Lo quita de esta lista (el documento del resumen se queda en docs/resumenes-robots/)">Quitar</button></div></article>`).join('');
+}
+PANEL.addEventListener('input', e => { if (e.target.id === 'arch-q') drawArchivo(); });
+PANEL.addEventListener('click', async e => {
+  const b = e.target.closest('[data-arch-del]'); if (!b) return;
+  if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Quitar?'; setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Quitar'; }, 3000); return; }
+  try { await api('DELETE', `/api/despedidos/${b.dataset.archDel}`); } catch { /* toast ya mostrado */ }
+});
+
 // Conversación de un robot que ya se fue (solo lectura): sus mensajes y los tuyos, y sus documentos.
 function archPanel(a) {
   if (!a) return '<p class="muted">Abre un robot desde el buscador.</p>';
   const L = lookOf(a.name, null, {look: a.look});
   const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
-  return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % 8], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>📌 ${esc(a.title)}</b></div>` : ''}${a.note ? `<div class="rt-note"><span>🗒 ${esc(a.note)}</span></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="arch-back">← Buscar</button></div>
+  return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % 8], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>📌 ${esc(a.title)}</b></div>` : ''}${a.note ? `<div class="rt-note"><span>🗒 ${esc(a.note)}</span></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="arch-back">← Volver</button></div>
     <div class="rp-grid"><div class="rp-col"><h4>Conversación <small class="muted">(sin herramientas)</small></h4><div class="log" id="arch-log" data-src="@arch" style="--c:${COLORS[(a.color || 0) % 8]}">${renderLog(a.log, a.name)}</div></div>
-    <div class="rp-col"><div class="sumbox lg agent" style="--c:${COLORS[(a.color || 0) % 8]}"><span class="w">📝 Super resumen · ${a.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'}</span><span class="lg-acts"><button type="button" class="cp-btn cp-msg" data-copy="msg">📋 Copiar</button></span><div class="x md-chat">${mdHtml(a.summary || '_Sin resumen._')}</div></div>
+    <div class="rp-col"><div class="sumbox lg agent" style="--c:${COLORS[(a.color || 0) % 8]}"><span class="w">📝 Super resumen · ${a.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'}</span><span class="lg-acts">${a.summaryPath ? `<button type="button" class="cp-btn" data-docpath="${esc(a.summaryPath)}" title="${esc(a.summaryPath)}">📄 Documento</button>` : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg">📋 Copiar</button></span><div class="x md-chat">${mdHtml(a.summary || '_Sin resumen._')}</div></div>
     <form class="rehire" id="retake-form" data-arch-id="${esc(a.id)}"><h4>↻ Retomar con este resumen</h4><p class="note">Entra un robot nuevo solo con este resumen (no con toda su conversación). Si necesita más, se lo das tú o lo busca en los documentos y la memoria.</p><textarea id="retake-in" rows="3" placeholder="Qué cambió o qué sigue. Ej.: Ramiro ya respondió: el stock lo maneja el WMS">${esc(a.note ? `Ya llegó lo que esperabas (${a.note}). ` : '')}</textarea><button class="btn primary sm">Retomar</button></form>
     ${a.docs.length ? `<h4>Documentos (${a.docs.length})</h4><div class="list doclist">${a.docs.slice().reverse().map(p => `<div class="item" data-docpath="${esc(p)}" title="${esc(p)}"><div class="meta-i"><b>${esc(fileName(p))}</b><div>${esc(shortPath(p))}</div></div></div>`).join('')}</div>` : '<p class="muted">No entregó documentos.</p>'}</div></div>`;
 }
@@ -2955,7 +2991,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-bige
 /* ---------- atajos de teclado ---------- */
 // No actúan mientras escribes. J/K recorren los robots en el orden de las tarjetas (primero los que te necesitan).
 const KEYS = [['J / K', 'Siguiente / anterior robot'], ['S', 'Siguiente robot que te espera'], ['A / D', 'Aprobar / denegar el permiso (y pasa al siguiente que espera)'],
-  ['R', 'Escribirle al robot abierto'], ['F', 'Seguir en el mapa al robot abierto'], ['/', 'Buscar en las conversaciones'], ['P', 'Para enviar (mensajes fijados)'],
+  ['R', 'Escribirle al robot abierto'], ['F', 'Seguir en el mapa al robot abierto'], ['/', 'Buscar en las conversaciones'], ['P', 'Para enviar (mensajes fijados)'], ['H', 'Archivo de despedidos (resúmenes para retomar)'],
   ['+ / − / 0', 'Acercar / alejar / ver todo el mapa'], ['N', 'Nuevo encargo'], ['B', 'Bandeja'], ['Esc', 'Cerrar'], ['?', 'Esta ayuda']];
 function keysHelp() {
   let box = $('#keys');
@@ -2993,6 +3029,7 @@ document.addEventListener('keydown', async e => {
   else if (k === 'f' && hover.name) follow(hover.name);
   else if (e.key === '/') { select('@search'); setTimeout(() => $('#search-in')?.focus(), 0); }
   else if (k === 'p') select('@pins');
+  else if (k === 'h') select('@archivo');
   else if (e.key === '+' || e.key === '=') setZoom(zoom.z * 1.35);
   else if (e.key === '-' || e.key === '_') setZoom(zoom.z / 1.35);
   else if (e.key === '0') setZoom(1);

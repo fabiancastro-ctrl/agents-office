@@ -178,7 +178,7 @@ function knownDoc(p) {
   if (!p) return null;
   const abs = path.resolve(WORKSPACE, String(p));
   const known = inbox.some(i => i.path === abs) || [...robots.values()].some(r => r.docs.some(d => d.path === abs))
-    || salas.some(s => contextPath(s) === abs || threadPath(s) === abs) || archive.some(a => a.docs.includes(abs));
+    || salas.some(s => contextPath(s) === abs || threadPath(s) === abs) || archive.some(a => a.docs.includes(abs) || a.summaryPath === abs);
   return known ? abs : null;
 }
 
@@ -762,8 +762,26 @@ try { archive = JSON.parse(fs.readFileSync(ARCH_FILE, 'utf8')); } catch { /* sin
 const normText = t => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 // Super resumen de lo que hacía: el que escribió el robot al despedirlo con «📝 Despedir con su resumen» o, si no,
 // uno que arma la oficina con el encargo, tu nota, su último mensaje y sus documentos. Queda como documento en
-// resumenes/ (carpeta de datos de la oficina) y es lo único que recibe el robot que retome la tarea.
-const SUM_DIR = path.join(RUNS, 'resumenes');
+// docs/resumenes-robots/ de la carpeta de trabajo (a mano, aparte del resto de docs y fácil de borrar) y es lo
+// único que recibe el robot que retome la tarea.
+const sumDir = () => path.join(WORKSPACE || RUNS, 'docs', 'resumenes-robots');
+// Los resúmenes de antes vivían en la carpeta de datos de la oficina (runs/resumenes): se mudan a la nueva.
+function migrateSummaries() {
+  const old = path.join(RUNS, 'resumenes');
+  if (!WORKSPACE || !fs.existsSync(old)) return;
+  let moved = 0;
+  try {
+    fs.mkdirSync(sumDir(), { recursive: true });
+    for (const f of fs.readdirSync(old)) {
+      const from = path.join(old, f), to = path.join(sumDir(), f);
+      if (!f.endsWith('.md') || fs.existsSync(to)) continue;
+      fs.copyFileSync(from, to); fs.unlinkSync(from); moved++;
+      for (const a of archive) if (a.summaryPath === from) a.summaryPath = to;
+    }
+    if (!fs.readdirSync(old).length) fs.rmdirSync(old);
+  } catch (e) { console.error(`No se pudieron mudar los resúmenes a ${sumDir()}: ${e.message}`); }
+  if (moved) { fs.writeFileSync(ARCH_FILE, JSON.stringify(archive)); console.log(`Resúmenes mudados a ${sumDir()}: ${moved}`); }
+}
 function autoSummary(r) {
   const last = [...r.log].reverse().find(l => l.kind === 'agent')?.text || '';
   const oneLine = t => String(t ?? '').replace(/\s+/g, ' ').trim();
@@ -775,9 +793,9 @@ function autoSummary(r) {
 }
 function writeSummary(r, summary, by) {
   const day = now().slice(0, 10);
-  const file = path.join(SUM_DIR, `${day}-${r.name}-${crypto.randomBytes(2).toString('hex')}.md`);
+  const file = path.join(sumDir(), `${day}-${r.name}-${crypto.randomBytes(2).toString('hex')}.md`);
   const head = `# ${r.name}${r.title ? ` · ${r.title}` : ''}\n\n_${by === 'robot' ? 'Resumen escrito por el robot al despedirlo' : 'Resumen armado por la oficina al despedirlo'} · entró ${r.startedAt?.slice(0, 16).replace('T', ' ')} · se fue ${now().slice(0, 16).replace('T', ' ')}_\n\n`;
-  try { fs.mkdirSync(SUM_DIR, { recursive: true }); fs.writeFileSync(file, head + summary.trim() + '\n'); return file; } catch { return null; }
+  try { fs.mkdirSync(sumDir(), { recursive: true }); fs.writeFileSync(file, head + summary.trim() + '\n'); return file; } catch { return null; }
 }
 function archiveRobot(r, reason, robotSummary) {
   const summary = String(robotSummary || '').trim() || autoSummary(r);
@@ -792,8 +810,11 @@ function archiveRobot(r, reason, robotSummary) {
     startedAt: r.startedAt, leftAt: now(), reason, docs: r.docs.map(d => d.path), log });
   if (archive.length > ARCH_MAX) archive = archive.slice(-ARCH_MAX);
   fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+  emitArchive();
 }
-const archMeta = a => ({ id: a.id, name: a.name, title: a.title, label: a.label, color: a.color, look: a.look, startedAt: a.startedAt, leftAt: a.leftAt, docs: a.docs.length, note: a.note || '' });
+const archMeta = a => ({ id: a.id, name: a.name, title: a.title, label: a.label, color: a.color, look: a.look, startedAt: a.startedAt, leftAt: a.leftAt, docs: a.docs.length, note: a.note || '',
+  summaryBy: a.summaryBy || 'oficina', summaryPath: a.summaryPath || null, excerpt: trunc(String(a.summary || '').replace(/[#*_`>|-]+/g, ' '), 260) });
+const emitArchive = () => broadcast({ type: 'archive', count: archive.length });
 // Busca en el archivo (sin tildes ni mayúsculas): devuelve por robot las posiciones de los mensajes que coinciden.
 function searchArchive(q) {
   const qn = normText(q).trim();
@@ -1714,7 +1735,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins, archiveCount: archive.length })}\n\n`);
       clients.add(res);
       const ping = setInterval(() => res.write(': ping\n\n'), 20000);
       req.on('close', () => { clearInterval(ping); clients.delete(res); });
@@ -1833,11 +1854,20 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/despedidos') {
       const q = url.searchParams.get('q');
-      return send(res, 200, q ? { results: searchArchive(q) } : { recent: archive.slice(-30).reverse().map(archMeta), total: archive.length });
+      const all = url.searchParams.get('all') === '1';
+      return send(res, 200, q ? { results: searchArchive(q) } : { recent: (all ? archive : archive.slice(-30)).slice().reverse().map(archMeta), total: archive.length });
     }
     if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2] && parts[3] === 'retomar') {
       try { const r = await retake(parts[2], (await readBody(req)).text); return send(res, 201, { ok: true, name: r.name }); }
       catch (e) { return send(res, 409, { error: e.message }); }
+    }
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) { // lo quita de la lista; el .md del resumen queda
+      const n = archive.length;
+      archive = archive.filter(x => x.id !== parts[2]);
+      if (archive.length === n) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
+      fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+      emitArchive();
+      return send(res, 200, { ok: true });
     }
     if (req.method === 'GET' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) {
       const a = archive.find(x => x.id === parts[2]);
@@ -1986,7 +2016,7 @@ const server = http.createServer(async (req, res) => {
 
 await guardSession();
 WORKSPACE = initialWorkspace();
-if (WORKSPACE) { loadSessions(); await restore(); }
+if (WORKSPACE) { loadSessions(); await restore(); migrateSummaries(); }
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Oficina de Agentes · http://127.0.0.1:${PORT}`);
   console.log(WORKSPACE ? `Carpeta de trabajo: ${WORKSPACE}` : `Primera ejecución: abre http://127.0.0.1:${PORT} para elegir la carpeta de trabajo`);
