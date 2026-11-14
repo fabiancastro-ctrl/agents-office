@@ -1203,3 +1203,58 @@ html[data-theme=light] .rc-note{color:#7a5f12}
 .be-ta:focus{outline:2px solid var(--amber);outline-offset:1px}
 html[data-theme=light] .be-ta{background:#fff;color:#1b2430}
 .chat>.btn.primary{align-self:end}
+
+/* ---------- comandos en su consola (!terminal y /comandos de Claude) ---------- */
+.lg.shell{justify-self:end;max-width:88%;min-width:min(320px,100%)}
+.lg.shell .w{color:var(--amber);text-align:right}
+.lg.shell pre.x{margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.45 var(--mono);background:#06090e;color:#d7e3f1;border:1px solid #2a3443;padding:7px 10px;max-height:320px;overflow:auto}
+.lg.shell.in pre.x{border-radius:8px 8px 3px 8px;border-right:3px solid var(--amber);color:#ffe2a3}
+.lg.shell.in pre.x b{color:var(--teal)}
+.lg.shell.out{margin-top:-6px}
+.lg.shell.out pre.x{border-radius:3px 3px 8px 8px;border-top:0;color:#b9c6d6}
+.lg.shell.out.err pre.x{color:#ffb3bb;border-color:#5a2a33}
+html[data-theme=light] .lg.shell pre.x{background:#1d2533}
+
+/* ---------- mensajes de avance del robot (no son su respuesta final) ---------- */
+.lg.agent.interim{opacity:.7;padding:4px 10px 5px;font-size:12.5px;background:transparent;border-style:dashed;border-left-style:solid;border-left-color:color-mix(in srgb,var(--c) 45%,transparent)}
+.lg.agent.interim>.w{font-size:10px}
+.lg.agent.interim>.w::after{content:" · avance";text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted)}
+.lg.agent.interim .lg-acts [data-pin],.lg.agent.interim .lg-acts [data-fwd]{display:none}
+.lg.agent.interim:has(>.lg-acts [data-fwd])>.w{padding-right:6em}
+.lg.agent.interim:has(>.lg-acts [data-fwd]){min-width:0}
+.lg.agent.interim:hover{opacity:1}
+/* consola caída: se apaga de golpe (ojos y antena parpadean y se apagan), se desploma y queda caído, en gris,
+   con un hilito de humo de vez en cuando. Al revivirlo se quita la clase y vuelve a su animación normal. */
+.robot.lost > svg{animation:powerdown 1.6s ease-in forwards!important;transform-origin:50% 100%}
+@keyframes powerdown{
+  0%{filter:none;transform:none}
+  12%{filter:brightness(1.7)}
+  22%{filter:brightness(.5)}
+  32%{filter:brightness(1.4)}
+  45%{filter:grayscale(.6) brightness(.6);transform:none}
+  68%{transform:rotate(-17deg) translateY(4px) scaleY(.9)}
+  80%{transform:rotate(-12deg) translateY(3px) scaleY(.92)}
+  100%{filter:grayscale(1) brightness(.68);transform:rotate(-14deg) translateY(4px) scaleY(.9)}}
+.robot.lost .head{animation:headdrop 1s .7s cubic-bezier(.5,0,.75,1.4) forwards!important}
+@keyframes headdrop{60%{transform:rotate(34deg) translateY(3px)}to{transform:rotate(28deg) translateY(2.4px)}}
+.robot.lost .arm-l,.robot.lost .arm-r,.robot.lost .leg-l,.robot.lost .leg-r{animation:none!important}
+.robot.lost .antg{animation:antdroop .8s .9s ease-in forwards!important}
+@keyframes antdroop{to{transform:rotate(-38deg)}}
+.robot.lost [fill="url(#hd-glow)"],.robot.lost .hd-refl{opacity:0!important;transition:opacity .4s .5s}
+.robot.lost .arm-l{transform:rotate(14deg)!important}
+.robot.lost .arm-r{transform:rotate(-10deg)!important}
+.robot.lost .p,.robot.lost .f,.robot.lost .o-hand{display:none!important}
+.robot.lost .eye{animation:eyeoff .9s forwards!important}
+@keyframes eyeoff{0%{opacity:1}15%{opacity:.15}28%{opacity:1}42%{opacity:.1}55%{opacity:.85}100%{opacity:.06}}
+.robot.lost .ant{animation:antoff .9s forwards!important}
+@keyframes antoff{0%{opacity:1}18%{opacity:.2}30%{opacity:1}100%{opacity:1;fill:#2f3644}}
+.robot.lost .led{animation:none!important;fill:#2a3342!important}
+.robot.lost .sign{display:block;background:#5a6478;color:#fff;border-color:#2a3342;animation:none}
+.robot.lost .shadow{opacity:.6}
+.robot.lost::before{content:"";position:absolute;left:46%;top:-6px;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle,rgba(190,200,215,.55),transparent 70%);opacity:0;animation:smoke 4.5s 1.8s ease-out infinite;pointer-events:none;z-index:3}
+@keyframes smoke{0%{opacity:0;transform:translate(0,0) scale(.6)}15%{opacity:.9}100%{opacity:0;transform:translate(6px,-22px) scale(2.2)}}
+@media (prefers-reduced-motion:reduce){.robot.lost > svg{filter:grayscale(1) brightness(.68);transform:rotate(-14deg) scaleY(.9)}.robot.lost .eye{opacity:.06}}
+.robot.poweron > svg{animation:poweron 1.4s ease-out!important;transform-origin:50% 100%}
+@keyframes poweron{0%{filter:grayscale(1) brightness(.68);transform:rotate(-14deg) translateY(4px) scaleY(.9)}55%{filter:grayscale(.3);transform:rotate(3deg) translateY(-3px) scaleY(1.04)}75%{filter:brightness(1.5)}100%{filter:none;transform:none}}
+.robot.poweron .eye{animation:eyeon 1.2s!important}
+@keyframes eyeon{0%,30%{opacity:.06}40%{opacity:1}50%{opacity:.2}62%,100%{opacity:1}}

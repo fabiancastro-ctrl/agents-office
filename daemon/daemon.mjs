@@ -131,13 +131,25 @@ function usage(r) {
 }
 
 // Qué tan lleno tiene el contexto: tokens del último mensaje (entrada + caché) sobre su ventana (200k, o 1M si ya la pasó).
+const fmtK = n => n >= 1000 ? `${Math.round(n / 100) / 10} k` : String(n);
+// Tamaño de la ventana de contexto según el modelo: los Claude 5 (Opus/Sonnet) y los «[1m]» trabajan con 1 M de
+// tokens; Haiku y los modelos anteriores, con 200 k. Si no se sabe el modelo, se infiere por el tamaño (como antes).
+function ctxWindow(model, t) {
+  const m = String(model || '').toLowerCase();
+  if (/\[1m\]|-1m\b/.test(m)) return 1000000;
+  if (/haiku/.test(m)) return 200000;
+  if (/claude-(opus|sonnet|fable)-[5-9]/.test(m)) return 1000000;
+  if (m) return 200000;
+  return t > 200000 ? 1000000 : 200000;
+}
 function ctxOf(r) {
   let last = null;
   for (const u of r.msgUsage.values()) last = u;
+  if (r.ctxPost != null) last = { input_tokens: r.ctxPost }; // recién compactado, sin respuesta nueva todavía
   if (!last) return null;
   const t = (last.input_tokens || 0) + (last.cache_read_input_tokens || 0) + (last.cache_creation_input_tokens || 0);
-  const lim = t > 200000 ? 1000000 : 200000;
-  return { tokens: t, pct: Math.min(100, Math.round(t * 100 / lim)) };
+  const lim = ctxWindow(r.model, t);
+  return { tokens: t, pct: Math.min(100, Math.round(t * 100 / lim)), window: lim };
 }
 
 function view(r, withLog = false) {
@@ -146,7 +158,7 @@ function view(r, withLog = false) {
     state: r.state, place: r.place, subs: r.subs, pendingSubs: r.pendingSubs,
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
-    parent: r.parent || null, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending,
+    parent: r.parent || null, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending, consoleLost: !!r.consoleLost,
     permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null
   };
   if (withLog) v.log = r.log.slice(-150);
@@ -422,7 +434,9 @@ async function restore() {
   try { windows = (await run('tmux', ['list-windows', '-t', SESSION, '-F', '#{window_name}'])).stdout.split('\n'); } catch { /* sin sesion */ }
   const used = new Set();
   for (const s of saved.robots || []) {
-    if (!windows.includes(s.name)) continue;
+    // Sin consola: si su sesión de Claude sigue en disco no se pierde, queda «consola caída» para revivirlo.
+    const lost = !windows.includes(s.name);
+    if (lost && !fs.existsSync(s.transcript || path.join(os.homedir(), '.claude/projects', WORKSPACE.replace(/\//g, '-'), `${s.sessionId}.jsonl`))) continue;
     const place = s.place?.type === 'room' ? s.place : s.place?.type === 'desk' && !used.has(s.place.idx) ? s.place : null;
     const r = {
       ...s, place, offset: 0, partial: '', msgUsage: new Map(), alive: true, subs: [], pendingSubs: 0, bubble: '', activity: '',
@@ -441,8 +455,8 @@ async function restore() {
     pumpTranscript(r); // desde el inicio para el uso de tokens; al log solo entra lo posterior a lo guardado
     r.muteUntil = 0;
     r.restoring = false;
-    log(r, 'sys', 'Reconectado tras reiniciar la oficina');
-    console_(r.name, 'reconectado', r.label);
+    if (lost) markLost(r);
+    else { log(r, 'sys', 'Reconectado tras reiniciar la oficina'); console_(r.name, 'reconectado', r.label); }
   }
 }
 
@@ -456,10 +470,14 @@ function taskNote(p) {
   return sum || status || 'Tarea en segundo plano sin detalle';
 }
 
-function log(r, kind, text) {
+function log(r, kind, text, extra) {
   if (r.muteUntil && r.linePos <= r.muteUntil) return;
-  const entry = { kind, text: String(text ?? ''), at: now() };
-  r.log.push(entry);
+  const entry = { kind, text: String(text ?? ''), ...(extra || {}), at: extra?.at && !Number.isNaN(Date.parse(extra.at)) ? extra.at : now() };
+  // Claude guarda el transcript en tandas: un texto puede llegar después de la herramienta que vino luego.
+  // Con su hora real se inserta en su lugar, así la conversación queda en el orden en que pasó.
+  let k = r.log.length;
+  while (k > 0 && r.log[k - 1].at > entry.at) k--;
+  r.log.splice(k, 0, entry);
   if (r.log.length > 400) r.log.splice(0, r.log.length - 400);
   saveConv(r);
   broadcast({ type: 'log', name: r.name, entry });
@@ -808,6 +826,43 @@ async function retake(id, text) {
   return r;
 }
 
+/* ---------- consola caída y revivir ---------- */
+// Si la ventana tmux de un robot desaparece (se cerró tmux, alguien la mató, se cayó), el robot no se borra:
+// queda «⚠ consola caída» con su conversación, y «Revivir» le abre otra consola con su misma sesión (--resume).
+function markLost(r) {
+  if (r.consoleLost) return;
+  r.consoleLost = true; r.hold = null; r.ask = null; r.needsPermission = false; r.activity = ''; r.tool = '';
+  r.subs = r.subs.map(x => ({ ...x, status: 'done' })); r.pendingSubs = 0;
+  log(r, 'sys', '⚠ Su consola se cerró (tmux). Su sesión sigue en disco: puedes revivirlo.');
+  console_(r.name, 'consola caída', r.label);
+  emit(r);
+}
+async function checkConsoles() {
+  if (!robots.size) return;
+  let windows;
+  try { windows = new Set((await run('tmux', ['list-windows', '-t', SESSION, '-F', '#{window_name}'])).stdout.split('\n')); }
+  catch { windows = new Set(); } // sin sesión o sin servidor de tmux: ninguna consola sigue viva
+  for (const r of robots.values()) if (!r.consoleLost && r.state !== 'walking' && !launching.has(r.name) && !windows.has(r.name)) markLost(r);
+}
+setInterval(() => { checkConsoles().catch(() => {}); }, 10000);
+async function revive(r) {
+  if (!r.consoleLost) throw new Error('Su consola sigue abierta.');
+  await ensureSession();
+  let size = 0; try { size = fs.statSync(r.transcript).size; } catch { /* sin transcript */ }
+  const tmuxArgs = ['new-window', '-d', '-t', `${SESSION}:`, '-n', r.name, '-c', WORKSPACE,
+    '-e', `OFFICE_ROBOT=${r.name}`, '-e', `OFFICE_PORT=${PORT}`, 'env', '-u', 'ANTHROPIC_API_KEY',
+    'claude', '--settings', SETTINGS, '--resume', r.sessionId, '--append-system-prompt', ROBOT_HINTS];
+  if (r.permissionMode) tmuxArgs.push('--permission-mode', r.permissionMode);
+  await run('tmux', tmuxArgs);
+  // Lo que ya estaba en su sesión no se repite en la conversación: se sigue leyendo desde el final.
+  r.offset = size; r.partial = '';
+  r.consoleLost = false;
+  setState(r, 'done');
+  log(r, 'sys', `Revivido con su misma sesión (${r.sessionId.slice(0, 8)}): recuerda todo. Escríbele para seguir.`);
+  console_(r.name, 'revivido', `tmux attach -t ${SESSION}:${r.name}`);
+  emit(r);
+}
+
 async function removeRobot(r, reason, robotSummary) {
   deliver(r); // si se da de baja con documentos sin entregar, no se pierden
   try { archiveRobot(r, reason, robotSummary); } catch { /* el archivo es un extra: no frena la baja */ }
@@ -849,14 +904,48 @@ function pumpTranscript(r) {
   }
 }
 
+// Comandos que escribes en su consola y no pasan por el hook de tus mensajes: «!comando» (modo bash) y los
+// comandos locales de Claude (/context, /compact, /model…). Solo quedan en el transcript: se muestran como «shell».
+const tagOf = (t, k) => (new RegExp(`<${k}>([\\s\\S]*?)</${k}>`).exec(t) || [])[1];
+const cutKeep = (t, n) => t.length > n ? t.slice(0, n) + '\n…' : t; // como trunc, pero respeta los saltos de línea
+const stripAnsi = t => String(t ?? '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r/g, '');
+function shellLog(r, text) {
+  const bi = tagOf(text, 'bash-input');
+  if (bi != null) { log(r, 'shell', bi.trim(), { cmd: true }); return true; }
+  const bo = tagOf(text, 'bash-stdout'), be = tagOf(text, 'bash-stderr');
+  if (bo != null || be != null) {
+    const out = [stripAnsi(bo).trim(), stripAnsi(be).trim()].filter(Boolean).join('\n');
+    log(r, 'shell', cutKeep(out, 6000) || '(sin salida)', { err: !!stripAnsi(be).trim() });
+    return true;
+  }
+  const name = tagOf(text, 'command-name');
+  if (name) { log(r, 'shell', `${name.trim()} ${(tagOf(text, 'command-args') || '').trim()}`.trim(), { cmd: true, slash: true }); return true; }
+  const lo = tagOf(text, 'local-command-stdout'), le = tagOf(text, 'local-command-stderr');
+  if (lo != null || le != null) {
+    const out = [stripAnsi(lo).trim(), stripAnsi(le).trim()].filter(Boolean).join('\n');
+    log(r, 'shell', cutKeep(out, 6000) || '(sin salida)', { err: !!stripAnsi(le).trim() });
+    return true;
+  }
+  return false;
+}
 function onTranscript(r, e) {
   if (e.isSidechain) return;
+  if (e.type === 'system' && e.subtype === 'local_command') { if (shellLog(r, String(e.content ?? ''))) { r.lastEventAt = now(); emit(r); } return; }
+  // /compact (o el automático): Claude anota cuánto contexto quedó. Hasta su próxima respuesta, el medidor usa eso.
+  if (e.type === 'system' && e.subtype === 'compact_boundary') {
+    const post = Number(e.compactMetadata?.postTokens);
+    r.ctxPost = Number.isFinite(post) && post > 0 ? post : 0;
+    log(r, 'sys', `Compactó su contexto${e.compactMetadata?.preTokens ? `: de ${fmtK(e.compactMetadata.preTokens)} a ${fmtK(r.ctxPost)} tokens` : ''}`);
+    if (!r.restoring) emit(r); // el medidor del escritorio baja ya, sin esperar otro evento del robot
+    return;
+  }
   if (e.type === 'assistant' && e.message) {
     // Un mensaje llega en varias lineas con el mismo id; la ultima trae el usage final.
-    if (e.message.id && e.message.usage) r.msgUsage.set(e.message.id, e.message.usage);
+    if (e.message.id && e.message.usage) { r.msgUsage.set(e.message.id, e.message.usage); r.ctxPost = null; }
+    if (e.message.model && e.message.model !== '<synthetic>') r.model = e.message.model;
     for (const c of e.message.content || []) {
       if (c.type === 'text' && c.text.trim()) {
-        log(r, 'agent', c.text.trim());
+        log(r, 'agent', c.text.trim(), { at: e.timestamp });
         r.bubble = trunc(c.text, 140);
         emit(r);
       }
@@ -865,6 +954,7 @@ function onTranscript(r, e) {
   if (e.type === 'user' && e.message) {
     const content = e.message.content;
     const text = typeof content === 'string' ? content : (content || []).map(c => c.text || '').join(' ');
+    if (/<bash-(input|stdout|stderr)>/.test(text)) { shellLog(r, text); r.lastEventAt = now(); emit(r); return; }
     // Esc no dispara Stop: la interrupcion solo se ve en el transcript.
     if (/\[Request interrupted/.test(text) && !r.restoring) {
       log(r, 'sys', 'Interrumpido');
@@ -984,6 +1074,9 @@ async function onHook(name, body, via = '', closers = []) {
     r.offset = 0;
     r.partial = '';
   }
+  // Antes de anotar una herramienta, lo que el robot ya escribió en el transcript (p. ej. «Voy a contar…»):
+  // así la conversación queda en el orden en que pasó y el avance no aparece después de su herramienta.
+  if (!r.restoring && (body.hook_event_name === 'PreToolUse' || body.hook_event_name === 'PostToolUse')) pumpTranscript(r);
   const internalHelper = body.agent_id && !body.agent_type;
   const sub = subFor(r, body);
 
@@ -1134,7 +1227,7 @@ async function guardSession() {
 async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, title, leaveWhenDone, attachments, routine, sala: salaId, parent, color, look }) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
   const active = [...robots.values()].filter(x => x.state !== 'done');
-  if (active.length + launching.size >= maxRobots) throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
+  if (active.filter(x => !x.consoleLost).length + launching.size >= maxRobots) throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
   const taken = n => robots.has(n) || launching.has(n);
   name = (name || NAMES.find(n => !taken(n)) || `robot-${Date.now() % 1000}`).toLowerCase();
   if (!/^[a-z0-9-]{1,20}$/.test(name)) throw new Error('Nombre inválido: usa minúsculas, números y guiones.');
@@ -1775,7 +1868,11 @@ const server = http.createServer(async (req, res) => {
       const r = robotOr404(res, parts[2]);
       if (!r) return;
       const action = parts[3];
+      if (req.method === 'POST' && action === 'revivir') {
+        try { await revive(r); return send(res, 200, { ok: true }); } catch (e) { return send(res, 409, { error: e.message }); }
+      }
       if (req.method === 'POST' && action === 'say') {
+        if (r.consoleLost) return send(res, 409, { error: `La consola de ${r.name} está caída: revívelo primero.` });
         const { text, attachments } = await readBody(req);
         if (!String(text || '').trim() && !validAttachments(attachments).length) return send(res, 400, { error: 'Mensaje vacío.' });
         await say(r, text, attachments);

@@ -383,10 +383,13 @@ function paint(a) {
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
   const tool = shownTool(a), urg = urgency(d);
-  a.el.className = ['robot', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : ''].filter(Boolean).join(' ');
+  a.el.className = ['robot', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : '', d.consoleLost ? 'lost' : ''].filter(Boolean).join(' ');
   // Pide robots nuevos: cartel propio (no «LISTO») para que se vea que espera tu aprobación.
-  a.sign.textContent = d.spawnReq ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?` : d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
-  const text = d.summaryPending ? 'Escribo mi resumen y me voy' : d.spawnReq ? `Quiero lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: apruébalo en mi ventana` : d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
+  // Al revivirlo: se endereza y los ojos vuelven a encender (solo la primera vez que deja de estar caído).
+  if (a.wasLost && !d.consoleLost) { a.el.classList.add('poweron'); setTimeout(() => a.el.classList.remove('poweron'), 1600); }
+  a.wasLost = !!d.consoleLost;
+  a.sign.textContent = d.consoleLost ? '⚠ sin consola' : d.spawnReq ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?` : d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
+  const text = d.consoleLost ? 'Se cerró mi consola: revíveme' : d.summaryPending ? 'Escribo mi resumen y me voy' : d.spawnReq ? `Quiero lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: apruébalo en mi ventana` : d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
   if (text && text !== a.lastBubble) {
     a.lastBubble = text;
     a.bubble.textContent = text; a.bubble.title = text; a.bubble.hidden = false;
@@ -405,7 +408,7 @@ function paint(a) {
     desk.el.dataset.cl = pct >= 75 ? 3 : pct >= 50 ? 2 : pct >= 25 ? 1 : 0;
     if (d.ctx) { desk.el.dataset.ctx = pct >= 75 ? 'hi' : pct >= 50 ? 'mid' : 'lo'; desk.el.style.setProperty('--ctx', Math.min(100, pct) + '%'); } else delete desk.el.dataset.ctx;
     desk.el.classList.toggle('noted', !!d.note);
-    desk.el.title = d.ctx ? `${d.name} · contexto ${pct}% lleno (${fmtTok(d.ctx.tokens)} tokens)` : '';
+    desk.el.title = d.ctx ? `${d.name} · contexto ${pct}% lleno (${fmtTok(d.ctx.tokens)} de ${fmtTok(d.ctx.window || 200000)} tokens)` : '';
     desk.paper.hidden = !pend;
     desk.paper.dataset.count = pend > 1 ? pend : '';
   }
@@ -579,7 +582,21 @@ function connect() {
     else if (m.type === 'routines') { st.routines = m.routines; renderRoutineChips(); renderMeta(); if (st.selected === '@cron') schedulePanel(); }
     else if (m.type === 'log') {
       const a = st.robots.get(m.name);
-      if (a) { a.log.push(m.entry); if (st.selected === m.name) appendLog(m.entry, a); if (st.side === m.name) appendLog(m.entry, a, $('#side .sd-log')); }
+      if (a) {
+        // Llega en orden casi siempre; si es más viejo que el último (el transcript se guarda en tandas), va en su
+        // lugar y se repinta esa conversación.
+        let k = a.log.length;
+        while (k > 0 && a.log[k - 1].at > m.entry.at) k--;
+        a.log.splice(k, 0, m.entry);
+        const views = [[st.selected === m.name, $('#log', PANEL)], [st.side === m.name, $('#side .sd-log')]];
+        for (const [on, lg] of views) {
+          if (!on || !lg) continue;
+          if (k === a.log.length - 1) { appendLog(m.entry, a, lg); continue; }
+          const bottom = lg.scrollTop + lg.clientHeight >= lg.scrollHeight - 30;
+          lg.innerHTML = renderLog(a.log, m.name); markPins(lg);
+          if (bottom) lg.scrollTop = lg.scrollHeight;
+        }
+      }
     } else if (m.type === 'deliver') onDeliver(m.name, m.items);
     else if (m.type === 'inbox') { st.inbox = m.inbox; renderInboxBadge(); renderMeta(); if (st.selected === '@inbox') schedulePanel(); }
     else if (m.type === 'left') onLeft(m.name);
@@ -729,7 +746,7 @@ function renderMeta() {
 const CARDS = $('#cards'), KPIS = $('#kpis');
 const GROUP_OF = {input: 'need', working: 'work', walking: 'work', delegating: 'work', idle: 'work', done: 'done'};
 // Un robot que pide robots nuevos te necesita aunque siga trabajando.
-const groupOf = d => d.spawnReq ? 'need' : GROUP_OF[d.state] || 'work';
+const groupOf = d => d.spawnReq || d.consoleLost ? 'need' : GROUP_OF[d.state] || 'work';
 const fmtDur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
 const tokOf = d => (d.usage?.out || 0) + (d.usage?.in || 0) + (d.usage?.cacheWrite || 0);
 const runningSubs = d => d.subs.filter(s => s.status !== 'done').length;
@@ -767,8 +784,8 @@ setInterval(scheduleCards, 30000); // «sin actividad» cambia con el reloj, no 
 // Avisos: contador en el título de la pestaña (siempre) y, si los activas, sonido y notificación del sistema.
 st.inboxTemp = prefGet('inboxTemp', '0') === '1';
 const notif = {on: prefGet('notify', '0') === '1', known: null, ctx: null, base: document.title};
-const alertOf = d => d.spawnReq ? 'spawn' : d.state === 'input' ? (d.needsPermission || d.hold ? 'perm' : 'ask') : isStuck(d) ? 'stuck' : '';
-const ALERT_TXT = {spawn: 'quiere lanzar robots nuevos', perm: 'pide permiso', ask: 'tiene una pregunta para ti', stuck: 'lleva más de 10 min sin actividad'};
+const alertOf = d => d.consoleLost ? 'lost' : d.spawnReq ? 'spawn' : d.state === 'input' ? (d.needsPermission || d.hold ? 'perm' : 'ask') : isStuck(d) ? 'stuck' : '';
+const ALERT_TXT = {lost: 'se quedó sin consola', spawn: 'quiere lanzar robots nuevos', perm: 'pide permiso', ask: 'tiene una pregunta para ti', stuck: 'lleva más de 10 min sin actividad'};
 function updateTitle(n) { document.title = (n ? `(${n}) ` : '') + notif.base; drawFavicon(n); }
 // Ícono de la pestaña: la inicial de la oficina y, si alguien te necesita, un círculo rojo con cuántos.
 const fav = {hue: 174, letter: 'O', n: -1};
@@ -884,18 +901,21 @@ document.addEventListener('click', async e => {
 function cardHtml(a) {
   const d = a.data, g = groupOf(d);
   const subs = runningSubs(d), docs = d.docs.length, tok = tokOf(d);
-  const pill = d.spawnReq ? `<span class="pill p-input">pide ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}</span>`
+  const pill = d.consoleLost ? '<span class="pill p-input">⚠ consola caída</span>'
+    : d.spawnReq ? `<span class="pill p-input">pide ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}</span>`
     : d.state === 'input' && d.inputAt
     ? `<span class="pill p-input">espera <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></span>`
     : `<span class="pill p-${d.state}">${d.state === 'done' && d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : esc(stateLabel(d))}</span>`;
   const perm = d.hold || d.needsPermission;
-  const line = d.spawnReq ? `Quiere lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: ${d.spawnReq.items.map(i => i.title || plainMd(i.text).slice(0, 40)).join(' · ')}`
+  const line = d.consoleLost ? 'Su consola se cerró (tmux). Su sesión sigue en disco: «Revivir» la abre de nuevo y recuerda todo.'
+    : d.spawnReq ? `Quiere lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: ${d.spawnReq.items.map(i => i.title || plainMd(i.text).slice(0, 40)).join(' · ')}`
     : d.ask ? `Te hizo ${d.ask.questions.length === 1 ? 'una pregunta' : `${d.ask.questions.length} preguntas`}: ${d.ask.questions.map(q => q.header || q.question).join(' · ')}`
     : d.state === 'input'
     ? (perm ? `Pide permiso: ${d.hold ? d.hold.tool : (d.activity || 'una herramienta')}` : (plainMd(d.bubble) || 'Tiene una pregunta para ti'))
     : d.state === 'done' ? (plainMd(d.bubble) || 'Terminó su turno') : (d.activity || (d.state === 'walking' ? 'Llegando a su escritorio' : 'Pensando…'));
   let actions = '';
-  if (d.spawnReq) actions = `<button class="btn primary sm" data-card-act="open">Revisar y lanzar</button>`;
+  if (d.consoleLost) actions = `<button class="btn primary sm" data-card-act="revive">↻ Revivir</button><button class="btn sm" data-card-act="open">Ver</button><button class="btn sm danger" data-card-act="kill">Despedir</button>`;
+  else if (d.spawnReq) actions = `<button class="btn primary sm" data-card-act="open">Revisar y lanzar</button>`;
   else if (d.ask) actions = askForm(d, 'c');
   else if (d.hold) actions = `<button class="btn primary sm" data-card-act="hold-allow">Aprobar</button><button class="btn danger sm" data-card-act="hold-deny">Denegar</button><button class="btn sm" data-card-act="open">Ver</button>`;
   else if (d.needsPermission) actions = `<button class="btn primary sm" data-card-act="perm-approve">Aprobar</button><button class="btn danger sm" data-card-act="perm-reject">Rechazar</button><button class="btn sm" data-card-act="open">Ver consola</button>`;
@@ -973,6 +993,7 @@ CARDS.addEventListener('click', async e => {
       case 'open': return select(name);
       case 'again': return a && launchAgain(a.data);
       case 'compact': return a && compact(a.data.name);
+      case 'revive': return a && revive(a.data.name, b);
       case 'sumkill': return a && sumKill(a.data.name);
       case 'docs': return a?.data.docs.length && showDoc(a.data.docs[a.data.docs.length - 1].path);
       case 'perm-approve': return await api('POST', `/api/robots/${name}/permission`, {decision: 'approve'});
@@ -1547,11 +1568,15 @@ document.addEventListener('click', async e => {
 // Avatar del robot en sus globos: su cabeza con su color y accesorio (en salas, el de cada robot que habla).
 const avColor = name => { const d = st.robots.get(name)?.data; return d ? COLORS[d.color % 8] : COLORS[[...String(name)].reduce((h, c) => h + c.charCodeAt(0), 0) % 8]; };
 const avatarOf = name => name ? robotHead(avColor(name), lookOf(name, st.robots.get(name)?.data.place, st.robots.get(name)?.data)) : '';
-function logRow(l, robot, i) {
+function logRow(l, robot, i, interim) {
   if (l.kind === 'tool') return toolRow(l);
   if (l.kind === 'user' && /^\s*<task-notification>/.test(l.text)) l = {...l, kind: 'bg', text: taskNoteWeb(l.text)};
   const t = hhmm(l.at);
   if (l.kind === 'bg') return `<div class="lg bg${/^✗/.test(l.text) ? ' bad' : ''}"><span class="w">Aviso de su consola · tarea en segundo plano · ${t}</span><span class="x">${esc(l.text)}</span></div>`;
+  // Comando en su consola: «!comando» (terminal) o /comando de Claude, y su salida, con estilo de terminal.
+  if (l.kind === 'shell') return l.cmd
+    ? `<div class="lg shell in"><span class="w">Tú en su consola · ${l.slash ? 'comando de Claude' : 'terminal'} · ${t}</span><pre class="x">${l.slash ? '' : '<b>$</b> '}${esc(l.text)}</pre></div>`
+    : `<div class="lg shell out${l.err ? ' err' : ''}"><pre class="x">${esc(l.text)}</pre></div>`;
   if (l.kind === 'sys') return `<div class="lg sys"><span class="x">${esc(l.text)}</span><time>${t}</time></div>`;
   const md = MD_KINDS.has(l.kind) && window.marked && window.DOMPurify;
   const who = l.who || (l.kind === 'agent' && robot) || KIND_LABEL[l.kind] || l.kind;
@@ -1559,10 +1584,22 @@ function logRow(l, robot, i) {
   const body = md ? (l.kind === 'agent' ? copyable(mdHtml(text)) : mdHtml(text)) : '';
   const av = l.kind === 'agent' ? avatarOf(l.kind === 'agent' && !l.who ? robot : l.who) : '';
   const cpAll = l.kind === 'agent' && md ? `<span class="lg-acts">${i != null ? '<button type="button" class="cp-btn" data-pin title="Guardar en «Para enviar» para pegarlo después">📌</button><button type="button" class="cp-btn" data-fwd title="Pasar este mensaje a otro robot">↪ Pasar</button>' : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg" title="Copiar todo el mensaje con formato de chat (Google Chat, WhatsApp)">📋 Copiar</button></span>` : '';
-  return `<div class="lg ${l.kind}${av ? ' has-av' : ''}"${i != null ? ` data-i="${i}"` : ''}${av && l.who ? ` style="--c:${avColor(l.who)}"` : ''}><span class="w">${av}${esc(who)} · ${t}${pasted}</span>${cpAll}${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
+  return `<div class="lg ${l.kind}${av ? ' has-av' : ''}${interim ? ' interim' : ''}"${i != null ? ` data-i="${i}"` : ''}${av && l.who ? ` style="--c:${avColor(l.who)}"` : ''}><span class="w">${av}${esc(who)} · ${t}${pasted}</span>${cpAll}${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
+}
+// Avance o respuesta final: un mensaje del robot al que le siguen herramientas u otro mensaje antes de que le
+// vuelvas a escribir es un avance («Ahora reviso…»), no su respuesta. Se muestra chico y tenue; la final, normal.
+function interimSet(log) {
+  const out = new Set(); let last = -1;
+  log.forEach((l, i) => {
+    if (l.kind === 'user') last = -1;
+    else if (l.kind === 'agent') { if (last >= 0) out.add(last); last = i; }
+    else if ((l.kind === 'tool' || l.kind === 'sub') && last >= 0) { out.add(last); last = -1; }
+  });
+  return out;
 }
 function renderLog(log, robot) {
   const out = []; let run = [];
+  const interim = interimSet(log);
   const flush = () => { if (run.length) out.push(toolGroup(run)); run = []; };
   log.forEach((l, i) => {
     if (l.kind === 'tool') {
@@ -1572,13 +1609,19 @@ function renderLog(log, robot) {
     }
     flush();
     if (l.kind === 'user' && out.length && !/^\s*<task-notification>/.test(l.text)) out.push(TURN_SEP);
-    out.push(logRow(l, robot, i));
+    out.push(logRow(l, robot, i, interim.has(i)));
   });
   flush();
   return out.join('');
 }
 function appendLog(entry, a, lg = $('#log', PANEL)) {
   if (!lg) return;
+  if (['agent', 'tool', 'sub'].includes(entry.kind)) { // el mensaje anterior del robot en este turno pasa a ser un avance
+    for (let row = lg.lastElementChild; row; row = row.previousElementSibling) {
+      if (row.classList.contains('user')) break;
+      if (row.classList.contains('agent')) { row.classList.add('interim'); break; }
+    }
+  }
   const stick = lg.scrollTop + lg.clientHeight >= lg.scrollHeight - 30;
   if (entry.kind === 'tool' && st.toolMode === 'hide') return;
   if (entry.kind === 'tool' && st.toolMode === 'group') {
@@ -1655,6 +1698,10 @@ const canSummary = d => !d.summaryPending && (d.state === 'done' || (d.state ===
 async function sumKill(name) {
   try { await api('POST', `/api/robots/${name}/despedir-con-resumen`); toast(`${name} está escribiendo su resumen; al terminar se va`); } catch { /* toast ya mostrado */ }
 }
+async function revive(name, btn) {
+  if (btn) btn.disabled = true;
+  try { await api('POST', `/api/robots/${name}/revivir`); toast(`${name} volvió con su sesión`); } catch { if (btn) btn.disabled = false; }
+}
 const SLEEP_MS = 2 * 3600e3;
 const sleepMs = d => d.state === 'done' && !d.spawnReq ? Date.now() - (Date.parse(d.lastEventAt || d.timeline?.at(-1)?.at || '') || Date.now()) : 0;
 const isSleepy = d => sleepMs(d) >= SLEEP_MS;
@@ -1713,7 +1760,8 @@ function robotPanel(a) {
   const subRow = s => `<div class="sub-row${s.status === 'done' ? ' ok' : ''}" title="${esc(s.desc || s.activity || '')}"><i></i><b>${esc(shortType(s.type))}</b><span>${s.status === 'done' ? 'listo' : esc(s.activity || 'trabajando')}</span></div>`;
   const subs = d.subs.length ? `<div class="rp-block"><h4>Subagentes <small>${running.length ? `${running.length} trabajando` : ''}${running.length && finished.length ? ' · ' : ''}${finished.length ? `${finished.length} listo${finished.length === 1 ? '' : 's'}` : ''}</small></h4><div class="subs-list" id="subs-list">${[...running, ...finished].map(subRow).join('')}</div></div>` : '';
   let alert = '';
-  if (d.spawnReq) alert = spawnBox(d);
+  if (d.consoleLost) alert = `<div class="alert" id="rp-alert"><b>⚠ Se cerró su consola</b><span class="note">Su ventana de tmux desapareció (se cerró tmux o la cerraron). Su sesión de Claude sigue en disco: «Revivir» le abre otra consola con esa misma sesión y recuerda todo. Si tenía agentes o tareas en segundo plano, esos sí se cortaron: pídele que los relance.</span><div class="row"><button class="btn primary sm" data-act="revive">↻ Revivir</button><button class="btn sm danger" data-act="kill">Despedir</button></div></div>`;
+  else if (d.spawnReq) alert = spawnBox(d);
   else if (d.ask) alert = `<div class="alert ask-box" id="rp-alert"><b>Te pregunta</b>${askForm(d, 'p')}</div>`;
   else if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission) alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
@@ -2073,7 +2121,7 @@ function renderHover() {
     ${titleOf(d) ? `<div class="hc-title${d.title ? '' : ' auto'}">📌 ${esc(titleOf(d))}</div>` : ''}
     <div class="hc-act">${esc(hoverActivity(d).slice(0, 120))}</div>
     ${d.state === 'input' && d.inputAt ? `<div class="hc-wait">Esperando tu respuesta hace <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></div>` : ''}
-    ${d.note ? `<div class="hc-note">🗒 ${esc(d.note)}</div>` : ''}${isSleepy(d) ? `<div class="hc-org">💤 Dormido: ${fmtDur(sleepMs(d))} sin actividad</div>` : ''}${d.ctx ? `<div class="hc-org">Contexto ${d.ctx.pct}% lleno</div>` : ''}<div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
+    ${d.note ? `<div class="hc-note">🗒 ${esc(d.note)}</div>` : ''}${isSleepy(d) ? `<div class="hc-org">💤 Dormido: ${fmtDur(sleepMs(d))} sin actividad</div>` : ''}${d.ctx ? `<div class="hc-org">Contexto ${d.ctx.pct}% lleno (${fmtTok(d.ctx.tokens)} de ${fmtTok(d.ctx.window || 200000)})</div>` : ''}<div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
     ${hover.line ? `<div class="hc-con">› ${esc(hover.line)}</div>` : ''}`;
   hover.el.style.left = a.pos.x + '%';
   hover.el.style.top = py(a.pos.y);
@@ -2306,6 +2354,7 @@ PANEL.addEventListener('click', async e => {
     if (b.dataset.act === 'follow' && a) { select(null); return follow(name); }
     if (b.dataset.act === 'qnext') return goNextWaiting();
     if (b.dataset.act === 'compact' && a) return compact(name);
+    if (b.dataset.act === 'revive' && a) return revive(name, b);
     if (b.dataset.act === 'sumkill' && a) return sumKill(name);
     if (b.dataset.act === 'arch-back') { select('@search'); return; }
     if ((b.dataset.act === 'spawn-ok' || b.dataset.act === 'spawn-no') && a?.data.spawnReq) { b.disabled = true; await decideSpawn(a.data, b.dataset.act === 'spawn-ok'); return; }
