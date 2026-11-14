@@ -1661,6 +1661,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/usage') return send(res, 200, { weeks: officeUsage() });
     if (req.method === 'GET' && url.pathname === '/api/claude-status') return send(res, 200, await claudeStatus(url.searchParams.get('refresh') === '1'));
     if (req.method === 'GET' && url.pathname === '/api/skills') return send(res, 200, { skills: listSkills() });
+    // Repos de la carpeta de trabajo (primer nivel con .git): el autocompletado del chat los sugiere.
+    if (req.method === 'GET' && url.pathname === '/api/vocab') {
+      let repos = [];
+      try { repos = fs.readdirSync(WORKSPACE, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.') && fs.existsSync(path.join(WORKSPACE, e.name, '.git'))).map(e => e.name).sort(); } catch { /* sin carpeta */ }
+      return send(res, 200, { repos });
+    }
     if (req.method === 'POST' && url.pathname === '/api/routines') {
       const rt = createRoutine(await readBody(req));
       emitRoutines();
