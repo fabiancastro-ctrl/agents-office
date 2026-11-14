@@ -54,7 +54,7 @@ function ensureDesks(n) {
     el.className = 'desk'; el.dataset.desk = i;
     // Silla y algún objeto (taza o planta) para que los escritorios no sean todos iguales.
     const item = i % 3 === 1 ? '<i class="mug"></i>' : i % 4 === 2 ? '<i class="dplant"></i>' : '';
-    el.innerHTML = `<i class="ctxm" aria-hidden="true"><b></b></i><i class="chair"></i><div class="mon"><i></i></div><div class="mon m2"><i></i></div><div class="kb"></div><i class="mpad"></i><i class="mouse"></i>${item}<i class="clutter"></i><div class="paper" hidden></div><span class="dn">${String(i + 1).padStart(2, '0')}</span>`;
+    el.innerHTML = `<i class="ctxm" aria-hidden="true"><b></b></i><i class="chair"></i><div class="mon"><i></i></div><div class="mon m2"><i></i></div><div class="kb"></div><i class="mpad"></i><i class="mouse"></i>${item}<i class="clutter"></i><i class="dnote" aria-hidden="true"></i><div class="paper" hidden></div><span class="dn">${String(i + 1).padStart(2, '0')}</span>`;
     MAP.appendChild(el);
     deskEls.push({el, paper: el.querySelector('.paper')});
   }
@@ -301,7 +301,7 @@ function upsert(d, fromSnapshot = false) {
 
 function vacate(place, a) {
   const desk = deskFor(place);
-  if (desk) { desk.el.classList.remove('on', 'deleg'); desk.paper.hidden = true; desk.el.dataset.cl = 0; desk.el.title = ''; delete desk.el.dataset.ctx; }
+  if (desk) { desk.el.classList.remove('on', 'deleg'); desk.paper.hidden = true; desk.el.dataset.cl = 0; desk.el.title = ''; delete desk.el.dataset.ctx; desk.el.classList.remove('noted'); }
   for (const el of a.subEls.values()) el.remove();
   a.subEls.clear();
   a.extraEl?.remove(); a.extraEl = null;
@@ -383,10 +383,10 @@ function paint(a) {
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
   const tool = shownTool(a), urg = urgency(d);
-  a.el.className = ['robot', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : ''].filter(Boolean).join(' ');
+  a.el.className = ['robot', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : ''].filter(Boolean).join(' ');
   // Pide robots nuevos: cartel propio (no «LISTO») para que se vea que espera tu aprobación.
   a.sign.textContent = d.spawnReq ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?` : d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
-  const text = d.spawnReq ? `Quiero lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: apruébalo en mi ventana` : d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
+  const text = d.summaryPending ? 'Escribo mi resumen y me voy' : d.spawnReq ? `Quiero lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: apruébalo en mi ventana` : d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
   if (text && text !== a.lastBubble) {
     a.lastBubble = text;
     a.bubble.textContent = text; a.bubble.title = text; a.bubble.hidden = false;
@@ -404,6 +404,7 @@ function paint(a) {
     const pct = d.ctx?.pct ?? 0;
     desk.el.dataset.cl = pct >= 75 ? 3 : pct >= 50 ? 2 : pct >= 25 ? 1 : 0;
     if (d.ctx) { desk.el.dataset.ctx = pct >= 75 ? 'hi' : pct >= 50 ? 'mid' : 'lo'; desk.el.style.setProperty('--ctx', Math.min(100, pct) + '%'); } else delete desk.el.dataset.ctx;
+    desk.el.classList.toggle('noted', !!d.note);
     desk.el.title = d.ctx ? `${d.name} · contexto ${pct}% lleno (${fmtTok(d.ctx.tokens)} tokens)` : '';
     desk.paper.hidden = !pend;
     desk.paper.dataset.count = pend > 1 ? pend : '';
@@ -899,12 +900,12 @@ function cardHtml(a) {
   else if (d.hold) actions = `<button class="btn primary sm" data-card-act="hold-allow">Aprobar</button><button class="btn danger sm" data-card-act="hold-deny">Denegar</button><button class="btn sm" data-card-act="open">Ver</button>`;
   else if (d.needsPermission) actions = `<button class="btn primary sm" data-card-act="perm-approve">Aprobar</button><button class="btn danger sm" data-card-act="perm-reject">Rechazar</button><button class="btn sm" data-card-act="open">Ver consola</button>`;
   else if (d.state === 'input') actions = `<form class="rc-reply" data-card-reply><input id="reply-${esc(d.name)}" placeholder="Responder a ${esc(d.name)}…" autocomplete="off"><button class="btn primary sm">Enviar</button></form>`;
-  else if (d.state === 'done') actions = `<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
+  else if (d.state === 'done') actions = `${isSleepy(d) ? `<span class="rc-sleep" title="Sin actividad hace ${fmtDur(sleepMs(d))}. Despídelo con su resumen y retoma la tarea cuando vuelva lo que espera.">💤 ${fmtDur(sleepMs(d))}</span>${canSummary(d) ? '<button class="btn sm" data-card-act="sumkill">📝 Resumen y despedir</button>' : ''}` : ''}${canCompact(d) ? `<button class="btn sm" data-card-act="compact" title="Contexto al ${d.ctx.pct} %">🧹 Compactar</button>` : ''}<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
   const stuck = isStuck(d), urg = urgency(d);
   const cls = ['rc', `g-${g}`, `s-${d.state}`, urg ? `urg-${urg}` : '', stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
   return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % 8]}">
     <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</span>
-      <div class="rc-t"><b>${esc(d.name)}</b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">📌 ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small></div>${pill}</div>
+      <div class="rc-t"><b>${esc(d.name)}</b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">📌 ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small>${d.note ? `<span class="rc-note" title="${esc(d.note)}">🗒 ${esc(d.note)}</span>` : ''}</div>${pill}</div>
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
     <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
       ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">⏸ sin actividad ${fmtDur(idleMs(d))}</span>` : ''}
@@ -971,6 +972,8 @@ CARDS.addEventListener('click', async e => {
     switch (b.dataset.cardAct) {
       case 'open': return select(name);
       case 'again': return a && launchAgain(a.data);
+      case 'compact': return a && compact(a.data.name);
+      case 'sumkill': return a && sumKill(a.data.name);
       case 'docs': return a?.data.docs.length && showDoc(a.data.docs[a.data.docs.length - 1].path);
       case 'perm-approve': return await api('POST', `/api/robots/${name}/permission`, {decision: 'approve'});
       case 'perm-reject': return await api('POST', `/api/robots/${name}/permission`, {decision: 'reject'});
@@ -1620,6 +1623,42 @@ PANEL.addEventListener('click', async e => {
 });
 // El título que pusiste o, si no hay, uno sugerido a partir del encargo (se ve más tenue).
 const titleOf = d => d.title || suggestTitle(d.request);
+// Nota tuya pegada al robot: qué está esperando, a quién, qué falta. Se guarda en la oficina y en el archivo.
+const noteUi = {editing: null};
+function noteEditor(d) {
+  if (noteUi.editing === d.name) return `<form class="rt-note edit" id="note-form" data-robot="${esc(d.name)}"><input id="note-in" maxlength="300" value="${esc(d.note || '')}" placeholder="Ej.: esperando respuesta de Ramiro sobre el stock" autocomplete="off"><button class="btn primary sm">Guardar</button><button type="button" class="btn sm" data-note="cancel">Cancelar</button></form>`;
+  return d.note ? `<div class="rt-note" id="note-view"><span>🗒 ${esc(d.note)}</span><button type="button" class="btn sm ghost" data-note="edit">✎</button><button type="button" class="btn sm ghost" data-note="clear" title="Quitar la nota">✕</button></div>`
+    : `<button type="button" class="btn sm ghost" id="note-view" data-note="edit" title="Una nota tuya: qué espera, de quién, qué falta">🗒 Nota</button>`;
+}
+PANEL.addEventListener('click', e => {
+  const b = e.target.closest('[data-note]'); if (!b) return;
+  const d = st.robots.get(st.selected)?.data; if (!d) return;
+  if (b.dataset.note === 'clear') return void api('POST', `/api/robots/${d.name}/note`, {note: ''}).catch(() => {});
+  noteUi.editing = b.dataset.note === 'edit' ? d.name : null;
+  renderPanel();
+  if (noteUi.editing) { const i = $('#note-in'); i?.focus(); i?.select(); }
+});
+PANEL.addEventListener('keydown', e => { if (e.key === 'Escape' && e.target.id === 'note-in') { e.stopPropagation(); e.preventDefault(); noteUi.editing = null; renderPanel(); } }, true);
+PANEL.addEventListener('submit', async e => {
+  if (e.target.id !== 'note-form') return;
+  e.preventDefault();
+  try { await api('POST', `/api/robots/${e.target.dataset.robot}/note`, {note: $('#note-in').value}); noteUi.editing = null; renderPanel(); } catch { /* toast ya mostrado */ }
+});
+// Contexto casi lleno (75 %+): un botón le manda /compact sin abrir su consola. Solo cuando no está en medio de algo.
+const canCompact = d => (d.ctx?.pct ?? 0) >= 75 && (d.state === 'done' || (d.state === 'input' && !d.needsPermission && !d.hold && !d.ask));
+async function compact(name) {
+  try { await api('POST', `/api/robots/${name}/say`, {text: '/compact'}); toast(`${name} está compactando su contexto`); } catch { /* toast ya mostrado */ }
+}
+// Dormido: listo y sin actividad hace más de 2 h (por lo general espera algo de afuera). Se sugiere despedirlo:
+// «📝 Despedir con su resumen» guarda un super resumen y con él otro robot retoma la tarea cuando vuelva lo que esperaba.
+const canSummary = d => !d.summaryPending && (d.state === 'done' || (d.state === 'input' && !d.needsPermission && !d.hold && !d.ask));
+async function sumKill(name) {
+  try { await api('POST', `/api/robots/${name}/despedir-con-resumen`); toast(`${name} está escribiendo su resumen; al terminar se va`); } catch { /* toast ya mostrado */ }
+}
+const SLEEP_MS = 2 * 3600e3;
+const sleepMs = d => d.state === 'done' && !d.spawnReq ? Date.now() - (Date.parse(d.lastEventAt || d.timeline?.at(-1)?.at || '') || Date.now()) : 0;
+const isSleepy = d => sleepMs(d) >= SLEEP_MS;
+
 function titleEditor(d) {
   if (titleUi.editing === d.name) return `<form class="rt-title edit" id="title-form" data-robot="${esc(d.name)}"><input id="title-in" maxlength="60" value="${esc(d.title || titleOf(d))}" placeholder="Ej.: Tareas de QA · Revisando wallet#32 Ramiro" autocomplete="off"><button class="btn primary sm">Guardar</button><button type="button" class="btn sm" data-title="cancel">Cancelar</button></form>`;
   const sug = !d.title && titleOf(d);
@@ -1654,6 +1693,7 @@ PANEL.addEventListener('click', e => { const b = e.target.closest('[data-unqueue
 async function decideSpawn(d, allow) {
   const f = PANEL.querySelector(`form[data-spawn="${CSS.escape(d.spawnReq.id)}"]`);
   const items = f ? d.spawnReq.items.map((it, i) => ({title: f.querySelector(`[data-sp-t="${i}"]`).value, text: f.querySelector(`[data-sp-x="${i}"]`).value, on: f.querySelector(`[data-sp-on="${i}"]`).checked})).filter(x => x.on && x.text.trim()) : d.spawnReq.items;
+  if (allow && items.length && !await quotaOk(`${d.name} quiere lanzar ${items.length} robot${items.length === 1 ? '' : 's'}.`)) return;
   const r = await api('POST', `/api/robots/${d.name}/encargos/${d.spawnReq.id}`, {decision: allow && items.length ? 'approve' : 'reject', items});
   if (allow) toast(r.launched?.length ? `Entraron ${r.launched.join(', ')}${r.queued ? ` · ${r.queued} esperan cupo` : ''}` : r.queued ? `${r.queued} esperan cupo en la puerta` : 'No lanzaste ninguno');
 }
@@ -1678,7 +1718,7 @@ function robotPanel(a) {
   else if (d.hold) alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission) alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
-    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}${lookEditor(d)}<div class="ph-tools" id="ph-tools"><button type="button" class="btn sm ghost" data-act="follow" title="Cierra esta ventana y la cámara del mapa sigue a este robot (tecla F, o Mayús + clic en el robot)">📍 Seguir en el mapa</button>${sidePicker(d)}</div><div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
+    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</div><div style="min-width:0"><h3>${esc(d.name)}</h3>${titleEditor(d)}${noteEditor(d)}${lookEditor(d)}<div class="ph-tools" id="ph-tools">${canCompact(d) ? `<button type="button" class="btn sm" data-act="compact" title="Contexto al ${d.ctx.pct} %: le manda /compact para resumir su conversación y liberar espacio">🧹 Compactar (${d.ctx.pct} %)</button>` : ''}${isSleepy(d) ? `<span class="rc-sleep">💤 ${fmtDur(sleepMs(d))} sin actividad</span>` : ''}<button type="button" class="btn sm ghost" data-act="follow" title="Cierra esta ventana y la cámara del mapa sigue a este robot (tecla F, o Mayús + clic en el robot)">📍 Seguir en el mapa</button>${sidePicker(d)}</div><div class="sub-h">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)}</div><div class="origin">${esc(d.origin || 'Origen desconocido')}</div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
     ${queueBar(d)}${alert}
     <div class="rp-grid" id="rp-grid">
       <div class="rp-col">
@@ -1700,12 +1740,25 @@ function robotPanel(a) {
           <button class="btn sm" data-act="console">Abrir consola en Terminal</button>
           <button class="btn sm" data-act="again" title="Abre «Nuevo encargo» con lo mismo que le pediste a este robot">↻ Lanzar otro igual</button>
           <button class="btn sm" data-act="fav" title="Guarda este encargo como acceso rápido en «Nuevo encargo»">★ Frecuente</button>
-          <button class="btn sm danger" data-act="kill">Dar de baja</button>
+          ${canSummary(d) ? `<button class="btn sm" data-act="sumkill" title="Le pide un super resumen de lo que hacía, lo guarda como documento en la oficina y lo despide. Con ese resumen otro robot puede retomar la tarea.">📝 Despedir con su resumen</button>` : d.summaryPending ? '<span class="note">📝 Escribiendo su resumen para irse…</span>' : ''}
+          <button class="btn sm danger" data-act="kill" title="Lo despide ya; la oficina arma un resumen con lo que sabe">Dar de baja</button>
         </div>
         <div class="stats">tokens · salida ${u.out ?? 0} · entrada ${u.in ?? 0} · caché leída ${u.cacheRead ?? 0} · caché escrita ${u.cacheWrite ?? 0}${d.permissionMode ? ' · permisos: ' + esc(d.permissionMode) : ''}</div>
         <div class="note">tmux attach -t ${esc(st.config.session || 'office')}:${esc(d.name)} · sesión ${esc(d.sessionId)}</div>
       </div>
     </div>`;
+}
+
+// Aviso de cuota: antes de lanzar o retomar, si algún límite de tu suscripción va en 80 % o más, te pregunta.
+// Usa lo último leído de /usage (hasta 10 min); si no hay, lo pide con un tope de 4 s y, si no llega, no frena.
+async function quotaOk(what) {
+  let c = st.claude;
+  if (!(c && Date.now() - Date.parse(c.at) < 10 * 60e3)) {
+    try { c = await Promise.race([fetch('/api/claude-status').then(r => r.ok ? r.json() : null), new Promise(r => setTimeout(() => r(null), 4000))]); if (c) st.claude = c; } catch { c = null; }
+  }
+  const hot = (c?.limits || []).filter(l => l.pct >= 80);
+  if (!hot.length) return true;
+  return confirm(`${what}\n\nVas en ${hot.map(l => `${l.pct} % de «${l.title}»${l.resets ? ` (${l.resets})` : ''}`).join(' y ')}. Cada robot gasta de la misma cuota.\n\n¿Seguir igual?`);
 }
 
 function newPanel() {
@@ -2020,7 +2073,7 @@ function renderHover() {
     ${titleOf(d) ? `<div class="hc-title${d.title ? '' : ' auto'}">📌 ${esc(titleOf(d))}</div>` : ''}
     <div class="hc-act">${esc(hoverActivity(d).slice(0, 120))}</div>
     ${d.state === 'input' && d.inputAt ? `<div class="hc-wait">Esperando tu respuesta hace <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></div>` : ''}
-    ${d.ctx ? `<div class="hc-org">Contexto ${d.ctx.pct}% lleno</div>` : ''}<div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
+    ${d.note ? `<div class="hc-note">🗒 ${esc(d.note)}</div>` : ''}${isSleepy(d) ? `<div class="hc-org">💤 Dormido: ${fmtDur(sleepMs(d))} sin actividad</div>` : ''}${d.ctx ? `<div class="hc-org">Contexto ${d.ctx.pct}% lleno</div>` : ''}<div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
     ${hover.line ? `<div class="hc-con">› ${esc(hover.line)}</div>` : ''}`;
   hover.el.style.left = a.pos.x + '%';
   hover.el.style.top = py(a.pos.y);
@@ -2121,6 +2174,7 @@ PANEL.addEventListener('input', e => {
   if (v !== e.target.value) e.target.value = v;
 });
 
+let launchingJob = false;
 PANEL.addEventListener('submit', async e => {
   e.preventDefault();
   if (e.target.id === 'job-form') {
@@ -2130,12 +2184,17 @@ PANEL.addEventListener('submit', async e => {
       ? {kind: 'libre', text: $('#job-text').value, permissionMode: $('#job-mode').value, name: $('#job-name').value.trim() || undefined, title: $('#job-title').value.trim() || undefined, attachments}
       : {kind: 'skill', skill: $('#job-skill').value, args: $('#job-args').value, permissionMode: $('#job-mode').value, name: $('#job-name').value.trim() || undefined, title: $('#job-title').value.trim() || undefined, attachments};
     body.origin = 'Lanzado por ti desde «Nuevo encargo»';
+    // Mientras se revisa la cuota y se abre la consola el formulario queda bloqueado: un segundo clic no lanza otro.
+    if (launchingJob) return;
+    launchingJob = true;
+    const btns = [...e.target.querySelectorAll('button')]; btns.forEach(b => { b.disabled = true; });
     try {
+      if (!await quotaOk('Vas a lanzar un robot nuevo.')) return;
       const {name} = await api('POST', '/api/robots', body);
       ['job-text', 'job-args', 'job-name'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       st.att.job = [];
       select(name);
-    } catch { /* toast ya mostrado */ }
+    } catch { /* toast ya mostrado */ } finally { launchingJob = false; btns.forEach(b => { b.disabled = false; }); }
   }
   if (e.target.id === 'rt-form') {
     const libre = $('#rt-kind-libre').checked;
@@ -2178,6 +2237,7 @@ PANEL.addEventListener('submit', async e => {
     const body = skill ? {kind: 'skill', skill: $('#sk-skill').value, args: $('#sk-args').value} : {kind: 'libre', text: $('#sk-text').value};
     Object.assign(body, {sala: id, permissionMode: $('#sk-mode').value, origin: `Lanzado por ti en la sala «${s?.name || id}»`});
     try {
+      if (!await quotaOk('Vas a lanzar un robot en la sala.')) return;
       const {name} = await api('POST', '/api/robots', body);
       ['sk-text', 'sk-args'].forEach(x => { document.getElementById(x).value = ''; });
       select(name);
@@ -2245,6 +2305,8 @@ PANEL.addEventListener('click', async e => {
   try {
     if (b.dataset.act === 'follow' && a) { select(null); return follow(name); }
     if (b.dataset.act === 'qnext') return goNextWaiting();
+    if (b.dataset.act === 'compact' && a) return compact(name);
+    if (b.dataset.act === 'sumkill' && a) return sumKill(name);
     if (b.dataset.act === 'arch-back') { select('@search'); return; }
     if ((b.dataset.act === 'spawn-ok' || b.dataset.act === 'spawn-no') && a?.data.spawnReq) { b.disabled = true; await decideSpawn(a.data, b.dataset.act === 'spawn-ok'); return; }
     if (b.dataset.act === 'console') await api('POST', `/api/robots/${name}/console`);
@@ -2561,7 +2623,7 @@ async function searchArchive() {
     const av = a => robotHead(COLORS[(a.color || 0) % 8], lookOf(a.name, null, {look: a.look}));
     const when = a => new Date(a.leftAt).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
     if (!q || q.length < 2) {
-      box.innerHTML = r.recent?.length ? `<section class="sr-g"><h4>Se fueron hace poco <small>${r.total} en el archivo</small></h4>${r.recent.slice(0, 12).map(a => `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-w">${av(a)}${esc(a.name)} · se fue ${when(a)}</span><span class="sr-t">${esc(a.title || a.label)}</span></button>`).join('')}</section>` : '';
+      box.innerHTML = r.recent?.length ? `<section class="sr-g"><h4>Se fueron hace poco <small>${r.total} en el archivo · ábrelos para ver su resumen o retomarlos</small></h4>${r.recent.slice(0, 12).map(a => `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-w">${av(a)}${esc(a.name)} · se fue ${when(a)}</span><span class="sr-t">${esc(a.title || a.label)}${a.note ? ` · 🗒 ${esc(a.note)}` : ''}</span></button>`).join('')}</section>` : '';
       return;
     }
     const qn = norm(q);
@@ -2578,14 +2640,25 @@ document.addEventListener('click', async e => {
     PANEL.dataset.view = ''; select('@arch');
   } catch { toast('No se pudo abrir'); }
 });
+PANEL.addEventListener('submit', async e => {
+  if (e.target.id !== 'retake-form') return;
+  e.preventDefault();
+  const b = e.target.querySelector('button');
+  if (!await quotaOk(`Vas a lanzar un robot para retomar la tarea de ${st.archView?.name || 'este robot'}.`)) return;
+  b.disabled = true;
+  try { const {name} = await api('POST', `/api/despedidos/${e.target.dataset.archId}/retomar`, {text: $('#retake-in').value}); toast(`${name} retoma la tarea con el resumen`); st.archView = null; select(name); }
+  catch { b.disabled = false; }
+});
 // Conversación de un robot que ya se fue (solo lectura): sus mensajes y los tuyos, y sus documentos.
 function archPanel(a) {
   if (!a) return '<p class="muted">Abre un robot desde el buscador.</p>';
   const L = lookOf(a.name, null, {look: a.look});
   const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
-  return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % 8], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>📌 ${esc(a.title)}</b></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="arch-back">← Buscar</button></div>
+  return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % 8], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>📌 ${esc(a.title)}</b></div>` : ''}${a.note ? `<div class="rt-note"><span>🗒 ${esc(a.note)}</span></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="arch-back">← Buscar</button></div>
     <div class="rp-grid"><div class="rp-col"><h4>Conversación <small class="muted">(sin herramientas)</small></h4><div class="log" id="arch-log" data-src="@arch" style="--c:${COLORS[(a.color || 0) % 8]}">${renderLog(a.log, a.name)}</div></div>
-    <div class="rp-col">${a.docs.length ? `<h4>Documentos (${a.docs.length})</h4><div class="list doclist">${a.docs.slice().reverse().map(p => `<div class="item" data-docpath="${esc(p)}" title="${esc(p)}"><div class="meta-i"><b>${esc(fileName(p))}</b><div>${esc(shortPath(p))}</div></div></div>`).join('')}</div>` : '<p class="muted">No entregó documentos.</p>'}</div></div>`;
+    <div class="rp-col"><div class="sumbox lg agent" style="--c:${COLORS[(a.color || 0) % 8]}"><span class="w">📝 Super resumen · ${a.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'}</span><span class="lg-acts"><button type="button" class="cp-btn cp-msg" data-copy="msg">📋 Copiar</button></span><div class="x md-chat">${mdHtml(a.summary || '_Sin resumen._')}</div></div>
+    <form class="rehire" id="retake-form" data-arch-id="${esc(a.id)}"><h4>↻ Retomar con este resumen</h4><p class="note">Entra un robot nuevo solo con este resumen (no con toda su conversación). Si necesita más, se lo das tú o lo busca en los documentos y la memoria.</p><textarea id="retake-in" rows="3" placeholder="Qué cambió o qué sigue. Ej.: Ramiro ya respondió: el stock lo maneja el WMS">${esc(a.note ? `Ya llegó lo que esperabas (${a.note}). ` : '')}</textarea><button class="btn primary sm">Retomar</button></form>
+    ${a.docs.length ? `<h4>Documentos (${a.docs.length})</h4><div class="list doclist">${a.docs.slice().reverse().map(p => `<div class="item" data-docpath="${esc(p)}" title="${esc(p)}"><div class="meta-i"><b>${esc(fileName(p))}</b><div>${esc(shortPath(p))}</div></div></div>`).join('')}</div>` : '<p class="muted">No entregó documentos.</p>'}</div></div>`;
 }
 PANEL.addEventListener('input', e => {
   if (e.target.id !== 'search-in') return;

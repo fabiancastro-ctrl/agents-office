@@ -1160,3 +1160,28 @@ html[data-theme=light] .fwd label{color:#3b475a}
 .robot.spawn .sign{display:block;background:var(--violet);color:#1b1240;border-color:#4b3d8f;animation:wave 1s ease-in-out infinite;box-shadow:0 0 10px rgba(169,156,242,.6)}
 .sr-sep{margin:6px 0 0;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;border-top:1px dashed var(--line);padding-top:10px}
 .sr-w .rhead{width:16px;height:16px;vertical-align:-3px;margin-right:4px}
+
+/* ---------- notas, dormidos y recontratar ---------- */
+.rt-note{display:flex;align-items:center;gap:6px;margin:3px 0;font-size:12.5px;color:#f6e7b0}
+.rt-note>span{background:color-mix(in srgb,#ffd96b 14%,transparent);border:1px dashed color-mix(in srgb,#ffd96b 45%,transparent);border-radius:6px;padding:2px 8px;min-width:0;overflow-wrap:anywhere}
+.rt-note.edit input{flex:1;min-width:220px;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:inherit;font-size:12.5px}
+#note-view.btn{margin:3px 0}
+.rc-note{display:block;font-size:11.5px;color:#f6e7b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-sleep{font-size:11.5px;color:#9fb3cc;margin-right:auto;align-self:center}
+.hc-note{background:#fff3c4;color:#4a3a10;border-radius:5px;padding:2px 6px;font-size:11px}
+/* post-it en el escritorio del robot con nota */
+.desk .dnote{display:none;position:absolute;left:44%;top:6%;width:10%;height:30%;background:#ffd96b;transform:rotate(-8deg);box-shadow:1px 1px 0 rgba(0,0,0,.35);z-index:3}
+.desk .dnote::after{content:"";position:absolute;left:18%;right:18%;top:35%;height:1px;background:#b48a1c;box-shadow:0 3px 0 #b48a1c}
+.desk.noted .dnote{display:block}
+/* dormido: «zzz» sobre la cabeza y el cartel apagado */
+.robot.sleepy .sign{opacity:.55;animation:none}
+.robot.sleepy::after{content:"z z z";position:absolute;left:-26px;top:-4px;font:700 12px/1 var(--mono);color:#bfe6ff;text-shadow:0 0 4px rgba(0,0,0,.8);letter-spacing:1px;animation:zz 2.4s ease-in-out infinite;pointer-events:none;z-index:3}
+@keyframes zz{0%{opacity:0;transform:translateY(4px)}40%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+.robot.sleepy .eye{opacity:.25}
+.rehire{display:grid;gap:6px;border:1px solid color-mix(in srgb,var(--teal) 40%,var(--line));border-radius:8px;padding:10px 12px;margin-bottom:12px;background:color-mix(in srgb,var(--teal) 6%,transparent)}
+.rehire h4{margin:0}
+.rehire textarea{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;font-size:12.5px;resize:vertical}
+.rehire .btn{justify-self:start}
+html[data-theme=light] .rt-note{color:#6b5410}
+html[data-theme=light] .rc-note{color:#7a5f12}
+.sumbox{max-width:100%!important;margin-bottom:12px}

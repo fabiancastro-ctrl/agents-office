@@ -146,7 +146,7 @@ function view(r, withLog = false) {
     state: r.state, place: r.place, subs: r.subs, pendingSubs: r.pendingSubs,
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
-    parent: r.parent || null, spawnReq: r.spawnReq || null, kids: kidsOf(r.name),
+    parent: r.parent || null, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending,
     permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null
   };
   if (withLog) v.log = r.log.slice(-150);
@@ -403,7 +403,7 @@ function saveState() {
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
         leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt,
-        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported
+        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported, note: r.note || ''
       })),
       spawnQueue
     };
@@ -600,8 +600,16 @@ function reportToParent(r, lastMessage) {
 
 /* ---------- ciclo de vida del turno ---------- */
 
+const SUMMARY_ASK = '[Oficina] Te vamos a despedir. Responde SOLO con un super resumen en Markdown (máximo 25 líneas) para que otro robot, '
+  + 'sin tu contexto, pueda retomar la tarea: objetivo, qué hiciste, en qué quedaste, qué falta, qué estabas esperando (de quién o de qué), '
+  + 'y repos, ramas, PRs, archivos y documentos clave con su ruta. Sin saludos ni preguntas. No uses herramientas.';
 function finishTurn(r, lastMessage) {
   if (lastMessage) r.bubble = trunc(lastMessage, 140);
+  if (r.summaryPending && r.pendingSubs <= 0 && String(lastMessage ?? '').trim()) { // su resumen: se guarda y se va
+    r.summaryPending = false;
+    removeRobot(r, 'despedido con su resumen', lastMessage);
+    return;
+  }
   r.activity = '';
   r.tool = '';
   if (r.pendingSubs > 0) { setState(r, 'delegating'); emit(r); return; }
@@ -734,17 +742,40 @@ const ARCH_MAX = 200;
 let archive = [];
 try { archive = JSON.parse(fs.readFileSync(ARCH_FILE, 'utf8')); } catch { /* sin despedidos */ }
 const normText = t => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-function archiveRobot(r, reason) {
+// Super resumen de lo que hacía: el que escribió el robot al despedirlo con «📝 Despedir con su resumen» o, si no,
+// uno que arma la oficina con el encargo, tu nota, su último mensaje y sus documentos. Queda como documento en
+// resumenes/ (carpeta de datos de la oficina) y es lo único que recibe el robot que retome la tarea.
+const SUM_DIR = path.join(RUNS, 'resumenes');
+function autoSummary(r) {
+  const last = [...r.log].reverse().find(l => l.kind === 'agent')?.text || '';
+  const oneLine = t => String(t ?? '').replace(/\s+/g, ' ').trim();
+  return [`- **Encargo:** ${trunc(oneLine(r.label), 300)}`,
+    r.note ? `- **Nota:** ${oneLine(r.note)}` : '',
+    `- **Estado al irse:** ${r.state === 'done' ? 'había terminado su turno' : r.state === 'input' ? 'esperaba tu respuesta' : 'estaba trabajando'}`,
+    last ? `\n## Su último mensaje\n\n${last.slice(0, 2500)}` : '',
+    r.docs.length ? `\n## Documentos\n\n${r.docs.map(d => `- ${d.path}`).join('\n')}` : ''].filter(Boolean).join('\n');
+}
+function writeSummary(r, summary, by) {
+  const day = now().slice(0, 10);
+  const file = path.join(SUM_DIR, `${day}-${r.name}-${crypto.randomBytes(2).toString('hex')}.md`);
+  const head = `# ${r.name}${r.title ? ` · ${r.title}` : ''}\n\n_${by === 'robot' ? 'Resumen escrito por el robot al despedirlo' : 'Resumen armado por la oficina al despedirlo'} · entró ${r.startedAt?.slice(0, 16).replace('T', ' ')} · se fue ${now().slice(0, 16).replace('T', ' ')}_\n\n`;
+  try { fs.mkdirSync(SUM_DIR, { recursive: true }); fs.writeFileSync(file, head + summary.trim() + '\n'); return file; } catch { return null; }
+}
+function archiveRobot(r, reason, robotSummary) {
+  const summary = String(robotSummary || '').trim() || autoSummary(r);
+  const by = robotSummary ? 'robot' : 'oficina';
+  const summaryPath = writeSummary(r, summary, by);
   const log = r.log.filter(l => ['user', 'agent', 'bg', 'doc'].includes(l.kind)).slice(-80)
     .map(l => ({ kind: l.kind, at: l.at, text: String(l.text ?? '').slice(0, 6000), ...(l.who ? { who: l.who } : {}) }));
-  if (!log.length && !r.docs.length) return; // no hizo nada que valga la pena buscar
+  if (!log.length && !r.docs.length && !robotSummary) return; // no hizo nada que valga la pena buscar
   archive.push({ id: crypto.randomBytes(4).toString('hex'), name: r.name, title: r.title || '', label: r.label, kind: r.kind, skill: r.skill,
-    origin: r.origin, color: r.color, look: { ...lookFromName(r.name), ...(r.look || {}) }, parent: r.parent || null,
+    origin: r.origin, color: r.color, look: { ...lookFromName(r.name), ...(r.look || {}) }, parent: r.parent || null, note: r.note || '',
+    summary, summaryBy: by, summaryPath, permissionMode: r.permissionMode || '', request: r.request || null,
     startedAt: r.startedAt, leftAt: now(), reason, docs: r.docs.map(d => d.path), log });
   if (archive.length > ARCH_MAX) archive = archive.slice(-ARCH_MAX);
   fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
 }
-const archMeta = a => ({ id: a.id, name: a.name, title: a.title, label: a.label, color: a.color, look: a.look, startedAt: a.startedAt, leftAt: a.leftAt, docs: a.docs.length });
+const archMeta = a => ({ id: a.id, name: a.name, title: a.title, label: a.label, color: a.color, look: a.look, startedAt: a.startedAt, leftAt: a.leftAt, docs: a.docs.length, note: a.note || '' });
 // Busca en el archivo (sin tildes ni mayúsculas): devuelve por robot las posiciones de los mensajes que coinciden.
 function searchArchive(q) {
   const qn = normText(q).trim();
@@ -753,16 +784,33 @@ function searchArchive(q) {
   for (const a of archive.slice().reverse()) {
     const hits = [];
     a.log.forEach((l, i) => { if (hits.length < 25 && normText(l.text).includes(qn)) hits.push({ i, at: l.at, kind: l.kind, who: l.who || null, text: l.text.slice(0, 1500) }); });
-    const inMeta = !hits.length && normText(`${a.name} ${a.title} ${a.label}`).includes(qn);
+    const inMeta = !hits.length && normText(`${a.name} ${a.title} ${a.label} ${a.note || ''} ${a.summary || ''}`).includes(qn);
     if (hits.length || inMeta) out.push({ ...archMeta(a), hits });
     if (out.length >= 40) break;
   }
   return out;
 }
 
-async function removeRobot(r, reason) {
+// Retomar: entra un robot nuevo (sesión nueva) con solo el super resumen del que se fue y tu instrucción. Si necesita
+// más contexto, se lo das tú o lo busca en los documentos y la memoria del proyecto.
+async function retake(id, text) {
+  const a = archive.find(x => x.id === id);
+  if (!a) throw new Error('Ese robot ya no está en el archivo.');
+  const summary = a.summary || '(sin resumen)';
+  const prompt = `Retomas una tarea que dejó el robot ${a.name}${a.title ? ` («${a.title}»)` : ''}, que se fue el ${new Date(a.leftAt).toLocaleString('es')}. `
+    + `No tienes su contexto: solo este resumen${a.summaryPath ? ` (también en ${a.summaryPath})` : ''}.\n\n---\n${summary}\n---\n\n`
+    + `Si necesitas más contexto, pídemelo o búscalo en los documentos que menciona y en la memoria del proyecto.`
+    + (String(text || '').trim() ? `\n\n${String(text).trim()}` : '');
+  const r = await launch({ kind: 'libre', text: prompt, name: robots.has(a.name) ? undefined : a.name, title: a.title, label: `Retoma: ${a.title || a.label}`,
+    color: a.color, look: a.look, origin: `Retoma la tarea de ${a.name} con su resumen (se había ido el ${new Date(a.leftAt).toLocaleString('es')})` });
+  r.note = a.note || '';
+  emit(r);
+  return r;
+}
+
+async function removeRobot(r, reason, robotSummary) {
   deliver(r); // si se da de baja con documentos sin entregar, no se pierden
-  try { archiveRobot(r, reason); } catch { /* el archivo es un extra: no frena la baja */ }
+  try { archiveRobot(r, reason, robotSummary); } catch { /* el archivo es un extra: no frena la baja */ }
   r.alive = false;
   try { await run('tmux', ['kill-window', '-t', `${SESSION}:${r.name}`]); } catch { /* ya cerrada */ }
   const u = usage(r);
@@ -831,7 +879,7 @@ setInterval(() => { for (const r of robots.values()) pumpTranscript(r); }, 1000)
 
 /* ---------- hooks ---------- */
 
-function hold(r, body) {
+function hold(r, body, closers = []) {
   const id = crypto.randomBytes(3).toString('hex');
   r.hold = { id, tool: describeTool(body.tool_name, body.tool_input) };
   setState(r, 'input');
@@ -848,13 +896,14 @@ function hold(r, body) {
       r, tool: body.tool_name, input: body.tool_input,
       decide: d => { clearTimeout(timer); pending.delete(id); r.hold = null; resolve(d); }
     });
+    closers.push(() => { const p = pending.get(id); if (p) { p.decide(null); log(r, 'sys', 'La consola cerró el permiso'); emit(r); } });
   });
 }
 
 // Cuestionarios (AskUserQuestion): la oficina retiene el hook y te muestra las preguntas con sus opciones.
 // Lo que respondas vuelve como `answers` en updatedInput y el robot lo recibe como si contestaras en su consola.
 // «Responder en la consola», el reinicio de la oficina o el tiempo límite sueltan el hook y la consola muestra su menú.
-function askHold(r, body, timeoutMs = APPROVAL_TIMEOUT_MS) {
+function askHold(r, body, timeoutMs = APPROVAL_TIMEOUT_MS, closers = []) {
   const id = crypto.randomBytes(3).toString('hex');
   const questions = body.tool_input.questions.slice(0, 8).map(q => ({
     question: String(q.question ?? ''), header: trunc(q.header, 30), multiSelect: !!q.multiSelect,
@@ -869,6 +918,7 @@ function askHold(r, body, timeoutMs = APPROVAL_TIMEOUT_MS) {
     const release = (out, note) => { clearTimeout(timer); pending.delete(id); if (r.ask?.id === id) r.ask = null; if (robots.get(r.name) === r) { if (note) log(r, 'sys', note); emit(r); } resolve(out); };
     const timer = setTimeout(() => release(null, 'Las preguntas pasaron a su consola (nadie respondió en la oficina)'), timeoutMs);
     pending.set(id, { r, ask: true, input: body.tool_input, release });
+    closers.push(() => { if (pending.has(id)) { release(null, 'La consola cerró la pregunta (se respondió o canceló allá)'); if (r.state === 'input' && !r.hold && !r.needsPermission) setState(r, 'working'); emit(r); } });
   });
 }
 
@@ -914,7 +964,7 @@ function subFor(r, body) {
   return s;
 }
 
-async function onHook(name, body, via = '') {
+async function onHook(name, body, via = '', closers = []) {
   // Pregunta: la atiende el hook largo (via=ask). Si llega por el general, espera un momento por si llega el largo;
   // los robots lanzados antes de este cambio solo tienen el general y siguen como antes (9 minutos).
   if (body.hook_event_name === 'PreToolUse' && body.tool_name === 'AskUserQuestion') {
@@ -974,8 +1024,8 @@ async function onHook(name, body, via = '') {
         }
         emit(r);
       }
-      if (!sub && body.tool_name === 'AskUserQuestion' && Array.isArray(body.tool_input?.questions)) return askHold(r, body, via === 'ask' ? ASK_TIMEOUT_MS : APPROVAL_TIMEOUT_MS);
-      if (APPROVAL && HOLD_TOOLS.has(body.tool_name)) return hold(r, body);
+      if (!sub && body.tool_name === 'AskUserQuestion' && Array.isArray(body.tool_input?.questions)) return askHold(r, body, via === 'ask' ? ASK_TIMEOUT_MS : APPROVAL_TIMEOUT_MS, closers);
+      if (APPROVAL && HOLD_TOOLS.has(body.tool_name)) return hold(r, body, closers);
       break;
     }
 
@@ -1084,10 +1134,18 @@ async function guardSession() {
 async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, title, leaveWhenDone, attachments, routine, sala: salaId, parent, color, look }) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
   const active = [...robots.values()].filter(x => x.state !== 'done');
-  if (active.length >= maxRobots) throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
-  name = (name || NAMES.find(n => !robots.has(n)) || `robot-${Date.now() % 1000}`).toLowerCase();
+  if (active.length + launching.size >= maxRobots) throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
+  const taken = n => robots.has(n) || launching.has(n);
+  name = (name || NAMES.find(n => !taken(n)) || `robot-${Date.now() % 1000}`).toLowerCase();
   if (!/^[a-z0-9-]{1,20}$/.test(name)) throw new Error('Nombre inválido: usa minúsculas, números y guiones.');
-  if (robots.has(name)) throw new Error(`Ya existe un robot llamado ${name}.`);
+  if (taken(name)) throw new Error(`Ya existe un robot llamado ${name}.`);
+  // El nombre queda apartado desde ya: dos pedidos casi simultáneos (doble clic) no abren dos consolas iguales.
+  launching.add(name);
+  try { return await launchReserved({ kind, skill, args, text, permissionMode, name, origin, customLabel, title, leaveWhenDone, attachments, routine, salaId, parent, color, look }); }
+  finally { launching.delete(name); }
+}
+const launching = new Set();
+async function launchReserved({ kind, skill, args, text, permissionMode, name, origin, customLabel, title, leaveWhenDone, attachments, routine, salaId, parent, color, look }) {
 
   let prompt, label;
   if (kind === 'skill') {
@@ -1556,7 +1614,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/hook') {
       const name = url.searchParams.get('robot') || 'desconocido';
-      return send(res, 200, await onHook(name, await readBody(req), url.searchParams.get('via') || ''));
+      // Si la consola corta el hook (la cerraron, cancelaron la pregunta o se reinició), lo retenido se suelta.
+      const closers = [];
+      res.on('close', () => { if (!res.writableEnded) closers.splice(0).forEach(f => { try { f(); } catch { /* ya resuelto */ } }); });
+      return send(res, 200, await onHook(name, await readBody(req), url.searchParams.get('via') || '', closers));
     }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
@@ -1675,6 +1736,10 @@ const server = http.createServer(async (req, res) => {
       const q = url.searchParams.get('q');
       return send(res, 200, q ? { results: searchArchive(q) } : { recent: archive.slice(-30).reverse().map(archMeta), total: archive.length });
     }
+    if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2] && parts[3] === 'retomar') {
+      try { const r = await retake(parts[2], (await readBody(req)).text); return send(res, 201, { ok: true, name: r.name }); }
+      catch (e) { return send(res, 409, { error: e.message }); }
+    }
     if (req.method === 'GET' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) {
       const a = archive.find(x => x.id === parts[2]);
       return a ? send(res, 200, a) : send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
@@ -1750,6 +1815,21 @@ const server = http.createServer(async (req, res) => {
         }
         emit(r);
         return send(res, 200, { ok: true });
+      }
+      // Despedir con su resumen: le pide un super resumen (su próxima respuesta) y al recibirlo lo da de baja.
+      if (req.method === 'POST' && action === 'despedir-con-resumen') {
+        if (r.state !== 'done' && !(r.state === 'input' && !r.needsPermission && !r.hold && !r.ask)) return send(res, 409, { error: 'Está en medio de algo: espera a que termine su turno.' });
+        r.summaryPending = true;
+        log(r, 'sys', 'Le pediste su resumen para despedirlo');
+        emit(r);
+        await say(r, SUMMARY_ASK);
+        return send(res, 200, { ok: true });
+      }
+      // Nota tuya pegada al robot («esperando respuesta de Ramiro»): se ve en la tarjeta, el mapa y el archivo.
+      if (req.method === 'POST' && action === 'note') {
+        r.note = String((await readBody(req)).note ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+        emit(r);
+        return send(res, 200, { ok: true, note: r.note });
       }
       if (req.method === 'POST' && action === 'title') {
         r.title = cleanTitle((await readBody(req)).title);
