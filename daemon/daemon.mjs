@@ -1957,7 +1957,17 @@ function send(res, code, obj) {
   res.end(obj == null ? '' : JSON.stringify(obj));
 }
 
-const STATIC = { '/': 'index.html', '/app.js': 'app.js', '/robot-art.js': 'robot-art.js', '/style.css': 'style.css', '/vendor/marked.min.js': 'vendor/marked.min.js', '/vendor/purify.min.js': 'vendor/purify.min.js' };
+// La página vive en web/app/*.js, un archivo por tema (mapa, robots, rutinas, panel…). Se sirven unidos en orden de
+// nombre dentro de una sola función, como si fueran un archivo: comparten variables y funciones sin volverse globales
+// del navegador. Se arma en cada pedido, así que un cambio solo necesita recargar la página.
+const APP_DIR = path.join(WEB, 'app');
+function appBundle() {
+  const parts = fs.readdirSync(APP_DIR).filter(f => f.endsWith('.js')).sort();
+  return '// Oficina de Agentes: dibuja el estado que empuja el daemon y manda tus acciones por la API.\n'
+    + `// Armado por el daemon a partir de web/app/ (${parts.join(', ')}). No se edita aquí.\n(() => {\n`
+    + parts.map(f => fs.readFileSync(path.join(APP_DIR, f), 'utf8')).join('') + '})();\n';
+}
+const STATIC = { '/': 'index.html', '/robot-art.js': 'robot-art.js', '/style.css': 'style.css', '/vendor/marked.min.js': 'vendor/marked.min.js', '/vendor/purify.min.js': 'vendor/purify.min.js' };
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function robotOr404(res, name) {
@@ -1992,6 +2002,10 @@ const server = http.createServer(async (req, res) => {
     // Sin carpeta de trabajo solo funcionan la página y la configuración inicial.
     if (!WORKSPACE && parts[0] === 'api' && url.pathname !== '/api/events') return send(res, 409, { error: 'Elige primero la carpeta de trabajo.', setup: true });
     if (!WORKSPACE && url.pathname === '/hook') return send(res, 200, null);
+    if (req.method === 'GET' && url.pathname === '/app.js') {
+      res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
+      return res.end(appBundle());
+    }
     if (req.method === 'GET' && STATIC[url.pathname]) {
       const file = path.join(WEB, STATIC[url.pathname]);
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)], 'Cache-Control': 'no-store' });

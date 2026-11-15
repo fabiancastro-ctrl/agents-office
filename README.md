@@ -225,7 +225,8 @@ Validó, sin interfaz gráfica, que se puede manejar el `claude` de la suscripci
 | `hooks/office-hook.sh` | Reenvía el JSON del hook al daemon. Sale sin hacer nada si no existe `OFFICE_ROBOT` o si el daemon no responde. |
 | `daemon/daemon.mjs` | Una oficina: lanza robots en su sesión tmux, sirve la página, sigue transcripts, suma tokens y (opcional) retiene permisos. Sin dependencias. |
 | `daemon/ctl.mjs` | Control desde la terminal: `skill`, `libre`, `say`, `approve`, `reject`, `pane`, `kill` (con el edificio: `office ctl <oficina> …`). |
-| `web/` | La página de la oficina. |
+| `web/` | La página de la oficina (`index.html`, `style.css`, `robot-art.js`). |
+| `web/app/*.js` | El código de la página, un archivo por tema (`02-mapa`, `05-rutinas`, `12-panel`, `16-eventos`…). El daemon los sirve unidos en orden de nombre como `/app.js`, dentro de una sola función: comparten variables y funciones como si fueran un archivo, así que un archivo puede usar lo de otro sin importarlo. Ojo con el orden solo en lo que corre al cargar la página (fuera de una función): ahí una `const` o `let` de un archivo con número mayor todavía no existe; las `function` sí se ven desde cualquiera. Para un tema nuevo, crea el archivo con el número que le toca. |
 | `test/` | Pruebas contra una oficina aislada y un Claude falso, sin gastar cuota: `node --test --test-concurrency=1 test/office.test.mjs` (necesita tmux). |
 | `events-YYYY-MM-DD.jsonl` (en los datos) | JSON crudo de cada hook, para estudiar qué campos llegan. Local, contiene comandos y rutas. |
 

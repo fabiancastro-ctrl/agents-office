@@ -214,3 +214,22 @@ test('comandos de la consola, orden por hora real y contexto tras compactar', as
     await waitFor(async () => (await o.robot('uno')).ctx.tokens === 12000, { what: 'el contexto tras compactar' });
   } finally { await o.stop(); }
 });
+
+test('la página: /app.js une web/app/*.js en orden, dentro de una sola función y con sintaxis válida', async () => {
+  const o = await startOffice();
+  try {
+    const res = await fetch(`${o.url}/app.js`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /javascript/);
+    const js = await res.text();
+    const vm = await import('node:vm');
+    assert.doesNotThrow(() => new vm.Script(js, { filename: 'app.js' }), 'el armado tiene sintaxis válida');
+    const dir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'web', 'app');
+    const parts = fs.readdirSync(dir).filter(f => f.endsWith('.js')).sort();
+    assert.ok(parts.length > 1);
+    const body = parts.map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('');
+    assert.ok(js.includes(`(() => {\n${body}})();\n`), 'las partes van completas, en orden y envueltas');
+    // Cada parte termina en salto de línea: si no, la última línea de una se pegaría a la primera de la siguiente.
+    for (const f of parts) assert.ok(fs.readFileSync(path.join(dir, f), 'utf8').endsWith('\n'), `${f} termina en salto de línea`);
+  } finally { await o.stop(); }
+});
