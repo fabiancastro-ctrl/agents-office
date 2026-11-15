@@ -258,6 +258,83 @@ test('comandos de la consola, orden por hora real y contexto tras compactar', as
   } finally { await o.stop(); }
 });
 
+// Dos robots con su transcript (uno con un subagente): cada mensaje con su usage, como lo guarda Claude.
+async function spendOffice(env, perRobot) {
+  const o = await startOffice({ maxRobots: 3, env: { OFFICE_SPEND_TICK_MS: '300', ...env } });
+  for (const [name, msgs] of Object.entries(perRobot)) {
+    await o.api('POST', '/api/robots', libre(name));
+    const tr = path.join(o.base, `${name}.jsonl`);
+    const at = new Date().toISOString();
+    fs.writeFileSync(tr, msgs.main.map((t, i) => JSON.stringify({ type: 'assistant', timestamp: at, message: { id: `${name}-${i}`, usage: { input_tokens: t, output_tokens: 0 } } })).join('\n') + '\n');
+    if (msgs.sub) {
+      fs.mkdirSync(path.join(o.base, name, 'subagents'), { recursive: true });
+      fs.writeFileSync(path.join(o.base, name, 'subagents', 'a.jsonl'), JSON.stringify({ type: 'assistant', timestamp: at, message: { id: `${name}-s`, usage: { output_tokens: msgs.sub } } }) + '\n');
+    }
+    await o.hook(name, { hook_event_name: 'SessionStart', source: 'startup', session_id: `${name}-sesion`, transcript_path: tr });
+  }
+  return o;
+}
+
+test('gasto por robot: parte de la semana con subagentes y aviso único cuando se dispara en la última hora', async () => {
+  const o = await spendOffice({}, { uno: { main: [1_000_000, 600_000], sub: 400_000 }, dos: { main: [500_000] } });
+  try {
+    await waitFor(async () => (await o.robot('uno')).spend?.week === 2_000_000, { what: 'el gasto de uno (con su subagente)' });
+    const uno = await o.robot('uno'), dos = await o.robot('dos');
+    assert.equal(uno.spend.officeWeek, 2_500_000);
+    assert.equal(uno.spend.pct, 80);
+    assert.equal(dos.spend.pct, 20);
+    assert.equal(uno.spend.hot, 'hour', '2 M en la última hora es disparo');
+    assert.equal(dos.spend.hot, null, 'la regla del 25 % espera a que la semana pase de 5 M');
+    await sleep(900); // varias revisiones más: el aviso sale una sola vez
+    const hits = (await o.robot('uno')).log.filter(l => /🔥 Se disparó: gastó 2,0 M tokens en la última hora/.test(l.text));
+    assert.equal(hits.length, 1);
+  } finally { await o.stop(); }
+});
+
+test('gasto por robot: más de la cuarta parte de la semana también es disparo', async () => {
+  const o = await spendOffice({ OFFICE_SPEND_HOUR_HOT: '1e12', OFFICE_SPEND_MIN_WEEK: '1000' }, { uno: { main: [3000] }, dos: { main: [1000] }, tres: { main: [100] } });
+  try {
+    await waitFor(async () => (await o.robot('tres')).spend?.officeWeek === 4100, { what: 'el gasto de la semana' });
+    assert.equal((await o.robot('uno')).spend.hot, 'share');
+    assert.equal((await o.robot('dos')).spend.pct, 24);
+    assert.equal((await o.robot('dos')).spend.hot, null);
+    assert.equal((await o.robot('tres')).spend.hot, null);
+  } finally { await o.stop(); }
+});
+
+test('empleado de la semana: cuenta desde que se renovó la cuota, corona con un fuego y con dos si también lidera la sesión de 5 h', async () => {
+  const o = await startOffice({ maxRobots: 4, env: { OFFICE_SPEND_TICK_MS: '300' } });
+  try {
+    const H = 3600e3, t = Date.now();
+    // La cuota semanal se renueva en 2 días (la semana empezó hace 5) y la sesión de 5 h termina en 1 h.
+    fs.writeFileSync(path.join(o.data, 'config.json'), JSON.stringify({ quota: { weekEnd: t + 2 * 24 * H, sessionEnd: t + H } }));
+    const write = (name, msgs) => {
+      const tr = path.join(o.base, `${name}.jsonl`);
+      fs.appendFileSync(tr, msgs.map(([tok, ago], i) => JSON.stringify({ type: 'assistant', timestamp: new Date(t - ago).toISOString(), message: { id: `${name}-${tok}-${ago}-${i}`, usage: { input_tokens: tok } } })).join('\n') + '\n');
+      return tr;
+    };
+    const plan = { uno: [[2_000_000, 0]], dos: [[3_000_000, 6 * H]], tres: [[9_000_000, 6 * 24 * H]] }; // tres: antes de la renovación
+    for (const [name, msgs] of Object.entries(plan)) {
+      await o.api('POST', '/api/robots', libre(name));
+      await o.hook(name, { hook_event_name: 'SessionStart', source: 'startup', session_id: `${name}-s`, transcript_path: write(name, msgs) });
+    }
+    await waitFor(async () => (await o.snapshot()).fame?.employee?.name === 'dos', { what: 'que dos sea el empleado de la semana' });
+    let s = await o.snapshot();
+    assert.equal(s.fame.employee.tokens, 3_000_000, 'lo de tres es de antes de que se renovara la cuota');
+    assert.equal(s.fame.sessionTop.name, 'uno', 'lo de dos fue hace 6 h: fuera de la sesión de 5 h');
+    assert.equal(s.fame.period.known, true);
+    assert.equal(Date.parse(s.fame.period.from), t - 5 * 24 * H);
+    const crown = n => s.robots.find(r => r.name === n).crown;
+    assert.deepEqual([crown('uno'), crown('dos'), crown('tres')], [0, 1, 0]);
+    // uno gasta 2 M más ahora: pasa a liderar la semana y la sesión → corona de dos fuegos.
+    write('uno', [[2_000_000, 1000]]);
+    await waitFor(async () => (await o.robot('uno')).crown === 2, { what: 'la corona de dos fuegos' });
+    s = await o.snapshot();
+    assert.equal(s.fame.employee.name, 'uno');
+    assert.equal(crown('dos'), 0, 'dos pierde la corona');
+  } finally { await o.stop(); }
+});
+
 test('la página: /app.js une web/app/*.js en orden, dentro de una sola función y con sintaxis válida', async () => {
   const o = await startOffice();
   try {

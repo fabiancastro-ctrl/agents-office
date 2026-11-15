@@ -36,7 +36,7 @@ const deskPos = i => ({x: 5 + (i % COLS) * 18, y: 43 + Math.floor(i / COLS) * RO
 // Lugares de los subagentes alrededor del robot: dos a los lados y cinco debajo.
 const MINI_SLOTS = [[-4.8, 0], [4.8, 0], [-6.6, 6], [-3.3, 6], [0, 6], [3.3, 6], [6.6, 6]];
 
-const st = {robots: new Map(), pins: [], side: null, jump: null, inbox: [], door: [], routines: [], salas: [], config: {}, selected: null, att: {}, weeks: [], claude: null, claudeLoading: false, claudeError: ''};
+const st = {robots: new Map(), pins: [], side: null, jump: null, inbox: [], door: [], fame: null, routines: [], salas: [], config: {}, selected: null, att: {}, weeks: [], claude: null, claudeLoading: false, claudeError: ''};
 const ATTACH_MAX = 20 * 1024 * 1024;
 const brk = {bots: new Map()}; // robots de la sala de descanso (solo animación)
 

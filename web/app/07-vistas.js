@@ -36,6 +36,26 @@ function renderGrowth() {
   const next = GROW_AT[lvl];
   $('#tboard').title = `Oficina nivel ${lvl} de 4 · ${s.total} tareas terminadas en total${next ? ` · el siguiente nivel (más plantas) llega a las ${next}` : ' · nivel máximo'}. Hoy: ${s.today}.`;
 }
+// Cuadro «Empleado de la semana» en tu escritorio: el robot que más tokens gastó desde que se renovó tu cuota
+// semanal (lo calcula el daemon; se reinicia con la cuota). Si está en la oficina lleva corona con fuego (🔥🔥 si
+// además es el que más gastó en la sesión actual de 5 h). Clic: abre al robot si sigue en la oficina.
+function renderFame() {
+  const box = $('#eotm'), em = st.fame?.employee;
+  box.hidden = !em;
+  if (!em) return;
+  const live = st.robots.get(em.name)?.data;
+  const crown = live?.crown || 0;
+  const look = lookOf(em.name, live?.place || null, live || {look: em.look, crown: 0});
+  const html = `<small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % 8], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
+  if (box._html !== html) { box._html = html; box.innerHTML = html; }
+  const p = st.fame.period, d = t => new Date(t).toLocaleString('es', {weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'});
+  box.title = `👑 Empleado de la semana: ${em.name}${em.title ? ` («${em.title}»)` : ''} · ${em.tokens.toLocaleString('es')} tokens desde ${d(p.from)}.\n`
+    + `Se reinicia cuando se renueva tu cuota semanal: ${d(p.to)}${p.known ? '' : ' (aún sin leer /usage: se toma el lunes)'}.\n`
+    + (em.present ? `Está en la oficina con la corona ${crown >= 2 ? 'de dos fuegos 🔥🔥: también es el que más gastó en esta sesión de 5 h' : 'de un fuego 🔥'}. Clic para verlo.` : 'Ya no está en la oficina (está en el archivo).');
+  box.classList.toggle('live', !!em.present);
+}
+$('#eotm').addEventListener('click', () => { const n = st.fame?.employee?.name; if (n && st.robots.has(n)) select(n); });
+
 function setMapTheme(t) {
   t = TDECO[t] || t === 'moderna' ? t : 'moderna';
   $('.map-wrap').dataset.mt = t;

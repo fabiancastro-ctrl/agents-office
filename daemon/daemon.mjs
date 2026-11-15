@@ -161,7 +161,8 @@ function view(r, withLog = false) {
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
     parent: r.parent || null, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending, consoleLost: !!r.consoleLost,
-    permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null
+    permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null,
+    spend: r.spend || null, crown: crownOf(r.name)
   };
   if (withLog) v.log = r.log.slice(-150);
   return v;
@@ -269,6 +270,119 @@ function officeUsage() {
   return [...weeks.values()].sort((a, b) => b.week.localeCompare(a.week)).slice(0, 8).map(w => ({ ...w, sessions: w.sessions.size }));
 }
 
+/* ---------- gasto por robot ---------- */
+// Cuánto lleva cada robot esta semana (con sus subagentes) y en la última hora, y qué parte es del gasto de la
+// oficina esta semana. Es la parte de lo que gastó la OFICINA, no del límite de tu suscripción (Claude no lo
+// expone por robot). «Gasto» = entrada + salida + caché escrita, como los KPI de la oficina. No gasta cuota: son
+// cuentas sobre los transcripts. Avisa una vez cuando un robot se dispara: mucho en la última hora (en NR el 95 %
+// de las horas de un robot quedan bajo 1,65 M) o más de la cuarta parte de la semana con la semana ya avanzada.
+const SPEND_HOUR_HOT = Number(process.env.OFFICE_SPEND_HOUR_HOT || 1.5e6);
+const SPEND_SHARE_HOT = 25, SPEND_SHARE_MIN_WEEK = Number(process.env.OFFICE_SPEND_MIN_WEEK || 5e6);
+const SPEND_TICK_MS = Number(process.env.OFFICE_SPEND_TICK_MS || 60000);
+const fmtM = n => n >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')} M` : fmtK(n);
+const spendTok = u => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_creation_input_tokens || 0);
+function sessionFiles(transcript) {
+  if (!transcript) return [];
+  const files = [transcript];
+  const subDir = path.join(transcript.replace(/\.jsonl$/, ''), 'subagents');
+  try { files.push(...fs.readdirSync(subDir).filter(f => f.endsWith('.jsonl')).map(f => path.join(subDir, f))); } catch { /* sin subagentes */ }
+  return files;
+}
+function robotSpend(r, wk, hourAgo) {
+  let week = 0, hour = 0;
+  for (const f of sessionFiles(r.transcript)) {
+    const msgs = fileUsage(f);
+    if (!msgs) continue;
+    for (const { at, u } of msgs.values()) {
+      if (weekOf(at) !== wk) continue;
+      const t = spendTok(u);
+      week += t;
+      if (Date.parse(at) >= hourAgo) hour += t;
+    }
+  }
+  return { week, hour };
+}
+/* ---------- empleado de la semana ---------- */
+// El que más tokens gastó en la semana de tu cuota (entrada + salida + caché escrita, con sus subagentes; esté o no
+// en la oficina) sale en el cuadro «Empleado de la semana». Se reinicia cuando se renueva tu cuota semanal (la hora
+// que muestra /usage, guardada en la configuración; si no se conoce, el lunes 00:00). Si está en la oficina lleva el
+// accesorio secreto: corona con un fuego, o con dos si además es el que más gastó en la sesión actual de 5 h de tu
+// cuota. Se suma por nombre: retomar conserva el nombre.
+const WEEK_MS = 7 * 86400e3, SESSION_MS = 5 * 3600e3;
+function quotaPeriods(t = Date.now()) {
+  const q = readConfig().quota || {};
+  let weekEnd = Number(q.weekEnd) || 0;
+  if (weekEnd) while (weekEnd <= t) weekEnd += WEEK_MS; // ya se renovó: la siguiente, 7 días después
+  const monday = new Date(weekOf(t) + 'T00:00:00').getTime();
+  const sessionEnd = Number(q.sessionEnd) || 0;
+  return {
+    weekFrom: weekEnd ? weekEnd - WEEK_MS : monday, weekTo: weekEnd || monday + WEEK_MS, weekKnown: !!weekEnd,
+    sessionFrom: sessionEnd > t ? sessionEnd - SESSION_MS : t - SESSION_MS, sessionTo: sessionEnd > t ? sessionEnd : null
+  };
+}
+let fame = { employee: null, sessionTop: null, period: null };
+function computeFame(per) {
+  const byWeek = new Map(), bySession = new Map();
+  for (const s of officeSessions.values()) {
+    if (!s.robot) continue;
+    for (const f of sessionFiles(s.transcript)) {
+      const msgs = fileUsage(f);
+      if (!msgs) continue;
+      for (const { at, u } of msgs.values()) {
+        const ms = Date.parse(at);
+        if (ms < per.weekFrom) continue;
+        const t = spendTok(u);
+        byWeek.set(s.robot, (byWeek.get(s.robot) || 0) + t);
+        if (ms >= per.sessionFrom) bySession.set(s.robot, (bySession.get(s.robot) || 0) + t);
+      }
+    }
+  }
+  const top = m => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] || null;
+  const em = top(byWeek), st = top(bySession);
+  let employee = null;
+  if (em && em[1] > 0) { // su cara: la del robot si está; si no, la que tenía al irse (archivo); si no, la de su nombre
+    const live = robots.get(em[0]), gone = live ? null : [...archive].reverse().find(a => a.name === em[0]);
+    const src = live || gone;
+    employee = { name: em[0], tokens: em[1], color: src?.color ?? 0, look: src?.look || lookFromName(em[0]), present: !!live, title: live?.title || gone?.title || '' };
+  }
+  return { employee, sessionTop: st && st[1] > 0 ? { name: st[0], tokens: st[1] } : null,
+    period: { from: new Date(per.weekFrom).toISOString(), to: new Date(per.weekTo).toISOString(), known: per.weekKnown } };
+}
+const crownOf = name => fame.employee?.name === name ? (fame.sessionTop?.name === name ? 2 : 1) : 0;
+
+function updateSpend() {
+  const wk = weekOf(Date.now()), hourAgo = Date.now() - 3600e3;
+  const prevFame = fame;
+  fame = computeFame(quotaPeriods());
+  if (JSON.stringify(prevFame) !== JSON.stringify(fame)) {
+    for (const n of new Set([prevFame.employee?.name, fame.employee?.name])) { const r = n && robots.get(n); if (r) emit(r); } // su corona cambió
+    broadcast({ type: 'fame', fame }); // después de los robots: el cuadro se dibuja con la corona ya puesta
+    if (fame.employee && prevFame.employee && fame.employee.name !== prevFame.employee.name)
+      broadcast({ type: 'notice', text: fame.period.from !== prevFame.period?.from
+        ? `👑 Se renovó la cuota semanal: arranca una semana nueva y ${fame.employee.name} es el primer empleado de la semana.`
+        : `👑 Nuevo empleado de la semana: ${fame.employee.name} (${fmtM(fame.employee.tokens)} tokens).` });
+  }
+  const cur = officeUsage().find(w => w.week === wk);
+  const officeWeek = cur ? cur.in + cur.out + cur.cacheWrite : 0;
+  for (const r of robots.values()) {
+    const { week, hour } = robotSpend(r, wk, hourAgo);
+    const pct = officeWeek ? Math.min(100, Math.round(week * 100 / officeWeek)) : 0;
+    const hot = hour >= SPEND_HOUR_HOT ? 'hour' : (pct >= SPEND_SHARE_HOT && officeWeek >= SPEND_SHARE_MIN_WEEK) ? 'share' : null;
+    const next = { week, hour, pct, officeWeek, hot };
+    const prev = r.spend;
+    r.spend = next;
+    if (hot && !prev?.hot) {
+      const why = hot === 'hour' ? `gastó ${fmtM(hour)} tokens en la última hora` : `lleva el ${pct} % del gasto de la oficina esta semana (${fmtM(week)} de ${fmtM(officeWeek)})`;
+      log(r, 'sys', `🔥 Se disparó: ${why}`);
+      broadcast({ type: 'notice', text: `🔥 ${r.name} se disparó: ${why}. Míralo por si está en un bucle.` });
+    }
+    if (!prev || prev.week !== week || prev.hour !== hour || prev.pct !== pct || prev.hot !== hot) emit(r);
+  }
+}
+const spendTick = () => { try { updateSpend(); } catch (e) { console_('oficina', 'gasto', e.message); } };
+setInterval(spendTick, SPEND_TICK_MS);
+setTimeout(spendTick, Math.min(1500, SPEND_TICK_MS)); // al arrancar: cuadro del mes y coronas sin esperar el primer minuto
+
 /* ---------- estado de la suscripción (/usage) ---------- */
 // Una consola tmux aparte (_status, sin hooks de la oficina) donde se abre /usage y se lee la pantalla.
 // Mirar /usage no envía mensajes al modelo, así que no gasta cuota.
@@ -332,14 +446,37 @@ const USAGE_ES = [
 ];
 const toSpanish = line => USAGE_ES.reduce((l, [re, to]) => l.replace(re, to), line);
 
+// «Resets Nov 18 at 6pm (America/Bogota)» o «Resets 2:20am (America/Bogota)» → instante (ms). Se toma en la hora
+// local del equipo (la que muestra /usage es la tuya). Sin fecha: hoy o, si ya pasó la hora, mañana.
+const MON_N = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+function resetAt(line, from = Date.now()) {
+  const m = String(line || '').match(/^Resets (?:(\w{3}) (\d{1,2}) at )?(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  if (!m) return null;
+  const h = (Number(m[3]) % 12) + (m[5].toLowerCase() === 'pm' ? 12 : 0), d = new Date(from);
+  if (m[1] && MON_N[m[1]] !== undefined) {
+    const t = new Date(d.getFullYear(), MON_N[m[1]], Number(m[2]), h, Number(m[4] || 0));
+    if (t.getTime() < from - 86400e3) t.setFullYear(t.getFullYear() + 1); // «Jan 2» visto en diciembre
+    return t.getTime();
+  }
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, Number(m[4] || 0));
+  if (t.getTime() <= from) t.setDate(t.getDate() + 1);
+  return t.getTime();
+}
 function parseClaudeStatus(text) {
   const lines = text.split('\n').map(l => l.trimEnd());
   const clean = lines.map(l => l.trim());
   const limits = [];
+  const ends = {};
   clean.forEach((l, i) => {
     const m = l.match(/(\d+)% used/);
-    if (m) limits.push({ title: toSpanish(clean[i - 1] || ''), pct: Number(m[1]), resets: /^Resets/.test(clean[i + 1] || '') ? toSpanish(clean[i + 1]) : '' });
+    if (!m) return;
+    const raw = clean[i + 1] || '';
+    limits.push({ title: toSpanish(clean[i - 1] || ''), pct: Number(m[1]), resets: /^Resets/.test(raw) ? toSpanish(raw) : '' });
+    const at = /^Resets/.test(raw) ? resetAt(raw) : null;
+    if (at && /^Current session$/.test(clean[i - 1] || '')) ends.sessionEnd = at;
+    if (at && /^Current week \(all models\)$/.test(clean[i - 1] || '')) ends.weekEnd = at;
   });
+  if (ends.sessionEnd || ends.weekEnd) saveConfig({ quota: { ...(readConfig().quota || {}), ...ends } });
   const start = clean.findIndex(l => /^What's contributing/.test(l));
   const detail = start < 0 ? '' : lines.slice(start).filter(l => l.trim() && !/^\s*(Esc to|f to fix)/.test(l)).map(toSpanish).join('\n');
   return { limits, detail, at: now() };
@@ -2054,7 +2191,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins, archiveCount: archive.length, door: doorView() })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins, archiveCount: archive.length, door: doorView(), fame })}\n\n`);
       clients.add(res);
       const ping = setInterval(() => res.write(': ping\n\n'), 20000);
       req.on('close', () => { clearInterval(ping); clients.delete(res); });

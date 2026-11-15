@@ -9,7 +9,7 @@ function lookOf(name, place, d) {
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   const o = d?.look || {}, pick = (v, n, def) => Number.isInteger(v) ? ((v % n) + n) % n : def;
   return {ant: pick(o.ant, 4, h % 4), visor: pick(o.visor, 3, (h >>> 3) % 3), acc: pick(o.acc, 4, (h >>> 6) % 4),
-    uniform: place?.type === 'room' ? (place.sala ? '#ef8f7a' : '#a99cf2') : '', outfit: outfitOf(d, place), season: seasonNow()};
+    uniform: place?.type === 'room' ? (place.sala ? '#ef8f7a' : '#a99cf2') : '', outfit: outfitOf(d, place), season: seasonNow(), crown: Number(d?.crown) || 0};
 }
 // Uniforme según el trabajo: inspector (reviews y auditorías), escritor (documentación) o casco (rutinas).
 function outfitOf(d, place) {
@@ -115,7 +115,15 @@ function hdHead(v) {
 const HD_BODY = `<g class="hd"><rect x="10" y="26" width="20" height="14" rx="4" fill="url(#hd-vol)"/><path d="M29.1 28.4v8.4" stroke="#fff" stroke-opacity=".32" stroke-width=".6" stroke-linecap="round"/>
   <path d="M10.6 31h3.4M26 31h3.4" stroke="#0b1018" stroke-opacity=".22" stroke-width=".45"/><circle cx="11.9" cy="38.3" r=".45" fill="#0b1018" opacity=".4"/><circle cx="28.1" cy="38.3" r=".45" fill="#0b1018" opacity=".4"/></g>`;
 const HD_NECK = `<path class="hd" d="M17 24.1h6M17 25.5h6" stroke="#0b1018" stroke-opacity=".35" stroke-width=".5"/>`;
-function hatOf(look) { return HATS[look.season] || HATS[look.outfit] || ''; }
+// Accesorio secreto del robot del mes (lo decide el daemon: d.crown). Corona dorada con un fuego en la punta del
+// centro o, si además es el que más gastó esta semana, dos fuegos en las puntas de los lados. Le gana a cualquier gorro.
+const flame = (x, y) => `<g class="flame" style="transform-origin:${x}px ${y}px"><path d="M${x} ${y - 7.5}q3.6 3.8 2.6 6q-.8 1.6-2.6 1.6t-2.6-1.6q-1-2.2 2.6-6z" fill="#ff7a2f" stroke="rgba(120,30,0,.35)" stroke-width=".4"/><path d="M${x} ${y - 4.6}q1.9 2.2 1.3 3.4q-.5.9-1.3.9t-1.3-.9q-.6-1.2 1.3-3.4z" fill="#ffd36b"/></g>`;
+function crownSVG(n) {
+  return `<g class="crown"><path d="M10 9.6V2.6l5 3.2 5-6.2 5 6.2 5-3.2v7z" fill="#f2c230" stroke="#9a6d10" stroke-width=".8" stroke-linejoin="round"/>
+    <path d="M10.6 8.2h18.8" stroke="#ffe48a" stroke-width=".9" opacity=".8"/><circle cx="20" cy="6.6" r="1.4" fill="#ef4f5c"/><circle cx="14.6" cy="7.2" r="1" fill="#5fcbb9"/><circle cx="25.4" cy="7.2" r="1" fill="#5fcbb9"/>
+    ${n >= 2 ? flame(10, 2.6) + flame(30, 2.6) : flame(20, -.4)}</g>`;
+}
+function hatOf(look) { return look.crown ? crownSVG(look.crown) : HATS[look.season] || HATS[look.outfit] || ''; }
 function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
   const u = look.uniform, hat = hatOf(look);
   return `<svg viewBox="0 0 40 48" aria-hidden="true">
@@ -134,7 +142,7 @@ function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
 // Solo la cabeza (antena, visor y accesorio o gorro): avatar pequeño para el chat.
 function robotHead(color, look = {ant: 0, visor: 0, acc: 0}) {
   const hat = hatOf(look);
-  return `<svg class="rhead" viewBox="4 -5 32 31" aria-hidden="true">${hat ? '' : ANTENNAS[look.ant]}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${hdHead(look.visor)}${hat || HEAD_ACC[look.acc]}</svg>`;
+  return `<svg class="rhead" viewBox="${look.crown ? '4 -9 32 35' : '4 -5 32 31'}" aria-hidden="true">${hat ? '' : ANTENNAS[look.ant]}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${hdHead(look.visor)}${hat || HEAD_ACC[look.acc]}</svg>`;
 }
 
 // Título sugerido para un robot sin título: sale del encargo con reglas simples (sin preguntarle a Claude).

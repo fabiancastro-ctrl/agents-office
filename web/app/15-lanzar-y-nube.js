@@ -88,7 +88,7 @@ function renderHover() {
     ${titleOf(d) ? `<div class="hc-title${d.title ? '' : ' auto'}">📌 ${esc(titleOf(d))}</div>` : ''}
     <div class="hc-act">${esc(hoverActivity(d).slice(0, 120))}</div>
     ${d.state === 'input' && d.inputAt ? `<div class="hc-wait">Esperando tu respuesta hace <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></div>` : ''}
-    ${d.note ? `<div class="hc-note">🗒 ${esc(d.note)}</div>` : ''}${isSleepy(d) ? `<div class="hc-org">💤 Dormido: ${fmtDur(sleepMs(d))} sin actividad</div>` : ''}${d.ctx ? `<div class="hc-org">Contexto ${d.ctx.pct}% lleno (${fmtTok(d.ctx.tokens)} de ${fmtTok(d.ctx.window || 200000)})</div>` : ''}<div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
+    ${d.note ? `<div class="hc-note">🗒 ${esc(d.note)}</div>` : ''}${isSleepy(d) ? `<div class="hc-org">💤 Dormido: ${fmtDur(sleepMs(d))} sin actividad</div>` : ''}${d.ctx ? `<div class="hc-org">Contexto ${d.ctx.pct}% lleno (${fmtTok(d.ctx.tokens)} de ${fmtTok(d.ctx.window || 200000)})</div>` : ''}${d.crown ? `<div class="hc-org hc-crown">👑 Empleado de la semana${d.crown >= 2 ? ' · 🔥🔥 también el que más gastó en esta sesión de 5 h' : ' 🔥'}</div>` : ''}${spendText(d) ? `<div class="hc-org${d.spend.hot ? ' hc-hot' : ''}">Gasto: ${esc(spendText(d))}</div>` : ''}<div class="hc-org">${esc(d.origin || 'Origen desconocido')}</div>
     ${hover.line ? `<div class="hc-con">› ${esc(hover.line)}</div>` : ''}`;
   hover.el.style.left = a.pos.x + '%';
   hover.el.style.top = py(a.pos.y);

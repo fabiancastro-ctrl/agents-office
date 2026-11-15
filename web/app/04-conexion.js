@@ -8,15 +8,16 @@ function connect() {
     if (m.type === 'snapshot') {
       for (const a of st.robots.values()) { vacate(a.data.place, a); a.el.remove(); }
       st.robots.clear();
-      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || []; st.pins = m.pins || []; renderPinsBadge(); setArchCount(m.archiveCount || 0); st.door = m.door || []; renderDoor();
+      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || []; st.pins = m.pins || []; renderPinsBadge(); setArchCount(m.archiveCount || 0); st.door = m.door || []; renderDoor(); st.fame = m.fame || null;
       setSetup(m.setup);
       renderInboxBadge();
       m.robots.forEach(r => upsert(r, true));
+      renderFame(); // con los robots ya cargados: la cara del cuadro lleva su corona
       layout();
       PANEL.dataset.view = ''; // tras reconectar, repintado completo (el log pudo cambiar)
       renderRoutineChips(); renderSalaChips(); renderMeta(); renderPanel();
       notif.known = null; st.ready = true; // el siguiente checkAlerts toma esto como punto de partida
-    } else if (m.type === 'robot') upsert(m.robot);
+    } else if (m.type === 'robot') { upsert(m.robot); if (m.robot.name === st.fame?.employee?.name) renderFame(); }
     else if (m.type === 'setup') onSetupSaved(m);
     else if (m.type === 'config') { st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); renderMeta(); if (st.selected === '@new') schedulePanel(); }
     else if (m.type === 'salas') { st.salas = m.salas; renderSalaChips(); if (st.selected === '@war' || st.selected?.startsWith('@sala:')) schedulePanel(); }
@@ -44,6 +45,7 @@ function connect() {
     else if (m.type === 'notice') { toast(m.text); if (notif.on) { beep(); if ('Notification' in window && Notification.permission === 'granted') try { new Notification('Oficina de Agentes', {body: m.text}); } catch { /* sin notificación */ } } }
     else if (m.type === 'archive') { setArchCount(m.count); if (st.selected === '@archivo') loadArchivo(); }
     else if (m.type === 'pins') { st.pins = m.pins; renderPinsBadge(); markPins(); if (st.selected === '@pins') schedulePanel(); }
+    else if (m.type === 'fame') { st.fame = m.fame; renderFame(); }
     else if (m.type === 'door') { st.door = m.door; renderDoor(); }
     else if (m.type === 'favorites') { st.favorites = m.favorites; if (st.selected === '@new') schedulePanel(); }
   };

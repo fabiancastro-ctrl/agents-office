@@ -1336,3 +1336,22 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 /* Encargos que esperan en la puerta (oficina llena) */
 .door-chip{border-color:var(--amber);color:var(--amber)}
 .door-chip b{font-variant-numeric:tabular-nums}
+/* Gasto por robot: su parte del gasto de la oficina esta semana; 🔥 si se disparó */
+.rc-spend{color:var(--muted);font-variant-numeric:tabular-nums}
+.rc-spend.hot{color:var(--rose);font-weight:600}
+.hc-hot{color:var(--rose)}
+/* Empleado de la semana: cuadro en tu escritorio y corona con fuego (accesorio secreto, web/robot-art.js) */
+.eotm{position:absolute;z-index:4;display:grid;justify-items:center;align-content:center;gap:0;padding:2px 3px;background:linear-gradient(#2a2216,#1d180f);border:3px solid #d9a531;border-radius:3px;box-shadow:0 0 0 1px #7a5a1c,0 3px 0 rgba(0,0,0,.35),0 0 10px rgba(255,214,107,.25);color:#ffe7a8;cursor:default;overflow:hidden}
+.eotm[hidden]{display:none}
+.eotm.live{cursor:pointer}
+.eotm small{font:600 7px/1.15 var(--mono);letter-spacing:.06em;color:#d9a531;text-align:center;white-space:nowrap}
+.eotm-face{display:block;width:52px;height:56px;margin:2px 0 1px}
+.eotm-face svg{width:100%;height:100%;overflow:visible}
+.eotm b{font:600 12px/1.15 var(--mono);color:#ffe7a8;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eotm i{font:500 10px/1.1 var(--mono);font-style:normal;color:#d9a531}
+.hc-crown{color:#ffd36b}
+.flame{animation:flame-flick .8s ease-in-out infinite alternate}
+@keyframes flame-flick{0%{transform:scale(1,1)}45%{transform:scale(.88,1.12)}100%{transform:scale(1.07,.93)}}
+@media (prefers-reduced-motion:reduce){.flame{animation:none}}
+/* Sala de épica chica (como Rutinas): sus salas en lista con scroll */
+#sala-chips{max-height:calc(100% - 30px);overflow-y:auto;padding-bottom:6px;scrollbar-width:thin}

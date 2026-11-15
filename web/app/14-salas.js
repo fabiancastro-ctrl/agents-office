@@ -2,7 +2,7 @@
 const salaRobots = id => [...st.robots.values()].filter(a => a.data.place.sala === id);
 function renderSalaChips() {
   $('#sala-count').textContent = `${st.salas.length} sala${st.salas.length === 1 ? '' : 's'}`;
-  $('#sala-chips').innerHTML = st.salas.slice(0, 6).map(s => {
+  $('#sala-chips').innerHTML = st.salas.map(s => { // lista completa: la sala es chica y hace scroll
     const n = salaRobots(s.id).length;
     return `<div class="rchip" data-sala="${esc(s.id)}"><i class="dot" style="background:${n ? 'var(--teal)' : 'var(--wall)'}"></i><span>${esc(s.name)}<br><small>${esc(s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'} · ${s.thread.length} msj</small></span></div>`;
   }).join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';

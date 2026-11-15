@@ -59,12 +59,13 @@ function layout(incoming) {
   setRect($('.deco.bcoffee'), 49, 6.5, 2.8, 8);
   setRect($('.deco.pingpong'), 32, 20.5, 15, 4.5);
   setRect($('.room.r-cron'), 56, 3, 20, 30);
-  setRect($('.room.r-war'), 78, 3, 20, 59);
+  setRect($('.room.r-war'), 78, 3, 20, 30); // como Rutinas: las salas se ven en lista (con scroll si son muchas)
   setRect($('#room-open'), 2, 38, 74, 59 + e);
-  setRect($('#room-coord'), 78, 66 + e, 20, 31);
+  setRect($('#room-coord'), 78, 38, 20, 59 + e); // tu escritorio, a la par de los escritorios
   setRect($('#inbox'), 80, 76 + e, 7, 8);
   setRect($('#alarm'), 88.1, 77 + e, 2.2, null);
   setRect($('#me'), 91, 74 + e, 5, 11);
+  setRect($('#eotm'), 80.2, 44, 11, 20.5); // cuadro del empleado de la semana, colgado arriba en tu escritorio
   setRect($('.door'), 36, 97.2 + e, 8, 2.8);
   document.querySelectorAll('.win').forEach((w, k) => setRect(w, 18.6 + k * 18, 37.1, 4.2, 1.8)); // en los huecos entre escritorios
   setRect($('.deco.plant.p1'), 2.9, 27.8, 1.7, 4.5);
