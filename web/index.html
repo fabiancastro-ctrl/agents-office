@@ -24,7 +24,7 @@
   <button class="btn" id="btn-pins" title="Mensajes que guardaste con 📌 para pegarlos después en Google Chat o Slack (tecla P)">📌 Para enviar <b class="pins-n" id="pins-n" hidden></b></button>
   <button class="btn" id="btn-search" title="Buscar en todas las conversaciones de la oficina (tecla /)">🔎 Buscar</button>
   <button class="btn" id="btn-usage" title="Uso y estado de Claude: límites de tu suscripción y tokens de la oficina">Uso Claude</button>
-  <button class="btn" id="btn-compact" aria-pressed="false" title="Esconde el mapa y deja métricas, tarjetas (en columnas) y línea de tiempo: para el portátil o media pantalla">Compacta</button>
+  <button class="btn" id="btn-compact" aria-pressed="false" title="Esconde el mapa y deja métricas y tarjetas (en columnas): para el portátil o media pantalla">Compacta</button>
   <select class="mt-sel" id="map-theme" title="Estilo de esta oficina: se guarda en la oficina, así se ve igual en cualquier navegador" aria-label="Estilo de la oficina"><option value="moderna">Estilo: Moderna</option><option value="garaje">Estilo: Garaje</option><option value="nave">Estilo: Nave</option><option value="biblioteca">Estilo: Biblioteca</option><option value="cafeteria">Estilo: Cafetería</option></select>
   <button class="btn" id="btn-hd" aria-pressed="false" title="Robots en alta definición: volumen, brillo en el visor y microanimaciones. Se guarda en este navegador.">HD</button>
   <button class="btn" id="btn-view" aria-pressed="false" title="Alterna entre el plano 2D y la vista en perspectiva 2.5D">2.5D</button>
@@ -80,13 +80,6 @@
     </div>
     <div class="zoom-ui" id="zoom-ui"><div class="zu" role="group" aria-label="Zoom del mapa"><button type="button" data-zoom="out" title="Alejar (tecla −)" aria-label="Alejar">−</button><span id="zoom-n">100%</span><button type="button" data-zoom="in" title="Acercar (tecla +, o ⌘/Ctrl + rueda, o pellizco en el trackpad)" aria-label="Acercar">+</button><button type="button" data-zoom="reset" title="Ver todo (tecla 0)" aria-label="Ver todo">⤢</button></div><div class="zf" id="zoom-follow" hidden></div></div>
   </div>
-  <section class="tl" id="tl" aria-label="Línea de tiempo de los robots">
-    <div class="tl-h"><h4>Línea de tiempo</h4>
-      <div class="tl-legend"><span class="ts-working">trabajando</span><span class="ts-delegating">subagentes</span><span class="ts-input">te espera</span><span class="ts-done">listo</span><span class="tl-doc-l">▤ documento</span></div>
-      <div class="tl-range" id="tl-range" role="group" aria-label="Rango de tiempo"><button type="button" data-tl="auto">Auto</button><button type="button" data-tl="1">1 h</button><button type="button" data-tl="3">3 h</button><button type="button" data-tl="8">8 h</button></div>
-    </div>
-    <div class="tl-body" id="tl-body"></div>
-  </section>
  </div>
   <aside class="cards" id="cards" aria-label="Robots de la oficina"></aside>
 </div>

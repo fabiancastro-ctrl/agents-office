@@ -33,7 +33,7 @@ function renderMini() {
 }
 $('#minimap').addEventListener('click', e => { const b = e.target.closest('[data-mini]'); if (b) select(b.dataset.mini); });
 
-function scheduleCards() { if (!cardsRaf) cardsRaf = requestAnimationFrame(() => { cardsRaf = 0; renderKpis(); renderCards(); renderTimeline(); renderMini(); checkAlerts(); }); }
+function scheduleCards() { if (!cardsRaf) cardsRaf = requestAnimationFrame(() => { cardsRaf = 0; renderKpis(); renderCards(); renderMini(); checkAlerts(); }); }
 
 /* ---------- robots sin actividad y avisos ---------- */
 // Un robot ocupado sin eventos (herramientas, subagentes, mensajes) durante STUCK_MS puede estar colgado o en
@@ -226,7 +226,6 @@ function highlight(name) {
     if (!n) continue;
     st.robots.get(n)?.el.classList.toggle('hl', n === name);
     document.getElementById('card-' + n)?.classList.toggle('hl', n === name);
-    document.getElementById('tl-' + n)?.classList.toggle('hl', n === name);
   }
   cardUi.hl = name;
 }

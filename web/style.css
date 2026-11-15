@@ -66,7 +66,7 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 /* Mapa (juego) a la izquierda, tarjetas de gestión a la derecha; en pantallas angostas las tarjetas bajan */
 .office{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,24vw,380px);gap:14px;align-items:start}
 /* El mapa ocupa todo el ancho pero sin pasar la altura de la ventana (proporcion 16:10) */
-.map-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--floor);max-width:max(860px,calc((100vh - 242px - var(--tl-h, 0px)) * 1.6));width:100%;margin:0 auto;min-width:0}
+.map-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--floor);max-width:max(860px,calc((100vh - 242px) * 1.6));width:100%;margin:0 auto;min-width:0}
 /* isolation: los z-index de los robots quedan dentro del mapa y no tapan el modal ni el header */
 .map{position:relative;isolation:isolate;width:100%;min-width:860px;aspect-ratio:16/10;overflow:hidden;
   background-image:linear-gradient(var(--tile) 1px,transparent 1px),linear-gradient(90deg,var(--tile) 1px,transparent 1px);background-size:2.5% 4%}
@@ -589,38 +589,6 @@ details.rc-sec[open]>summary h4::after{transform:rotate(90deg)}
 
 /* ---------- línea de tiempo ---------- */
 .main-col{display:grid;gap:12px;min-width:0}
-.tl{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px 12px;max-width:max(860px,calc((100vh - 242px - var(--tl-h, 0px)) * 1.6));width:100%;margin:0 auto}
-.tl-h{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-bottom:6px}
-.tl-h h4{margin:0;font-family:var(--display);font-size:14px;font-weight:500;color:var(--muted)}
-.tl-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted)}
-.tl-legend span::before{content:"";display:inline-block;width:14px;height:6px;border-radius:2px;margin-right:5px;vertical-align:1px;background:var(--tc)}
-.tl-legend .tl-doc-l::before{display:none}
-.tl-range{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
-.tl-range button{background:transparent;border:0;border-right:1px solid var(--line);padding:2px 9px;font-size:11.5px;color:var(--muted)}
-.tl-range button:last-child{border-right:0}
-.tl-range button.on{background:var(--panel-2);color:var(--ink)}
-.tl-body{display:grid;gap:3px;max-height:220px;overflow-y:auto;scrollbar-width:thin}
-.tl-axis,.tl-row{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;align-items:center}
-.tl-axis{position:sticky;top:0;z-index:2;background:var(--panel);height:18px}
-.tl-axis .tl-track{height:18px;background:none;border-bottom:1px solid var(--line);border-radius:0}
-.tl-tick{position:absolute;bottom:2px;transform:translateX(-50%);font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
-.tl-tick::after{content:"";position:absolute;left:50%;top:100%;height:3px;border-left:1px solid var(--line)}
-.tl-tick.now{transform:translateX(-100%);color:var(--amber)}
-.tl-name{font-family:var(--mono);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
-.tl-row .tl-name::before{content:"";display:inline-block;width:7px;height:7px;border-radius:2px;background:var(--c);margin-right:6px;vertical-align:1px}
-.tl-track{position:relative;height:18px;background:rgba(255,255,255,.035);border-radius:4px}
-.tl-row{cursor:pointer;border-radius:5px;padding:2px 0}
-.tl-row:hover,.tl-row.hl{background:var(--panel-2)}
-.tl-row.sel .tl-name{color:var(--amber)}
-.tl-row.g-done .tl-name{color:var(--muted)}
-.tl-seg{position:absolute;top:2px;bottom:2px;min-width:3px;border-radius:3px;background:var(--tc)}
-.ts-working{--tc:var(--teal)} .ts-delegating{--tc:var(--violet)} .ts-input{--tc:var(--rose)} .ts-done{--tc:color-mix(in srgb,var(--amber) 55%,var(--panel))} .ts-idle{--tc:#3c4a60}
-.tl-row .tl-seg.ts-working:last-of-type,.tl-row .tl-seg.ts-delegating:last-of-type{background:linear-gradient(90deg,var(--tc) 70%,color-mix(in srgb,var(--tc) 50%,transparent));animation:tlpulse 1.6s ease-in-out infinite}
-.tl-row .tl-seg.ts-input:last-of-type{animation:tlpulse 1s ease-in-out infinite}
-@keyframes tlpulse{50%{opacity:.6}}
-.tl-doc{position:absolute;top:-3px;transform:translateX(-50%);font-size:12px;line-height:1;color:var(--amber);font-weight:400;text-shadow:0 0 3px #000;z-index:1}
-.tl-empty{margin:4px 0 0;font-size:12px;color:var(--muted)}
-@media (prefers-reduced-motion:reduce){.tl-row .tl-seg{animation:none!important}}
 
 
 /* ---------- vista 2.5D (opcional, botón «Vista 2.5D») ---------- */
@@ -812,7 +780,6 @@ body.compact .cards{position:static;max-height:none;overflow:visible;grid-templa
 body.compact .cards>.rc-zero{grid-column:1/-1}
 body.compact .main-col{order:2}
 body.compact>.toast,body>.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%)}
-body.compact .tl{max-width:none;width:100%}
 
 /* ---------- tema claro ---------- */
 /* La página (barra, métricas, tarjetas, paneles, chat) pasa a clara; el mapa sigue siendo la oficina de noche:

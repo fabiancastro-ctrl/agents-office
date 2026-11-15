@@ -90,52 +90,8 @@ function setTheme(light) {
 $('#btn-theme').addEventListener('click', () => setTheme(document.documentElement.dataset.theme !== 'light'));
 setTheme(prefGet('theme', 'dark') === 'light');
 
-/* ---------- línea de tiempo ---------- */
-// Una franja por robot: el color dice en qué estado estuvo cada tramo (el daemon guarda el historial) y las
-// marcas ▤ dicen cuándo escribió un documento. Así se ve el ritmo de cada tarea sin abrirla.
-const TL = $('#tl-body');
-const TL_CLASS = {walking: 'working', working: 'working', delegating: 'delegating', input: 'input', done: 'done', idle: 'idle'};
-const TL_STEPS = [5, 10, 15, 30, 60, 120, 180, 240].map(m => m * 60e3);
+// Hora corta (14:05) para el chat, el buscador y los mensajes fijados.
 const hhmm = t => new Date(t).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'});
-function tlWindow(nowMs, list) {
-  const r = prefGet('tlRange', 'auto');
-  if (r !== 'auto') return Number(r) * 3600e3;
-  const first = Math.min(nowMs, ...list.map(a => Date.parse(a.data.startedAt) || nowMs));
-  return Math.min(12 * 3600e3, Math.max(20 * 60e3, (nowMs - first) * 1.06));
-}
-function renderTimeline() {
-  const nowMs = Date.now();
-  const list = [...st.robots.values()].sort((x, y) => (Date.parse(x.data.startedAt) || 0) - (Date.parse(y.data.startedAt) || 0));
-  const span = tlWindow(nowMs, list), t0 = nowMs - span;
-  const pct = t => ((t - t0) / span * 100).toFixed(3);
-  $('#tl-range').querySelectorAll('[data-tl]').forEach(b => b.classList.toggle('on', b.dataset.tl === prefGet('tlRange', 'auto')));
-  if (!list.length) { TL.innerHTML = '<p class="tl-empty">Sin robots en la oficina. Cuando lances encargos, aquí verás el ritmo de cada uno.</p>'; return; }
-  const step = TL_STEPS.find(s => span / s <= 7) || TL_STEPS[TL_STEPS.length - 1];
-  let ticks = '';
-  for (let t = Math.ceil(t0 / step) * step; t < nowMs - step * 0.25; t += step) ticks += `<span class="tl-tick" style="left:${pct(t)}%">${hhmm(t)}</span>`;
-  const rows = list.map(a => {
-    const d = a.data;
-    const tl = d.timeline?.length ? d.timeline : [{at: d.startedAt, s: d.state}];
-    let segs = '';
-    tl.forEach((e, i) => {
-      const s = Math.max(Date.parse(e.at), t0), end = i + 1 < tl.length ? Date.parse(tl[i + 1].at) : nowMs;
-      if (end <= t0 || end <= s) return;
-      const cls = TL_CLASS[e.s] || 'idle';
-      segs += `<i class="tl-seg ts-${cls}" style="left:${pct(s)}%;width:${Math.max(0.15, (end - s) / span * 100).toFixed(3)}%" title="${esc(STATE_LABEL[e.s] || e.s)} · ${hhmm(Date.parse(e.at))}–${i + 1 < tl.length ? hhmm(end) : 'ahora'} (${fmtDur(end - Date.parse(e.at))})"></i>`;
-    });
-    const docs = d.docs.filter(x => Date.parse(x.at) >= t0).map(x => `<b class="tl-doc" style="left:${pct(Date.parse(x.at))}%" title="${esc(x.path.split('/').pop())} · ${hhmm(Date.parse(x.at))}">▤</b>`).join('');
-    const cls = ['tl-row', `g-${groupOf(d)}`, cardUi.hl === d.name ? 'hl' : '', st.selected === d.name ? 'sel' : ''].filter(Boolean).join(' ');
-    return `<div class="${cls}" id="tl-${esc(d.name)}" data-card="${esc(d.name)}"><span class="tl-name" style="--c:${COLORS[d.color % 8]}">${esc(d.name)}</span><div class="tl-track">${segs}${docs}</div></div>`;
-  }).join('');
-  TL.innerHTML = `<div class="tl-axis"><span class="tl-name"></span><div class="tl-track">${ticks}<span class="tl-tick now" style="left:100%">ahora</span></div></div>${rows}`;
-}
-TL.addEventListener('mouseover', e => { const r = e.target.closest('[data-card]'); highlight(r ? r.dataset.card : null); });
-TL.addEventListener('mouseleave', () => highlight(null));
-TL.addEventListener('click', e => { const r = e.target.closest('[data-card]'); if (r) select(r.dataset.card); });
-$('#tl-range').addEventListener('click', e => { const b = e.target.closest('[data-tl]'); if (b) { prefSet('tlRange', b.dataset.tl); renderTimeline(); } });
-setInterval(renderTimeline, 15000);
-// El mapa se achica lo justo para que la línea de tiempo quepa en pantalla sin hacer scroll (ver --tl-h en style.css).
-new ResizeObserver(([e]) => document.documentElement.style.setProperty('--tl-h', Math.ceil(e.borderBoxSize?.[0]?.blockSize ?? e.target.offsetHeight) + 'px')).observe($('#tl'));
 
 // El tiempo de cada tarjeta avanza solo; los tokens de la semana y la cuota se refrescan cada 5 min.
 setInterval(() => document.querySelectorAll('#cards [data-start]').forEach(el => { if (el.dataset.start) el.textContent = fmtDur(Date.now() - Date.parse(el.dataset.start)); }), 20000);
