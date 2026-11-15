@@ -1333,3 +1333,6 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 .hcheck{display:inline-flex!important;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-top:22px}
 .hcheck input{accent-color:var(--amber)}
 .hours-row input[type=time]{width:auto!important;min-width:110px}
+/* Encargos que esperan en la puerta (oficina llena) */
+.door-chip{border-color:var(--amber);color:var(--amber)}
+.door-chip b{font-variant-numeric:tabular-nums}

@@ -8,7 +8,7 @@ function connect() {
     if (m.type === 'snapshot') {
       for (const a of st.robots.values()) { vacate(a.data.place, a); a.el.remove(); }
       st.robots.clear();
-      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || []; st.pins = m.pins || []; renderPinsBadge(); setArchCount(m.archiveCount || 0);
+      st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || []; st.pins = m.pins || []; renderPinsBadge(); setArchCount(m.archiveCount || 0); st.door = m.door || []; renderDoor();
       setSetup(m.setup);
       renderInboxBadge();
       m.robots.forEach(r => upsert(r, true));
@@ -44,6 +44,7 @@ function connect() {
     else if (m.type === 'notice') { toast(m.text); if (notif.on) { beep(); if ('Notification' in window && Notification.permission === 'granted') try { new Notification('Oficina de Agentes', {body: m.text}); } catch { /* sin notificación */ } } }
     else if (m.type === 'archive') { setArchCount(m.count); if (st.selected === '@archivo') loadArchivo(); }
     else if (m.type === 'pins') { st.pins = m.pins; renderPinsBadge(); markPins(); if (st.selected === '@pins') schedulePanel(); }
+    else if (m.type === 'door') { st.door = m.door; renderDoor(); }
     else if (m.type === 'favorites') { st.favorites = m.favorites; if (st.selected === '@new') schedulePanel(); }
   };
 }

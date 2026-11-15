@@ -113,6 +113,49 @@ test('un robot pide robots: apruebas con cambios, entran según el cupo y los de
   } finally { await o.stop(); }
 });
 
+test('oficina llena: tu encargo espera en la puerta, se puede sacar y entra solo al liberarse un escritorio', async () => {
+  const o = await startOffice({ maxRobots: 1 });
+  try {
+    assert.equal((await o.api('POST', '/api/robots', libre('uno'))).status, 201);
+    // Sin pedir cola (curl de robots y rutinas): sigue el error de siempre.
+    const sin = await o.api('POST', '/api/robots', libre('dos'));
+    assert.equal(sin.status, 400);
+    assert.match(sin.body.error, /tope/);
+    // Desde «Nuevo encargo» (queue: true): queda en la puerta.
+    const q1 = await o.api('POST', '/api/robots', { ...libre('dos', 'Revisa el PR 7'), queue: true });
+    assert.equal(q1.status, 202);
+    assert.equal(q1.body.position, 1);
+    const q2 = await o.api('POST', '/api/robots', { kind: 'libre', text: 'Otra cosa', title: 'Otra', queue: true });
+    assert.equal(q2.body.position, 2);
+    // El nombre no se repite ni con los que esperan, y una rutina nunca se encola (ella reintenta sola).
+    assert.equal((await o.api('POST', '/api/robots', { ...libre('dos'), queue: true })).status, 400);
+    assert.equal((await o.api('POST', '/api/robots', { ...libre('tres'), queue: true, routine: 'rt1' })).status, 400);
+    let door = (await o.snapshot()).door;
+    assert.deepEqual(door.map(d => d.name), ['dos', null]);
+    assert.equal(door[1].title, 'Otra');
+    // Sacar el segundo de la puerta.
+    assert.equal((await o.api('DELETE', `/api/puerta/${q2.body.id}`)).status, 200);
+    assert.equal((await o.api('DELETE', `/api/puerta/${q2.body.id}`)).status, 404);
+    assert.equal((await o.snapshot()).door.length, 1);
+    // «uno» termina su turno: queda un escritorio libre y «dos» entra solo.
+    await turn(o, 'uno', 'hola', 'listo');
+    await waitFor(() => o.windows().includes('dos'), { timeout: 12000, what: 'que entre el que esperaba en la puerta' });
+    await waitFor(() => o.claudeCalls().some(c => c.includes('Revisa el PR 7')), { what: 'su encargo' });
+    assert.match((await o.robot('dos')).origin, /esperó cupo en la puerta/);
+    assert.equal((await o.snapshot()).door.length, 0);
+  } finally { await o.stop(); }
+});
+
+test('oficina llena: subir el tope con + deja entrar de inmediato lo que espera en la puerta', async () => {
+  const o = await startOffice({ maxRobots: 1 });
+  try {
+    await o.api('POST', '/api/robots', libre('uno'));
+    assert.equal((await o.api('POST', '/api/robots', { ...libre('dos'), queue: true })).status, 202);
+    await o.api('POST', '/api/config', { maxRobots: 2 });
+    await waitFor(() => o.windows().includes('dos'), { timeout: 3000, what: 'que entre sin esperar la revisión de 5 s' });
+  } finally { await o.stop(); }
+});
+
 test('despedir deja un resumen en docs/resumenes-robots y con él se retoma la tarea', async () => {
   const o = await startOffice();
   try {

@@ -62,7 +62,7 @@ function salaPanel(s) {
           <div class="field" id="f-sk-args" hidden><label for="sk-args">Argumentos</label><input id="sk-args"></div>
           <div class="field"><label for="sk-mode">Permisos</label><select id="sk-mode"><option value="">Heredar tu modo</option><option value="default">Preguntar (default)</option><option value="acceptEdits">Aceptar ediciones</option><option value="plan">Solo planear</option></select></div>
           <div class="note">El robot recibe, además del encargo, las rutas de CONTEXT.md, del hilo${s.folder ? ' y de la carpeta de la épica' : ''} con instrucciones de leerlas primero.</div>
-          <div class="row between"><span class="stats">${active}/${max} trabajando</span><button class="btn primary" ${active >= max ? 'disabled' : ''}>${active >= max ? `Tope de ${max} alcanzado` : 'Mandar robot'}</button></div>
+          <div class="row between"><span class="stats">${active}/${max} trabajando</span><button class="btn primary" title="${active >= max ? 'La oficina está llena: el robot espera en la puerta y entra solo cuando se libere un escritorio' : ''}">${active >= max ? '🚪 Dejar en la puerta' : 'Mandar robot'}</button></div>
         </form>
         ${docs}
       </div>

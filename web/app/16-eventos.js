@@ -56,16 +56,18 @@ PANEL.addEventListener('submit', async e => {
       ? {kind: 'libre', text: $('#job-text').value, permissionMode: $('#job-mode').value, name: $('#job-name').value.trim() || undefined, title: $('#job-title').value.trim() || undefined, attachments}
       : {kind: 'skill', skill: $('#job-skill').value, args: $('#job-args').value, permissionMode: $('#job-mode').value, name: $('#job-name').value.trim() || undefined, title: $('#job-title').value.trim() || undefined, attachments};
     body.origin = 'Lanzado por ti desde «Nuevo encargo»';
+    body.queue = true; // con la oficina llena, espera en la puerta en vez de dar error
     // Mientras se revisa la cuota y se abre la consola el formulario queda bloqueado: un segundo clic no lanza otro.
     if (launchingJob) return;
     launchingJob = true;
     const btns = [...e.target.querySelectorAll('button')]; btns.forEach(b => { b.disabled = true; });
     try {
       if (!await quotaOk('Vas a lanzar un robot nuevo.')) return;
-      const {name} = await api('POST', '/api/robots', body);
+      const r = await api('POST', '/api/robots', body);
       ['job-text', 'job-args', 'job-name'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       st.att.job = [];
-      select(name);
+      if (r.queued) { toast(`La oficina está llena: «${r.title}» espera en la puerta (${r.position}.º) y entra solo cuando se libere un escritorio.`); PANEL.dataset.view = ''; renderPanel(); }
+      else select(r.name);
     } catch { /* toast ya mostrado */ } finally { launchingJob = false; btns.forEach(b => { b.disabled = false; }); }
   }
   if (e.target.id === 'rt-form') {
@@ -98,12 +100,13 @@ PANEL.addEventListener('submit', async e => {
     const id = st.selected.slice(6), s = st.salas.find(x => x.id === id);
     const skill = $('#sk-skill-r').checked;
     const body = skill ? {kind: 'skill', skill: $('#sk-skill').value, args: $('#sk-args').value} : {kind: 'libre', text: $('#sk-text').value};
-    Object.assign(body, {sala: id, permissionMode: $('#sk-mode').value, origin: `Lanzado por ti en la sala «${s?.name || id}»`});
+    Object.assign(body, {sala: id, permissionMode: $('#sk-mode').value, origin: `Lanzado por ti en la sala «${s?.name || id}»`, queue: true});
     try {
       if (!await quotaOk('Vas a lanzar un robot en la sala.')) return;
-      const {name} = await api('POST', '/api/robots', body);
+      const r = await api('POST', '/api/robots', body);
       ['sk-text', 'sk-args'].forEach(x => { document.getElementById(x).value = ''; });
-      select(name);
+      if (r.queued) toast(`La oficina está llena: «${r.title}» espera en la puerta (${r.position}.º) y entra solo cuando se libere un escritorio.`);
+      else select(r.name);
     } catch { /* toast ya mostrado */ }
   }
   if (e.target.id === 'chat-form') {

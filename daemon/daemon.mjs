@@ -543,7 +543,29 @@ function roomSeat(room, name, extra = {}) {
 // La petición queda en r.spawnReq hasta que la apruebas; los aprobados entran si hay cupo y si no esperan en
 // spawnQueue. Cuando un hijo termina su primer encargo, su respuesta final se le escribe al padre en su consola.
 const SPAWN_MAX = 6;
-const spawnQueue = []; // [{ parent, title, text, at }]
+const spawnQueue = []; // [{ id, parent, title, text, at }] o, si es un encargo tuyo que esperó cupo, [{ id, job, title, name, at }]
+// Encargos tuyos que esperan en la puerta (sin padre): se ven en la barra y en «Nuevo encargo».
+const doorView = () => spawnQueue.filter(q => q.job).map(q => ({ id: q.id, title: q.title, name: q.name || null, at: q.at }));
+const emitDoor = () => broadcast({ type: 'door', door: doorView() });
+const FULL_RE = /escritorios libres|tope/i;
+// «Nuevo encargo» con la oficina llena: en vez de error, el encargo espera en la puerta y entra solo al haber cupo.
+// Solo si el pedido lo pide (queue: true) y no es de una rutina: las rutinas ya reintentan solas en su próxima revisión.
+async function launchOrQueue(body) {
+  try { return { robot: await launch(body) }; } catch (e) {
+    if (!body?.queue || body.routine || !FULL_RE.test(e.message)) throw e;
+    const name = body.name ? String(body.name).toLowerCase() : '';
+    if (name && !/^[a-z0-9-]{1,20}$/.test(name)) throw new Error('Nombre inválido: usa minúsculas, números y guiones.');
+    if (name && (robots.has(name) || spawnQueue.some(q => q.name === name))) throw new Error(`Ya existe un robot llamado ${name} (o espera en la puerta).`);
+    if (body.kind === 'libre' ? !String(body.text || '').trim() : !String(body.skill || '').trim()) throw new Error(body.kind === 'libre' ? 'Escribe qué necesitas.' : 'Elige la skill.');
+    const { queue, ...job } = body;
+    const title = cleanTitle(body.title || '') || trunc(body.kind === 'libre' ? String(body.text).replace(/\s+/g, ' ') : `/${body.skill} ${body.args || ''}`.trim(), 60);
+    const q = { id: crypto.randomBytes(3).toString('hex'), job, title, name: name || null, at: now() };
+    spawnQueue.push(q);
+    console_(name || 'puerta', 'espera cupo', title);
+    saveState(); emitDoor();
+    return { queued: q, position: spawnQueue.filter(x => x.job).length };
+  }
+}
 const kidsOf = name => [
   ...[...robots.values()].filter(x => x.parent === name).map(x => ({ name: x.name, state: x.state, title: x.title || '' })),
   ...spawnQueue.filter(q => q.parent === name).map(q => ({ name: null, state: 'queued', title: q.title, qid: q.id }))
@@ -591,6 +613,18 @@ async function drainSpawnQueue() {
   try {
     while (spawnQueue.length && [...robots.values()].filter(x => x.state !== 'done').length < maxRobots) {
       const q = spawnQueue.shift();
+      if (q.job) { // encargo tuyo que esperaba en la puerta
+        try {
+          const r = await launch({ ...q.job, origin: `${q.job.origin || 'Lanzado por ti'} · esperó cupo en la puerta desde ${new Date(q.at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` });
+          launched.push(r.name);
+          broadcast({ type: 'notice', text: `Se liberó un escritorio: entró ${r.name}${q.title ? ` («${q.title}»)` : ''}, que esperaba en la puerta.` });
+        } catch (e) {
+          if (FULL_RE.test(e.message)) { spawnQueue.unshift(q); break; }
+          broadcast({ type: 'notice', text: `No pude lanzar «${q.title || 'el encargo'}» que esperaba en la puerta: ${e.message}` });
+        }
+        emitDoor();
+        continue;
+      }
       try {
         const par = robots.get(q.parent); // los hijos salen con el mismo diseño que el padre: color, antena, visor y accesorio
         const kid = await launch({ kind: 'libre', text: q.text + KID_PREAMBLE(q.parent), label: q.title || trunc(q.text, 80), title: q.title, parent: q.parent,
@@ -599,7 +633,7 @@ async function drainSpawnQueue() {
         launched.push(kid.name);
         const p = robots.get(q.parent); if (p) emit(p);
       } catch (e) {
-        if (/escritorios libres|tope/i.test(e.message)) { spawnQueue.unshift(q); break; }
+        if (FULL_RE.test(e.message)) { spawnQueue.unshift(q); break; }
         const p = robots.get(q.parent); if (p) log(p, 'sys', `No se pudo lanzar «${q.title || trunc(q.text, 40)}»: ${e.message}`);
       }
     }
@@ -2020,7 +2054,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins, archiveCount: archive.length })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins, archiveCount: archive.length, door: doorView() })}\n\n`);
       clients.add(res);
       const ping = setInterval(() => res.write(': ping\n\n'), 20000);
       req.on('close', () => { clearInterval(ping); clients.delete(res); });
@@ -2053,6 +2087,7 @@ const server = http.createServer(async (req, res) => {
         if (!Number.isInteger(n) || n < 1 || n > MAX_ROBOTS_LIMIT) return send(res, 400, { error: `El tope debe estar entre 1 y ${MAX_ROBOTS_LIMIT}.` });
         maxRobots = n;
         saveState();
+        if (spawnQueue.length) setTimeout(drainSpawnQueue, 0); // con más cupo, lo que espera en la puerta entra ya
       }
       broadcast({ type: 'config', config: configView() });
       return send(res, 200, configView());
@@ -2182,8 +2217,17 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true });
     }
     if (req.method === 'POST' && url.pathname === '/api/robots') {
-      const r = await launch(await readBody(req));
-      return send(res, 201, { ok: true, name: r.name });
+      const out = await launchOrQueue(await readBody(req));
+      if (out.queued) return send(res, 202, { ok: true, queued: true, id: out.queued.id, title: out.queued.title, position: out.position });
+      return send(res, 201, { ok: true, name: out.robot.name });
+    }
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'puerta' && parts[2]) { // sacar un encargo tuyo de la puerta
+      const i = spawnQueue.findIndex(q => q.job && q.id === parts[2]);
+      if (i < 0) return send(res, 404, { error: 'Ese encargo ya entró o no estaba en la puerta.' });
+      const [q] = spawnQueue.splice(i, 1);
+      console_(q.name || 'puerta', 'sale de la puerta', q.title);
+      saveState(); emitDoor();
+      return send(res, 200, { ok: true });
     }
     if (parts[0] === 'api' && parts[1] === 'robots' && parts[2]) {
       const r = robotOr404(res, parts[2]);

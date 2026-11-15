@@ -81,9 +81,27 @@ async function quotaOk(what) {
   return confirm(`${what}\n\nVas en ${hot.map(l => `${l.pct} % de «${l.title}»${l.resets ? ` (${l.resets})` : ''}`).join(' y ')}. Cada robot gasta de la misma cuota.\n\n¿Seguir igual?`);
 }
 
+/* ---------- encargos que esperan en la puerta ---------- */
+// Con la oficina llena, «Invocar robot» deja el encargo en la puerta (lo guarda el daemon) y entra solo, en orden,
+// cuando se libera un escritorio. El tope cuenta como el daemon: solo los que trabajan (no los que terminaron).
+const busyCount = () => [...st.robots.values()].filter(a => a.data.state !== 'done' && !a.data.consoleLost).length;
+function renderDoor() {
+  const b = $('#btn-door'); if (!b) return;
+  b.hidden = !st.door.length;
+  $('#door-n').textContent = st.door.length;
+  if (st.selected === '@new') schedulePanel();
+}
+function doorSection() {
+  if (!st.door.length) return '';
+  return `<section class="dlg-sec"><h4>🚪 En la puerta (${st.door.length})</h4><p class="note">Entran solos, en este orden, cuando se libera un escritorio. Lo que hayas subido con + entra de inmediato.</p>
+    <div class="kid-l">${st.door.map((q, i) => `<span class="kid q"><b>${i + 1}.</b> ${q.name ? `<b>${esc(q.name)}</b> · ` : ''}${esc(q.title || 'encargo')}<span class="pill">desde ${esc(new Date(q.at).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'}))}</span><button type="button" class="btn sm ghost" data-door-del="${esc(q.id)}" title="Sacarlo de la puerta: no se lanza">✕</button></span>`).join('')}</div></section>`;
+}
+$('#btn-door').addEventListener('click', () => select('@new'));
+PANEL.addEventListener('click', e => { const b = e.target.closest('[data-door-del]'); if (b) api('DELETE', `/api/puerta/${b.dataset.doorDel}`).catch(() => {}); });
+
 function newPanel() {
   const max = st.config.maxRobots || 3;
-  const full = st.robots.size >= max;
+  const full = busyCount() >= max;
   const present = [...st.robots.values()];
   return `<div class="dlg-head"><h3>Nuevo encargo</h3><p>Entra un robot por la puerta y abre su consola tmux con <code>claude</code> usando tu suscripción. Al terminar se queda en su escritorio con el cartel LISTO hasta que lo des de baja (✕ sobre el robot o «Despedir terminados»).</p></div>
     <form class="dlg-sec" id="job-form">
@@ -105,9 +123,10 @@ function newPanel() {
       </div>
       <div class="dlg-foot">
         <div class="row"><label class="btn sm attach">Adjuntar archivos<input type="file" multiple hidden data-attfor="job"></label><button type="button" class="btn sm" data-fav-save title="Guarda lo que llenaste como acceso rápido">★ Guardar como frecuente</button></div>
-        <div class="row"><span class="stats">${st.robots.size}/${max} robots en la oficina</span><button class="btn primary" ${full ? 'disabled' : ''}>${full ? `Tope de ${max} robots alcanzado` : 'Invocar robot'}</button></div>
+        <div class="row"><span class="stats">${busyCount()}/${max} trabajando${full ? ' · oficina llena' : ''}</span><button class="btn primary" title="${full ? 'La oficina está llena: el encargo espera en la puerta y entra solo cuando se libere un escritorio' : ''}">${full ? '🚪 Dejar en la puerta' : 'Invocar robot'}</button></div>
       </div>
     </form>
+    ${doorSection()}
     ${present.length ? `<section class="dlg-sec"><h4>En la oficina</h4><div class="rt-grid">${present.map(a => `<div class="item" data-pick="${esc(a.data.name)}"><div class="meta-i"><b>${esc(a.data.name)}</b><div>${esc(a.data.label)}</div></div><span class="pill p-${a.data.state}">${STATE_LABEL[a.data.state] || a.data.state}</span></div>`).join('')}</div></section>` : ''}`;
 }
 
