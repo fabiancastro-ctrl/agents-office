@@ -1306,3 +1306,30 @@ html[data-theme=light] .lg.shell pre.x{background:#1d2533}
 .ac-item .btn.ghost.armed{color:var(--rose);border-color:var(--rose)}
 html[data-theme=light] .ac-x{color:#3b475a}
 html[data-theme=light] .ac-note{color:#7a5f12}
+
+/* ---------- rutinas: horarios, despertador, eventos, historial ---------- */
+.daych,.evch{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
+.daych label,.evch label{display:inline-flex;align-items:center;gap:4px;font-size:12px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;cursor:pointer;background:var(--panel-2)}
+.daych label:has(input:checked),.evch label:has(input:checked){border-color:var(--amber);background:color-mix(in srgb,var(--amber) 18%,var(--panel-2))}
+.daych input,.evch input{margin:0;accent-color:var(--amber)}
+.hours-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;font-size:12.5px}
+.hours-row input[type=time]{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
+.evch{margin:4px 0}
+.row.tpl{flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.rt-card.wake{border-color:color-mix(in srgb,var(--violet) 45%,var(--line))}
+.rt-card.editing{outline:2px solid var(--amber)}
+.rt-hist{font-size:12px}
+.rt-hist summary{cursor:pointer;color:var(--muted)}
+.rh{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:4px 0;border-top:1px dashed var(--line)}
+.rh time{color:var(--muted);font-family:var(--mono);font-size:11px}
+.rh .rh-r{grid-column:2;color:#c3cdda}
+.rh.err span{color:var(--rose)}
+.rt-prev:not(:empty){border:1px dashed color-mix(in srgb,var(--teal) 50%,var(--line));border-radius:8px;padding:8px 12px;margin:8px 0;font-size:13px;background:color-mix(in srgb,var(--teal) 6%,transparent)}
+.rt-prev ul{margin:6px 0 0;padding-left:18px;max-height:180px;overflow:auto}
+.rt-prev a{color:var(--sky)}
+#rt-c-tostate{margin-top:4px}
+.daych input,.evch input,.hcheck input{width:auto!important;height:auto;padding:0!important;flex:none}
+.daych label,.evch label{white-space:nowrap}
+.hcheck{display:inline-flex!important;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-top:22px}
+.hcheck input{accent-color:var(--amber)}
+.hours-row input[type=time]{width:auto!important;min-width:110px}
