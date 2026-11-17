@@ -7,7 +7,7 @@ function createRobot(d, fromSnapshot) {
   el.style.setProperty('--d', `-${(Math.random() * 3).toFixed(2)}s`);
   el.style.setProperty('--d2', `-${(Math.random() * 5).toFixed(2)}s`);
   el.style.setProperty('--sp', (0.85 + Math.random() * 0.3).toFixed(2));
-  el.innerHTML = `<i class="shadow"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
+  el.innerHTML = `<i class="shadow"></i><i class="jet" aria-hidden="true"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
   MAP.appendChild(el);
   const a = {data: d, el, bubble: el.querySelector('.bubble'), sign: el.querySelector('.sign'), carry: el.querySelector('.carry'),
     pos: door(), queueSlot: null, q: Promise.resolve(), subEls: new Map(), log: d.log || [], lastBubble: ''};
@@ -129,7 +129,7 @@ function paint(a) {
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
   const tool = shownTool(a), urg = urgency(d);
-  a.el.className = ['robot', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : '', d.consoleLost ? 'lost' : ''].filter(Boolean).join(' ');
+  a.el.className = ['robot', d.parent ? 'flyer' : '', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : '', d.consoleLost ? 'lost' : ''].filter(Boolean).join(' ');
   // Pide robots nuevos: cartel propio (no «LISTO») para que se vea que espera tu aprobación.
   // Al revivirlo: se endereza y los ojos vuelven a encender (solo la primera vez que deja de estar caído).
   if (a.wasLost && !d.consoleLost) { a.el.classList.add('poweron'); setTimeout(() => a.el.classList.remove('poweron'), 1600); }

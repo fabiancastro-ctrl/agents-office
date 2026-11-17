@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { startOffice, waitFor, sleep, turn } from './helpers.mjs';
 
@@ -127,6 +128,11 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     assert.ok(sala?.auto, 'se crea una sala de equipo');
     assert.equal(sala.owner, 'jefe');
     assert.match(sala.name, /jefe.*Migrar wallet/);
+    // Los hijos se llaman por lo que hacen (sin tildes ni palabras vacías), no con nombres genéricos.
+    assert.deepEqual(ok.body.launched.sort(), ['dos', 'uno']);
+    const r3 = await o.api('POST', '/api/robots/jefe/encargos', { encargos: [{ titulo: 'Revisión de los puertos', encargo: 'x' }, { titulo: 'Uno', encargo: 'otra vez' }, { nombre: 'mi-nombre', titulo: 'Cualquiera', encargo: 'y' }] });
+    assert.deepEqual((await o.robot('jefe')).spawnReq.items.map(i => i.name), ['revision-puertos', 'uno', 'mi-nombre']);
+    await o.api('POST', `/api/robots/jefe/encargos/${r3.body.id}`, { decision: 'reject' });
     for (const n of ['jefe', ...ok.body.launched]) assert.equal(snap.robots.find(r => r.name === n).place.sala, sala.id, `${n} está en la sala`);
     const ctx = fs.readFileSync(sala.context, 'utf8');
     assert.match(ctx, /wallet_balances/);
@@ -179,6 +185,32 @@ test('plantas: crecen con las tareas de la semana de la cuota y al renovarse se 
     s = (await o.snapshot()).config.stats;
     assert.equal(s.total, 335);
     assert.equal(s.repotAt, at, 'no se repite el cambio en la misma semana');
+  } finally { await o.stop(); }
+});
+
+test('resultados de los hijos: llegan juntos en un solo mensaje al padre, con la nota de la sala y sin turno extra al aprobar', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  const pane = n => execFileSync('tmux', ['capture-pane', '-p', '-J', '-S', '-300', '-t', `${o.session}:${n}`], { encoding: 'utf8' });
+  try {
+    await o.api('POST', '/api/robots', libre('jefe'));
+    const req = await o.api('POST', '/api/robots/jefe/encargos', { contexto: 'Dato que todos deben saber', encargos: [{ titulo: 'Uno', encargo: 'a' }, { titulo: 'Dos', encargo: 'b' }] });
+    const ok = await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' });
+    await sleep(800);
+    assert.doesNotMatch(pane('jefe'), /\[Oficina\]/, 'aprobar no le escribe al padre (no le abre un turno)');
+    // Cada hijo arranca con el contexto compartido copiado en su encargo.
+    await waitFor(() => o.claudeCalls().filter(c => c.includes('Dato que todos deben saber')).length >= 2, { what: 'que los hijos arranquen con el contexto' });
+    const [k1, k2] = ok.body.launched;
+    await turn(o, k1, 'encargo', 'Resultado UNO');
+    await sleep(800);
+    assert.doesNotMatch(pane('jefe'), /Resultado UNO/, 'el primero espera al otro');
+    await turn(o, k2, 'encargo', 'Resultado DOS');
+    await waitFor(() => /Resultado DOS/.test(pane('jefe')), { what: 'que lleguen los resultados' });
+    const p = pane('jefe');
+    assert.match(p, /Resultado UNO[\s\S]*Resultado DOS/, 'los dos en el mismo mensaje');
+    assert.match(p, /Aprobé tus robots/, 'con la nota de la sala');
+    const sent = (await o.robot('jefe')).log.filter(l => /Te llegaron juntos/.test(l.text));
+    assert.equal(sent.length, 1, 'un solo mensaje');
+    assert.match(sent[0].text, new RegExp(`${k1}, ${k2}`));
   } finally { await o.stop(); }
 });
 
