@@ -8,6 +8,8 @@ import { broadcast, emit } from './estado.mjs';
 import { lookFromName } from './equipo.mjs';
 import { ARCH_FILE, ARCH_MAX, archive, normText, sumDir } from './turno.mjs';
 import { launch } from './tmux.mjs';
+import { toTrash } from './salas.mjs';
+import { readBody, send } from './http.mjs';
 
 /* ---------- exportar una conversación ---------- */
 // Copia limpia de la conversación de un robot (vivo o del archivo) en docs/conversaciones-robots/, por si un resumen
@@ -164,4 +166,36 @@ async function retake(id, text) {
   return r;
 }
 
-export { archiveRobot, archMeta, convDir, emitArchive, exportConversation, migrateSummaries, retake, searchArchive };
+// Rutas de la API: archivo de despedidos: buscar, ver, retomar, exportar y quitar. Las llama http.mjs en orden; devuelven algo (true) si atendieron la petición.
+async function despedidosApi(req, res, url, parts) {
+    if (req.method === 'GET' && url.pathname === '/api/despedidos') {
+      const q = url.searchParams.get('q');
+      const all = url.searchParams.get('all') === '1';
+      return send(res, 200, q ? { results: searchArchive(q) } : { recent: (all ? archive : archive.slice(-30)).slice().reverse().map(archMeta), total: archive.length });
+    }
+    if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2] && parts[3] === 'retomar') {
+      try { const r = await retake(parts[2], (await readBody(req)).text); return send(res, 201, { ok: true, name: r.name }); }
+      catch (e) { return send(res, 409, { error: e.message }); }
+    }
+    if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2] && parts[3] === 'exportar') {
+      const a = archive.find(x => x.id === parts[2]);
+      if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
+      try { return send(res, 200, { ok: true, ...exportConversation(a) }); } catch (e) { return send(res, 409, { error: e.message }); }
+    }
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) { // lo quita de la lista y su resumen va a la Papelera
+      const a = archive.find(x => x.id === parts[2]);
+      if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
+      replaceList(archive, archive.filter(x => x !== a));
+      fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+      emitArchive();
+      // Solo si ningún otro despedido usa ese mismo .md (no debería, pero no se borra lo que otro necesita).
+      const moved = a.summaryPath && !archive.some(x => x.summaryPath === a.summaryPath) ? toTrash(a.summaryPath, path.basename(a.summaryPath, '.md')) : null;
+      return send(res, 200, { ok: true, papelera: moved });
+    }
+    if (req.method === 'GET' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) {
+      const a = archive.find(x => x.id === parts[2]);
+      return a ? send(res, 200, a) : send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
+    }
+}
+
+export { archiveRobot, archMeta, convDir, despedidosApi, emitArchive, exportConversation, migrateSummaries, retake, searchArchive };

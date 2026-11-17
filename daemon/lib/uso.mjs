@@ -98,13 +98,14 @@ function sessionFiles(transcript) {
   try { files.push(...fs.readdirSync(subDir).filter(f => f.endsWith('.jsonl')).map(f => path.join(subDir, f))); } catch { /* sin subagentes */ }
   return files;
 }
-function robotSpend(r, wk, hourAgo) {
+// Gasto de un robot en la semana de la cuota (desde weekFrom, la misma que usa el empleado de la semana) y en la última hora.
+function robotSpend(r, weekFrom, hourAgo) {
   let week = 0, hour = 0;
   for (const f of sessionFiles(r.transcript)) {
     const msgs = fileUsage(f);
     if (!msgs) continue;
     for (const { at, u } of msgs.values()) {
-      if (weekOf(at) !== wk) continue;
+      if (Date.parse(at) < weekFrom) continue;
       const t = spendTok(u);
       week += t;
       if (Date.parse(at) >= hourAgo) hour += t;
@@ -131,6 +132,8 @@ function quotaPeriods(t = Date.now()) {
   };
 }
 let fame = { employee: null, sessionTop: null, period: null };
+// Lo que gastó toda la oficina en la semana de la cuota: base del «% sem.» de cada robot (así cuadra con el empleado).
+let quotaWeekTotal = 0;
 function computeFame(per) {
   const byWeek = new Map(), bySession = new Map();
   for (const s of officeSessions.values()) {
@@ -149,6 +152,7 @@ function computeFame(per) {
   }
   const top = m => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] || null;
   const em = top(byWeek), st = top(bySession);
+  quotaWeekTotal = [...byWeek.values()].reduce((a, b) => a + b, 0); // total de la oficina en la semana de la cuota
   let employee = null;
   if (em && em[1] > 0) { // su cara: la del robot si está; si no, la que tenía al irse (archivo); si no, la de su nombre
     const live = robots.get(em[0]), gone = live ? null : [...archive].reverse().find(a => a.name === em[0]);
@@ -186,9 +190,9 @@ function updateTeamSpend() {
   if (changed) emitSalas();
 }
 function updateSpend() {
-  const wk = weekOf(Date.now()), hourAgo = Date.now() - 3600e3;
+  const hourAgo = Date.now() - 3600e3, per = quotaPeriods();
   const prevFame = fame;
-  fame = computeFame(quotaPeriods());
+  fame = computeFame(per);
   if (JSON.stringify(prevFame) !== JSON.stringify(fame)) {
     for (const n of new Set([prevFame.employee?.name, fame.employee?.name])) { const r = n && robots.get(n); if (r) emit(r); } // su corona cambió
     broadcast({ type: 'fame', fame }); // después de los robots: el cuadro se dibuja con la corona ya puesta
@@ -197,10 +201,11 @@ function updateSpend() {
         ? `👑 Se renovó la cuota semanal: arranca una semana nueva y ${fame.employee.name} es el primer empleado de la semana.`
         : `👑 Nuevo empleado de la semana: ${fame.employee.name} (${fmtM(fame.employee.tokens)} tokens).` });
   }
-  const cur = officeUsage().find(w => w.week === wk);
-  const officeWeek = cur ? cur.in + cur.out + cur.cacheWrite : 0;
+  // «% sem.»: parte del gasto de la oficina en la semana de la cuota, la misma ventana que el empleado de la semana.
+  // Antes usaba la semana del calendario (desde el lunes) y no cuadraba: un robot podía salir con 34 % sin ser el empleado.
+  const officeWeek = quotaWeekTotal;
   for (const r of robots.values()) {
-    const { week, hour } = robotSpend(r, wk, hourAgo);
+    const { week, hour } = robotSpend(r, per.weekFrom, hourAgo);
     const pct = officeWeek ? Math.min(100, Math.round(week * 100 / officeWeek)) : 0;
     const hot = hour >= SPEND_HOUR_HOT ? 'hour' : (pct >= SPEND_SHARE_HOT && officeWeek >= SPEND_SHARE_MIN_WEEK) ? 'share' : null;
     const next = { week, hour, pct, officeWeek, hot };

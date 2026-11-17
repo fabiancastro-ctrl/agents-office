@@ -128,4 +128,4 @@ function describeTool(tool, input = {}) {
   return tool;
 }
 
-export { boot, APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, ATTACH_DIR, ATTACH_MAX_BYTES, ATTACH_TTL_MS, CLAUDE_BIN, clients, colorSeq, CONFIG_FILE, console_, describeTool, EVENTS_FILE, HOLD_TOOLS, inbox, LEGACY_RUNS, MAX_ROBOTS_LIMIT, maxRobots, NAMES, NEVER_ALLOW, nextColor, now, pending, PERMISSION_MODES, PORT, replaceList, robots, ROOT, ROUTINE_TICK_MS, run, RUNS, SESSION, setColorSeq, setMaxRobots, SETTINGS, setWorkspace, TIMELINE_MAX, trunc, WEB, WORKSPACE };
+export { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, ATTACH_DIR, ATTACH_MAX_BYTES, ATTACH_TTL_MS, boot, CLAUDE_BIN, clients, colorSeq, CONFIG_FILE, console_, describeTool, EVENTS_FILE, HOLD_TOOLS, inbox, LEGACY_RUNS, MAX_ROBOTS_LIMIT, maxRobots, NAMES, NEVER_ALLOW, nextColor, now, pending, PERMISSION_MODES, PORT, replaceList, robots, ROOT, ROUTINE_TICK_MS, run, RUNS, SESSION, setColorSeq, setMaxRobots, SETTINGS, setWorkspace, TIMELINE_MAX, trunc, WEB, WORKSPACE };

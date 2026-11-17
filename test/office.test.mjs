@@ -139,8 +139,13 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     for (const n of ['jefe', ...ok.body.launched]) assert.equal(snap.robots.find(r => r.name === n).place.sala, sala.id, `${n} está en la sala`);
     const ctx = fs.readFileSync(sala.context, 'utf8');
     assert.match(ctx, /wallet_balances/);
-    // Reparto con nombre · tarea · estado: lo ven el padre, los hijos y tú.
-    assert.match(ctx, /## Reparto\n\n- `jefe` · Migrar wallet · coordina\n- `uno` · Uno · trabajando\n- `dos` · Dos · trabajando/);
+    // Reparto con nombre · tarea · estado: en REPARTO.md y en la sala (el tablero), NO en CONTEXT.md, que es de los robots.
+    const reparto = () => fs.readFileSync(path.join(path.dirname(sala.context), 'REPARTO.md'), 'utf8');
+    assert.match(reparto(), /- `jefe` · Migrar wallet · coordina\n- `uno` · Uno · trabajando\n- `dos` · Dos · trabajando/);
+    assert.doesNotMatch(ctx, /## Reparto/, 'la oficina no reescribe el archivo que editan los robots');
+    assert.deepEqual(snap.salas.find(x => x.id === sala.id).roster.map(e => `${e.name}:${e.state}`), ['jefe:coordina', 'uno:trabajando', 'dos:trabajando']);
+    // Cada hijo sabe quién es quién y se ve a sí mismo como «tú».
+    await waitFor(() => o.claudeCalls().join('\n').includes('- `dos` · Dos · tú') && o.claudeCalls().join('\n').includes('- `uno` · Uno · tú'), { what: 'que los hijos reciban quién es quién' });
     // Los hijos arrancan sabiendo de la sala; al padre se le avisa por su consola.
     await waitFor(() => o.claudeCalls().filter(c => c.includes(sala.context)).length >= 2, { what: 'que los hijos reciban la ruta del CONTEXT.md' });
     // Un hijo que pide robots: los suyos entran a la misma sala, sin crear otra.
@@ -150,8 +155,8 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     assert.equal(ok2.body.sala, sala.id);
     snap = await o.snapshot();
     assert.equal(snap.salas.filter(s => s.auto).length, 1);
-    assert.match(fs.readFileSync(sala.context, 'utf8'), /- `tres` · Tres · trabajando/);
-    assert.equal((fs.readFileSync(sala.context, 'utf8').match(/## Reparto/g) || []).length, 1, 'un solo reparto, actualizado');
+    assert.match(reparto(), /- `tres` · Tres · trabajando/);
+    assert.doesNotMatch(fs.readFileSync(sala.context, 'utf8'), /## Reparto/);
     // Equipo terminado: cuando todos los hijos entregaron, la sala queda marcada (una sola vez).
     const kids = snap.robots.filter(r => r.place.sala === sala.id && r.parent).map(r => r.name);
     assert.equal(kids.length, 3);
@@ -159,7 +164,7 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     assert.ok(!(await o.snapshot()).salas.find(s => s.id === sala.id).done, 'falta uno por entregar');
     await turn(o, kids.at(-1), 'encargo', 'Hecho');
     await waitFor(async () => (await o.snapshot()).salas.find(s => s.id === sala.id).done, { what: 'que el equipo quede terminado' });
-    assert.match(fs.readFileSync(sala.context, 'utf8'), /- `uno` · Uno · entregó/);
+    assert.match(reparto(), /- `uno` · Uno · entregó/);
     // Mientras quede algún hijo la sala sigue; si el padre queda solo, vuelve a un escritorio y la sala pasa al archivo.
     for (const n of kids.slice(0, -1)) await o.api('DELETE', `/api/robots/${n}`);
     assert.ok((await o.snapshot()).salas.some(s => s.id === sala.id));
@@ -172,7 +177,12 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     assert.match(cerradas[0].purpose, /jefe armó este equipo/);
     assert.equal((await o.api('GET', `/api/doc?path=${encodeURIComponent(cerradas[0].context)}`)).status, 200, 'su contexto se puede abrir desde el archivo');
     assert.ok(fs.existsSync(sala.context), 'sus archivos quedan');
-    assert.match(fs.readFileSync(sala.context, 'utf8'), /- `uno` · Uno · se fue/);
+    assert.match(reparto(), /- `uno` · Uno · se fue/);
+    // El buscador encuentra la sala cerrada por su contexto (sin tildes ni mayúsculas) y por su hilo.
+    const found = (await o.api('GET', `/api/salas-cerradas?q=${encodeURIComponent('WALLET_BALANCES')}`)).body.results;
+    assert.equal(found[0].id, sala.id);
+    assert.equal(found[0].hits[0].where, 'contexto');
+    assert.deepEqual((await o.api('GET', '/api/salas-cerradas?q=zzzz-nada')).body.results, []);
     // Borrar la sala cerrada: sale del archivo y su carpeta va a la papelera (aquí una temporal de la prueba).
     const del = await o.api('DELETE', `/api/salas-cerradas/${sala.id}`);
     assert.equal(del.status, 200);
@@ -256,6 +266,50 @@ test('equipo: el gasto de la sala suma a todos (también a los que se fueron) y 
     // Su gasto sigue contando aunque se haya ido.
     await sleep(900);
     assert.equal((await o.snapshot()).salas.find(x => x.id === ok.body.sala).spend, 160);
+  } finally { await o.stop(); }
+});
+
+test('solo local: rechaza peticiones desde otra página o a otro host, y deja pasar a la oficina y a los robots', async () => {
+  const o = await startOffice();
+  const url = `http://127.0.0.1:${o.port}/api/robots`;
+  const body = JSON.stringify({ kind: 'libre', name: 'intruso', text: 'haz algo', permissionMode: 'auto' });
+  try {
+    // Una página cualquiera (petición «simple», sin pre-chequeo CORS): rechazada, y no entra ningún robot.
+    const ajena = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain', Origin: 'https://pagina-cualquiera.example' }, body });
+    assert.equal(ajena.status, 403);
+    const nula = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain', Origin: 'null' }, body });
+    assert.equal(nula.status, 403, 'tampoco desde un iframe o archivo local (Origin: null)');
+    assert.equal(await o.robot('intruso'), undefined);
+    // Otro host (un dominio externo que apunta a tu equipo): rechazado, también para leer.
+    const { request } = await import('node:http');
+    const status = await new Promise((res, rej) => request({ host: '127.0.0.1', port: o.port, path: '/api/setup', headers: { Host: `evil.example:${o.port}` } }, r => { r.resume(); res(r.statusCode); }).on('error', rej).end());
+    assert.equal(status, 403);
+    // La página de la oficina (su propio Origin) y los robots (curl, sin Origin) siguen pasando.
+    const propia = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `http://127.0.0.1:${o.port}` }, body: JSON.stringify({ kind: 'libre', name: 'propio', text: 'ok' }) });
+    assert.equal(propia.status, 201);
+    const local = await fetch(url.replace('127.0.0.1', 'localhost'), { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `http://localhost:${o.port}` }, body: JSON.stringify({ kind: 'libre', name: 'porlocalhost', text: 'ok' }) });
+    assert.equal(local.status, 201, 'abrir la oficina como localhost también vale');
+  } finally { await o.stop(); }
+});
+
+test('gasto por robot: el «% sem.» usa la semana de la cuota, la misma del empleado de la semana (cuadran)', async () => {
+  // La cuota se renovó hace 6 días: un gasto de hace 5 días cuenta aunque sea de la semana del calendario anterior.
+  const weekEnd = Date.now() + 86400e3;
+  const o = await startOffice({ env: { OFFICE_SPEND_TICK_MS: '300' }, files: { 'config.json': JSON.stringify({ quota: { weekEnd } }) } });
+  try {
+    const msg = (id, daysAgo, out) => JSON.stringify({ type: 'assistant', timestamp: new Date(Date.now() - daysAgo * 86400e3).toISOString(), message: { id, usage: { input_tokens: 0, output_tokens: out }, content: [] } }) + '\n';
+    for (const [n, lines] of [['viejo', [msg('a1', 5, 600)]], ['nuevo', [msg('b1', 0.01, 400)]]]) {
+      await o.api('POST', '/api/robots', libre(n));
+      const tr = path.join(o.base, `${n}.jsonl`); fs.writeFileSync(tr, lines.join(''));
+      await o.hook(n, { hook_event_name: 'SessionStart', source: 'startup', session_id: `s-${n}`, transcript_path: tr });
+    }
+    const viejo = await waitFor(async () => { const r = await o.robot('viejo'); return r?.spend?.officeWeek === 1000 && r; }, { what: 'el gasto de la semana de la cuota' });
+    assert.equal(viejo.spend.week, 600, 'cuenta lo de hace 5 días (dentro de la semana de la cuota)');
+    assert.equal(viejo.spend.pct, 60);
+    assert.equal((await o.robot('nuevo')).spend.pct, 40);
+    const fame = (await o.snapshot()).fame;
+    assert.equal(fame.employee.name, 'viejo', 'el de mayor % es el empleado de la semana');
+    assert.equal(fame.employee.tokens, viejo.spend.week);
   } finally { await o.stop(); }
 });
 

@@ -4,10 +4,13 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { now, PORT, robots, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { now, PORT, replaceList, robots, RUNS, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { freeDesk, log, roomSeat, saveState } from './persistencia.mjs';
 import { spawnQueue } from './equipo.mjs';
+import { removeRobot } from './consola.mjs';
+import { say } from './tmux.mjs';
+import { readBody, readRaw, send } from './http.mjs';
 
 /* ---------- salas de épica ---------- */
 // Una sala agrupa a los robots que trabajan sobre una misma épica de Jira. Comparten dos archivos en runs/salas/<id>/:
@@ -26,7 +29,8 @@ function contextPath(s) { return path.join(SALAS_DIR, s.id, 'CONTEXT.md'); }
 function threadPath(s) { return path.join(SALAS_DIR, s.id, 'HILO.md'); }
 
 function salaView(s) {
-  return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt, auto: !!s.auto, owner: s.owner || null, color: Number.isInteger(s.color) ? s.color : null, purpose: s.purpose || '', done: !!s.done, spend: s.spend || 0 };
+  return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt, auto: !!s.auto, owner: s.owner || null, color: Number.isInteger(s.color) ? s.color : null, purpose: s.purpose || '', done: !!s.done, spend: s.spend || 0,
+    roster: (s.roster || []).map(e => ({ name: e.name, title: e.title || '', state: rosterState(e), owner: !!e.owner })) };
 }
 function emitSalas() { broadcast({ type: 'salas', salas: salas.map(salaView) }); }
 
@@ -81,7 +85,7 @@ function teamSala(r, items, context, salaId) {
   }
   const goal = r.title || r.label || 'su encargo';
   const s = createSala({ id: salaId, name: `Equipo de ${r.name} · ${goal}`, context: `# Contexto del equipo de ${r.name}\n\n_Sala creada por la oficina el ${stamp} cuando ${r.name} pidió robots. La comparten ${r.name} y los robots que lanzó._\n\n`
-    + `## Objetivo\n\n${goal}\n\n## Reparto\n\n- ${r.name} (coordina)\n${team}\n\n## Contexto que mandó ${r.name}\n\n${context || '_Sin contexto adicional: está en cada encargo._'}\n\n`
+    + `## Objetivo\n\n${goal}\n\n## Contexto que mandó ${r.name}\n\n${context || '_Sin contexto adicional: está en cada encargo._'}\n\n`
     + '## Decisiones tomadas\n\n## Estado verificado\n\n## Bloqueos y pendientes\n' });
   s.auto = true;
   s.owner = r.name;
@@ -96,8 +100,10 @@ function teamSala(r, items, context, salaId) {
   s.roster = [{ name: r.name, title: r.title || '', owner: true, sessionId: r.sessionId }];
   return { sala: s, created: true };
 }
-// «Reparto» del CONTEXT.md: quién es quién (nombre · tarea · estado), para el padre, los hijos y tú. Lo reescribe
-// la oficina al entrar, entregar o irse cada uno; el resto del archivo es de los robots y no se toca.
+// «Reparto»: quién es quién (nombre · tarea · estado), para el padre, los hijos y tú. Vive en REPARTO.md de la sala y
+// en salaView (el tablero lo dibuja de ahí), NO en CONTEXT.md: si la oficina reescribiera CONTEXT.md mientras un robot
+// lo edita, su edición fallaría y tendría que releerlo (una vuelta más de tokens). A los hijos les llega copiado en su
+// encargo (salaPreamble). Las salas viejas que lo tenían en CONTEXT.md lo pierden de ahí una sola vez.
 function rosterState(e) {
   if (e.owner) return robots.has(e.name) ? 'coordina' : 'se fue';
   const live = robots.get(e.name);
@@ -105,15 +111,20 @@ function rosterState(e) {
   if (spawnQueue.some(q => q.id === e.qid)) return 'esperando cupo';
   return e.dropped ? 'no se lanzó' : 'se fue';
 }
+const rosterPath = s => path.join(SALAS_DIR, s.id, 'REPARTO.md');
+const rosterLines = (s, me) => (s.roster || []).map(e => `- \`${e.name}\` · ${e.title || 'sin título'} · ${e.name === me ? 'tú' : rosterState(e)}`).join('\n');
 function writeRoster(s) {
   if (!s?.roster?.length) return;
-  const lines = s.roster.map(e => `- \`${e.name}\` · ${e.title || 'sin título'} · ${rosterState(e)}`).join('\n');
-  const block = `## Reparto\n\n${lines}\n`;
-  try {
-    const f = contextPath(s), txt = fs.readFileSync(f, 'utf8');
-    const re = /## Reparto\n[\s\S]*?(?=\n## |$)/;
-    fs.writeFileSync(f, re.test(txt) ? txt.replace(re, block) : `${txt.trimEnd()}\n\n${block}`);
-  } catch { /* sin archivo */ }
+  try { fs.writeFileSync(rosterPath(s), `# Reparto de la sala «${s.name}»\n\n_Lo mantiene la oficina: no lo edites._\n\n${rosterLines(s)}\n`); } catch { /* sin carpeta */ }
+  if (!s.rosterMoved) { // sala de antes: su «## Reparto» salía en CONTEXT.md; se quita una vez y no se vuelve a tocar
+    try {
+      const f = contextPath(s), txt = fs.readFileSync(f, 'utf8'), re = /\n?## Reparto\n[\s\S]*?(?=\n## |$)/;
+      if (re.test(txt)) fs.writeFileSync(f, txt.replace(re, ''));
+    } catch { /* sin archivo */ }
+    s.rosterMoved = true;
+    saveSalas();
+  }
+  emitSalas(); // el tablero lo dibuja de salaView
 }
 const rosterOf = name => salas.filter(s => s.roster?.some(e => e.name === name));
 function closeEmptyTeamSalas() {
@@ -178,15 +189,93 @@ function archiveSala(s, reason) {
 // Lo que recibe un robot al entrar a una sala. El CONTEXT.md va copiado aquí (si es razonable): leerlo con una
 // herramienta costaría lo mismo más una vuelta extra con todo su contexto. El hilo NO se lee entero: puede ser largo.
 const SALA_CTX_INLINE = 8000;
-function salaPreamble(s) {
+// Buscador: en las salas cerradas busca en su nombre y porqué, su CONTEXT.md y su hilo (HILO.md), sin tildes ni
+// mayúsculas. Devuelve por sala hasta 4 trozos que coinciden, con el archivo para abrirlo.
+const normQ = t => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function searchClosedSalas(q) {
+  const qn = normQ(q).trim();
+  if (qn.length < 2) return [];
+  const out = [];
+  for (const s of salasArchive) {
+    const hits = [];
+    const read = f => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+    for (const part of read(s.threadFile).split(/\n(?=### )/).slice(1)) { // mensajes del hilo: «### quién · fecha»
+      const [head, ...body] = part.split('\n');
+      const text = body.join('\n').trim();
+      if (normQ(text).includes(qn)) hits.push({ where: 'hilo', who: head.replace(/^###\s*/, ''), text: text.slice(0, 600), path: s.threadFile });
+    }
+    for (const par of read(s.context).split(/\n\s*\n/)) if (normQ(par).includes(qn) && !/^# /.test(par)) hits.push({ where: 'contexto', text: par.trim().slice(0, 600), path: s.context });
+    if (hits.length || normQ(`${s.name} ${s.purpose} ${s.key}`).includes(qn)) out.push({ id: s.id, name: s.name, purpose: s.purpose || '', closedAt: s.closedAt, color: s.color, context: s.context, threadFile: s.threadFile, hits: hits.slice(0, 4), more: Math.max(0, hits.length - 4) });
+  }
+  return out;
+}
+function salaPreamble(s, me) {
   let ctx = '';
   try { ctx = fs.readFileSync(contextPath(s), 'utf8').trim(); } catch { /* sin archivo */ }
   const inline = ctx && ctx.length <= SALA_CTX_INLINE;
   const last = s.thread.slice(-5).map(m => `· ${m.from}: ${trunc(m.text.replace(/\s+/g, ' '), 600)}`).join('\n');
+  const team = rosterLines(s, me);
   return `\n\n--- Sala «${s.name}»${s.key ? ` (Jira ${s.key})` : ''}: la compartes con otros robots ---
-Contexto compartido: ${contextPath(s)}${s.folder ? ` · documentos en ${path.join(WORKSPACE, s.folder)}` : ''}${inline ? ` (copia, no hace falta leerlo):\n${ctx}\n` : ' (léelo antes de empezar).\n'}${last ? `Lo último del hilo (para no repetir trabajo; más atrás en ${threadPath(s)}):\n${last}\n` : ''}- Si confirmas algo durable que falte o esté mal en el contexto (decisión, estado, bloqueo), corrígelo con Edit en su lugar, sin volverlo bitácora, con fecha absoluta.
+Contexto compartido: ${contextPath(s)}${s.folder ? ` · documentos en ${path.join(WORKSPACE, s.folder)}` : ''}${inline ? ` (copia, no hace falta leerlo):\n${ctx}\n` : ' (léelo antes de empezar).\n'}${team ? `Quién es quién en la sala (nombre · tarea · estado al entrar tú; al día en ${rosterPath(s)}):\n${team}\n` : ''}${last ? `Lo último del hilo (para no repetir trabajo; más atrás en ${threadPath(s)}):\n${last}\n` : ''}- Si confirmas algo durable que falte o esté mal en el contexto (decisión, estado, bloqueo), corrígelo con Edit en su lugar, sin volverlo bitácora, con fecha absoluta.
 - Tu respuesta final de cada turno se publica sola en el hilo: escríbela para que la entienda otro robot que no vio tu conversación. Para publicar a mitad de turno: curl -s -X POST "http://127.0.0.1:${PORT}/api/salas/${s.id}/hilo?from=$OFFICE_ROBOT" -H 'Content-Type: text/plain' --data-binary @<archivo>
 --- fin de la sala ---`;
 }
 
-export { archiveSala, checkTeamDone, closeEmptyTeamSalas, contextPath, createSala, emitSalas, ownerBackIfAlone, postThread, rosterOf, rosterState, salaPreamble, salas, SALAS_ARCH_FILE, SALAS_DIR, salasArchive, salaView, saveSalas, teamSala, threadPath, toTrash, writeRoster };
+// Rutas de la API: salas abiertas y cerradas. Las llama http.mjs en orden; devuelven algo (true) si atendieron la petición.
+async function salasApi(req, res, url, parts) {
+    if (req.method === 'GET' && url.pathname === '/api/salas-cerradas') return url.searchParams.get('q') ? send(res, 200, { results: searchClosedSalas(url.searchParams.get('q')) }) : send(res, 200, { salas: salasArchive });
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'salas-cerradas' && parts[2]) {
+      // Borra una sala cerrada: sale del archivo y su carpeta (CONTEXT.md, HILO.md) va a la Papelera, de donde se recupera.
+      const e = salasArchive.find(x => x.id === parts[2]);
+      if (!e) return send(res, 404, { error: 'Esa sala ya no está en el archivo.' });
+      if (salas.some(x => x.id === e.id)) return send(res, 409, { error: 'Esa sala está abierta otra vez: ciérrala primero.' });
+      const dir = path.dirname(e.context);
+      const moved = dir.startsWith(SALAS_DIR + path.sep) ? toTrash(dir, `sala-${e.id}`) : null;
+      replaceList(salasArchive, salasArchive.filter(x => x !== e));
+      fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
+      return send(res, 200, { ok: true, papelera: moved });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/salas') {
+      const s = createSala(await readBody(req));
+      emitSalas();
+      return send(res, 201, { ok: true, id: s.id });
+    }
+    if (parts[0] === 'api' && parts[1] === 'salas' && parts[2]) {
+      const s = salas.find(x => x.id === parts[2]);
+      if (!s) return send(res, 404, { error: 'Esa sala no existe.' });
+      const inSala = [...robots.values()].filter(r => r.place.sala === s.id);
+      // «Despedir equipo»: da de baja (sin resumen) a los hijos de la sala que ya entregaron su resultado. Los que siguen
+      // trabajando y el padre se quedan; si el padre queda solo, vuelve a su escritorio y la sala pasa al archivo.
+      if (req.method === 'POST' && parts[3] === 'despedir-equipo') {
+        const done = inSala.filter(r => r.parent && r.reported);
+        for (const r of done) await removeRobot(r, 'equipo despedido');
+        return send(res, 200, { ok: true, despedidos: done.map(r => r.name), quedan: inSala.length - done.length });
+      }
+      if (req.method === 'GET' && parts[3] === 'hilo') {
+        res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8' });
+        return res.end(fs.readFileSync(threadPath(s)));
+      }
+      if (req.method === 'POST' && parts[3] === 'hilo') {
+        // Desde la oficina llega JSON; un robot publica texto plano con ?from=$OFFICE_ROBOT.
+        if (String(req.headers['content-type'] || '').startsWith('application/json')) {
+          const { text, notify } = await readBody(req);
+          postThread(s, 'Coordinador', text);
+          // Avisar gasta cuota: cada robot de la sala recibe el mensaje como un turno nuevo.
+          if (notify) for (const r of inSala) await say(r, `[Hilo de la sala «${s.name}»] El coordinador escribió:\n${String(text).trim()}`);
+          return send(res, 201, { ok: true, notified: notify ? inSala.length : 0 });
+        }
+        const from = url.searchParams.get('from') || '';
+        postThread(s, robots.has(from) ? from : `externo (${trunc(from, 20) || 'sin nombre'})`, (await readRaw(req, 1e6)).toString('utf8'));
+        return send(res, 201, { ok: true });
+      }
+      if (req.method === 'DELETE' && !parts[3]) {
+        if (inSala.length) return send(res, 409, { error: `La sala tiene ${inSala.length} robot${inSala.length === 1 ? '' : 's'}; dalos de baja antes de cerrarla.` });
+        archiveSala(s, 'la cerraste');
+        replaceList(salas, salas.filter(x => x !== s)); // los archivos quedan en runs/salas/<id>/
+        saveSalas(); emitSalas();
+        return send(res, 200, { ok: true });
+      }
+    }
+}
+
+export { archiveSala, checkTeamDone, closeEmptyTeamSalas, contextPath, createSala, emitSalas, ownerBackIfAlone, postThread, rosterOf, rosterPath, rosterState, salaPreamble, salas, SALAS_ARCH_FILE, SALAS_DIR, salasApi, salasArchive, salaView, saveSalas, searchClosedSalas, teamSala, threadPath, toTrash, writeRoster };

@@ -1,12 +1,14 @@
 // Oficina de Agentes · robots que lanza un robot: peticiones, cola, nombres y resultados.
 // Parte de daemon/daemon.mjs, que carga los módulos de daemon/lib/ en orden y arranca la oficina.
+import path from 'node:path';
 import crypto from 'node:crypto';
 import { console_, maxRobots, now, robots, trunc } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { log, saveState } from './persistencia.mjs';
 import { cleanTitle } from './turno.mjs';
 import { launch, launching, say } from './tmux.mjs';
-import { checkTeamDone, contextPath, rosterOf, salas, saveSalas, teamSala, writeRoster } from './salas.mjs';
+import { checkTeamDone, contextPath, rosterOf, salas, SALAS_DIR, saveSalas, teamSala, writeRoster } from './salas.mjs';
+import { readBody, send } from './http.mjs';
 
 /* ---------- robots que lanza un robot ---------- */
 // Un robot puede pedirle a la oficina robots nuevos (cada uno con su consola y su contexto) en vez de subagentes.
@@ -211,4 +213,40 @@ const flushIfIdle = parent => { if (parent && pendingResults.has(parent)) maybeF
 function resumeResults() { for (const parent of pendingResults.keys()) maybeFlush(parent); }
 setInterval(resumeResults, 15e3);
 
-export { decideSpawn, doorView, drainSpawnQueue, emitDoor, flushIfIdle, kidName, kidsOf, launchOrQueue, lookFromName, maybeFlush, pendingResults, reportToParent, requestSpawn, resultTimers, resumeResults, spawnQueue, validName };
+// Rutas de la API: sacar un encargo tuyo de la puerta. Las llama http.mjs en orden; devuelven algo (true) si atendieron la petición.
+async function puertaApi(req, res, url, parts) {
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'puerta' && parts[2]) { // sacar un encargo tuyo de la puerta
+      const i = spawnQueue.findIndex(q => q.job && q.id === parts[2]);
+      if (i < 0) return send(res, 404, { error: 'Ese encargo ya entró o no estaba en la puerta.' });
+      const [q] = spawnQueue.splice(i, 1);
+      console_(q.name || 'puerta', 'sale de la puerta', q.title);
+      saveState(); emitDoor();
+      return send(res, 200, { ok: true });
+    }
+}
+
+// Rutas de la API: un robot pide robots y tú decides; quitar uno de la cola. Las llama http.mjs en orden; devuelven algo (true) si atendieron la petición.
+async function equipoRobotApi(req, res, url, parts, r, action) {
+      // Un robot pide robots nuevos (curl desde su consola) y tú decides desde la oficina.
+      if (req.method === 'POST' && action === 'encargos' && !parts[4]) {
+        try { const q = requestSpawn(r, await readBody(req)); const ctx = path.join(SALAS_DIR, q.salaId, 'CONTEXT.md'); const team = q.items.map(i => `${i.name} (${i.title || trunc(i.text.replace(/\s+/g, ' '), 40)})`).join(', '); return send(res, 202, { ok: true, id: q.id, contexto: ctx, equipo: q.items.map(i => ({ nombre: i.name, titulo: i.title })), mensaje: `Petición enviada. Si la aprueba, tus robots se llamarán: ${team}. El usuario la aprueba en la oficina; sigue con tu trabajo. Si la aprueba, tú y ellos quedan en una sala con el contexto compartido en ${ctx}: agrega ahí lo durable que averigües y ellos necesiten. Sus resultados te llegan como mensajes «[Oficina] Resultado…» (juntos los que terminen mientras trabajas).` }); }
+        catch (e) { return send(res, 400, { error: e.message }); }
+      }
+      if (req.method === 'POST' && action === 'encargos' && parts[4]) {
+        const b = await readBody(req);
+        try { return send(res, 200, { ok: true, ...(await decideSpawn(r, parts[4], b.decision === 'approve', b.items)) }); }
+        catch (e) { return send(res, 409, { error: e.message }); }
+      }
+      if (req.method === 'POST' && action === 'cola' && parts[4]) { // quitar uno que espera cupo en la puerta
+        const i = spawnQueue.findIndex(q => q.id === parts[4] && q.parent === r.name);
+        if (i < 0) return send(res, 404, { error: 'Ese robot ya entró o no estaba en la cola.' });
+        const [q] = spawnQueue.splice(i, 1);
+        log(r, 'sys', `Quitaste de la cola «${q.title || trunc(q.text, 40)}»`);
+        for (const s of salas) { const e = s.roster?.find(x => x.qid === q.id); if (e) { e.dropped = true; saveSalas(); writeRoster(s); } }
+        flushIfIdle(r.name);
+        emit(r);
+        return send(res, 200, { ok: true });
+      }
+}
+
+export { decideSpawn, doorView, drainSpawnQueue, emitDoor, equipoRobotApi, flushIfIdle, kidName, kidsOf, launchOrQueue, lookFromName, maybeFlush, pendingResults, puertaApi, reportToParent, requestSpawn, resultTimers, resumeResults, spawnQueue, validName };

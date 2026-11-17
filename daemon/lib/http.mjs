@@ -4,20 +4,20 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { ATTACH_DIR, ATTACH_MAX_BYTES, clients, console_, inbox, MAX_ROBOTS_LIMIT, PORT, replaceList, robots, run, setMaxRobots, setWorkspace, trunc, WEB, WORKSPACE } from './base.mjs';
+import { ATTACH_DIR, ATTACH_MAX_BYTES, clients, console_, inbox, MAX_ROBOTS_LIMIT, PORT, robots, run, setMaxRobots, setWorkspace, WEB, WORKSPACE } from './base.mjs';
 import { broadcast, configView, emit, knownDoc, MAP_THEMES, TEXT_DOC, view } from './estado.mjs';
 import { claudeStatus, fame, loadSessions, officeUsage } from './uso.mjs';
 import { OFFICE_NAME_MAX, officeName, saveConfig, saveWorkspace, setOfficeName, setupView, workspaceInfo } from './carpeta.mjs';
 import { log, restore, saveState } from './persistencia.mjs';
-import { decideSpawn, doorView, drainSpawnQueue, emitDoor, flushIfIdle, launchOrQueue, requestSpawn, resumeResults, spawnQueue } from './equipo.mjs';
-import { ARCH_FILE, archive, cleanTitle, emitInbox, favorites, pins, saveFavorites, savePins, SUMMARY_ASK } from './turno.mjs';
-import { archMeta, emitArchive, exportConversation, retake, searchArchive } from './exportar.mjs';
+import { doorView, drainSpawnQueue, equipoRobotApi, launchOrQueue, puertaApi, resumeResults, spawnQueue } from './equipo.mjs';
+import { archive, cleanTitle, emitInbox, favorites, fijadosApi, frecuentesApi, pins, SUMMARY_ASK } from './turno.mjs';
+import { despedidosApi, exportConversation } from './exportar.mjs';
 import { removeRobot, revive } from './consola.mjs';
 import { answerAsk, decide, onHook } from './hooks.mjs';
 import { validAttachments } from './adjuntos.mjs';
 import { listSkills, openConsole, pane, pressKey, say } from './tmux.mjs';
-import { checkRoutine, createRoutine, emitRoutines, firstRun, previewRoutine, resetRepoIndex, routines, routineView, saveRoutines, updateRoutine } from './rutinas.mjs';
-import { archiveSala, createSala, emitSalas, postThread, salas, SALAS_ARCH_FILE, SALAS_DIR, salasArchive, salaView, saveSalas, threadPath, toTrash, writeRoster } from './salas.mjs';
+import { resetRepoIndex, routines, routineView, rutinasApi } from './rutinas.mjs';
+import { salas, salasApi, salaView } from './salas.mjs';
 
 /* ---------- http ---------- */
 
@@ -44,9 +44,11 @@ function readRaw(req, max) {
   });
 }
 
+// Devuelve true: así las rutas de cada módulo (return send(...)) le dicen a http.mjs que atendieron la petición.
 function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(obj == null ? '' : JSON.stringify(obj));
+  return true;
 }
 
 // La página vive en web/app/*.js, un archivo por tema (mapa, robots, rutinas, panel…). Se sirven unidos en orden de
@@ -68,9 +70,23 @@ function robotOr404(res, name) {
   return r;
 }
 
+// Solo local: la oficina atiende únicamente peticiones a 127.0.0.1/localhost en su puerto (frena que un dominio
+// externo se haga pasar por tu equipo) y que no vengan de otra página (un sitio abierto en tu navegador no puede
+// lanzar robots, escribirles ni aprobarles permisos). La página de la oficina manda su propio Origin y los robots
+// llaman con curl, sin Origin: los dos pasan.
+const LOCAL_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
+function localOnly(req) {
+  if (!LOCAL_HOSTS.has(String(req.headers.host || ''))) return 'Solo se atiende en 127.0.0.1 o localhost.';
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null' && !LOCAL_HOSTS.has(origin.replace(/^https?:\/\//, ''))) return 'Petición desde otra página: rechazada.';
+  if (origin === 'null') return 'Petición desde otra página: rechazada.';
+  return '';
+}
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   const parts = url.pathname.split('/').filter(Boolean);
+  const denied = localOnly(req);
+  if (denied) { console_('oficina', 'rechazada', `${req.method} ${url.pathname} · host ${req.headers.host || '-'} · origen ${req.headers.origin || '-'}`); return send(res, 403, { error: denied }); }
   try {
     if (url.pathname === '/api/setup' && req.method === 'GET') return send(res, 200, setupView());
     if (url.pathname === '/api/setup/check' && req.method === 'POST') return send(res, 200, workspaceInfo((await readBody(req)).workspace));
@@ -159,161 +175,17 @@ const server = http.createServer(async (req, res) => {
       try { repos = fs.readdirSync(WORKSPACE, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.') && fs.existsSync(path.join(WORKSPACE, e.name, '.git'))).map(e => e.name).sort(); } catch { /* sin carpeta */ }
       return send(res, 200, { repos });
     }
-    if (req.method === 'POST' && url.pathname === '/api/routines/preview') {
-      try { return send(res, 200, await previewRoutine(await readBody(req))); } catch (e) { return send(res, 400, { error: trunc(e.stderr || e.message, 300) }); }
-    }
-    if (req.method === 'POST' && url.pathname === '/api/routines') {
-      try { const rt = await createRoutine(await readBody(req)); emitRoutines(); return send(res, 201, { ok: true, id: rt.id }); }
-      catch (e) { return send(res, 400, { error: trunc(e.stderr || e.message, 300) }); }
-    }
-    if (parts[0] === 'api' && parts[1] === 'routines' && parts[2]) {
-      const rt = routines.find(x => x.id === parts[2]);
-      if (!rt) return send(res, 404, { error: 'Esa rutina no existe.' });
-      if (req.method === 'POST' && parts[3] === 'run') { checkRoutine(rt); return send(res, 200, { ok: true }); }
-      if (req.method === 'PUT' && !parts[3]) {
-        try { await updateRoutine(rt, await readBody(req)); emitRoutines(); return send(res, 200, { ok: true }); }
-        catch (e) { return send(res, 400, { error: trunc(e.stderr || e.message, 300) }); }
-      }
-      if (req.method === 'POST' && parts[3] === 'pause') {
-        rt.paused = !rt.paused;
-        if (!rt.paused) { if (rt.type === 'wake') delete rt.fired; rt.doneOnce = false; rt.nextAt = firstRun(rt); } else rt.nextAt = Infinity;
-        saveRoutines(); emitRoutines();
-        return send(res, 200, { ok: true, paused: rt.paused });
-      }
-      if (req.method === 'DELETE' && !parts[3]) {
-        replaceList(routines, routines.filter(x => x !== rt));
-        saveRoutines(); emitRoutines();
-        return send(res, 200, { ok: true });
-      }
-    }
-    if (req.method === 'GET' && url.pathname === '/api/salas-cerradas') return send(res, 200, { salas: salasArchive });
-    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'salas-cerradas' && parts[2]) {
-      // Borra una sala cerrada: sale del archivo y su carpeta (CONTEXT.md, HILO.md) va a la Papelera, de donde se recupera.
-      const e = salasArchive.find(x => x.id === parts[2]);
-      if (!e) return send(res, 404, { error: 'Esa sala ya no está en el archivo.' });
-      if (salas.some(x => x.id === e.id)) return send(res, 409, { error: 'Esa sala está abierta otra vez: ciérrala primero.' });
-      const dir = path.dirname(e.context);
-      const moved = dir.startsWith(SALAS_DIR + path.sep) ? toTrash(dir, `sala-${e.id}`) : null;
-      replaceList(salasArchive, salasArchive.filter(x => x !== e));
-      fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
-      return send(res, 200, { ok: true, papelera: moved });
-    }
-    if (req.method === 'POST' && url.pathname === '/api/salas') {
-      const s = createSala(await readBody(req));
-      emitSalas();
-      return send(res, 201, { ok: true, id: s.id });
-    }
-    if (parts[0] === 'api' && parts[1] === 'salas' && parts[2]) {
-      const s = salas.find(x => x.id === parts[2]);
-      if (!s) return send(res, 404, { error: 'Esa sala no existe.' });
-      const inSala = [...robots.values()].filter(r => r.place.sala === s.id);
-      // «Despedir equipo»: da de baja (sin resumen) a los hijos de la sala que ya entregaron su resultado. Los que siguen
-      // trabajando y el padre se quedan; si el padre queda solo, vuelve a su escritorio y la sala pasa al archivo.
-      if (req.method === 'POST' && parts[3] === 'despedir-equipo') {
-        const done = inSala.filter(r => r.parent && r.reported);
-        for (const r of done) await removeRobot(r, 'equipo despedido');
-        return send(res, 200, { ok: true, despedidos: done.map(r => r.name), quedan: inSala.length - done.length });
-      }
-      if (req.method === 'GET' && parts[3] === 'hilo') {
-        res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8' });
-        return res.end(fs.readFileSync(threadPath(s)));
-      }
-      if (req.method === 'POST' && parts[3] === 'hilo') {
-        // Desde la oficina llega JSON; un robot publica texto plano con ?from=$OFFICE_ROBOT.
-        if (String(req.headers['content-type'] || '').startsWith('application/json')) {
-          const { text, notify } = await readBody(req);
-          postThread(s, 'Coordinador', text);
-          // Avisar gasta cuota: cada robot de la sala recibe el mensaje como un turno nuevo.
-          if (notify) for (const r of inSala) await say(r, `[Hilo de la sala «${s.name}»] El coordinador escribió:\n${String(text).trim()}`);
-          return send(res, 201, { ok: true, notified: notify ? inSala.length : 0 });
-        }
-        const from = url.searchParams.get('from') || '';
-        postThread(s, robots.has(from) ? from : `externo (${trunc(from, 20) || 'sin nombre'})`, (await readRaw(req, 1e6)).toString('utf8'));
-        return send(res, 201, { ok: true });
-      }
-      if (req.method === 'DELETE' && !parts[3]) {
-        if (inSala.length) return send(res, 409, { error: `La sala tiene ${inSala.length} robot${inSala.length === 1 ? '' : 's'}; dalos de baja antes de cerrarla.` });
-        archiveSala(s, 'la cerraste');
-        replaceList(salas, salas.filter(x => x !== s)); // los archivos quedan en runs/salas/<id>/
-        saveSalas(); emitSalas();
-        return send(res, 200, { ok: true });
-      }
-    }
-    if (req.method === 'POST' && url.pathname === '/api/favorites') {
-      const b = await readBody(req);
-      const kind = b.kind === 'libre' ? 'libre' : 'skill';
-      const f = { id: crypto.randomBytes(3).toString('hex'), name: trunc(String(b.name || '').trim(), 40), kind,
-        skill: kind === 'skill' ? String(b.skill || '').replace(/^\//, '').trim() : null, args: kind === 'skill' ? String(b.args || '') : '',
-        text: kind === 'libre' ? String(b.text || '') : '', permissionMode: b.permissionMode || '', title: cleanTitle(b.title) };
-      if (kind === 'skill' ? !f.skill : !f.text.trim()) return send(res, 400, { error: 'Llena el encargo antes de guardarlo.' });
-      f.name ||= f.title || (kind === 'skill' ? trunc(`/${f.skill} ${f.args}`.trim(), 40) : trunc(f.text, 40));
-      favorites.push(f); if (favorites.length > 30) favorites.shift();
-      saveFavorites();
-      return send(res, 201, { ok: true, favorite: f });
-    }
-    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'favorites' && parts[2]) {
-      replaceList(favorites, favorites.filter(f => f.id !== parts[2]));
-      saveFavorites();
-      return send(res, 200, { ok: true });
-    }
-    if (req.method === 'GET' && url.pathname === '/api/despedidos') {
-      const q = url.searchParams.get('q');
-      const all = url.searchParams.get('all') === '1';
-      return send(res, 200, q ? { results: searchArchive(q) } : { recent: (all ? archive : archive.slice(-30)).slice().reverse().map(archMeta), total: archive.length });
-    }
-    if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2] && parts[3] === 'retomar') {
-      try { const r = await retake(parts[2], (await readBody(req)).text); return send(res, 201, { ok: true, name: r.name }); }
-      catch (e) { return send(res, 409, { error: e.message }); }
-    }
-    if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2] && parts[3] === 'exportar') {
-      const a = archive.find(x => x.id === parts[2]);
-      if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
-      try { return send(res, 200, { ok: true, ...exportConversation(a) }); } catch (e) { return send(res, 409, { error: e.message }); }
-    }
-    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) { // lo quita de la lista y su resumen va a la Papelera
-      const a = archive.find(x => x.id === parts[2]);
-      if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
-      replaceList(archive, archive.filter(x => x !== a));
-      fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
-      emitArchive();
-      // Solo si ningún otro despedido usa ese mismo .md (no debería, pero no se borra lo que otro necesita).
-      const moved = a.summaryPath && !archive.some(x => x.summaryPath === a.summaryPath) ? toTrash(a.summaryPath, path.basename(a.summaryPath, '.md')) : null;
-      return send(res, 200, { ok: true, papelera: moved });
-    }
-    if (req.method === 'GET' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) {
-      const a = archive.find(x => x.id === parts[2]);
-      return a ? send(res, 200, a) : send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
-    }
-    if (req.method === 'POST' && url.pathname === '/api/pins') {
-      const b = await readBody(req);
-      const text = String(b.text || '').slice(0, 60000), robot = trunc(String(b.robot || '').trim(), 40);
-      if (!text.trim() || !robot) return send(res, 400, { error: 'Falta el mensaje.' });
-      const at = String(b.at || new Date().toISOString());
-      const dup = pins.find(p => p.robot === robot && p.at === at);
-      if (dup) return send(res, 200, { ok: true, pin: dup });
-      const p = { id: crypto.randomBytes(4).toString('hex'), robot, title: trunc(String(b.title || ''), 80), at, text, pinnedAt: new Date().toISOString() };
-      pins.push(p); if (pins.length > 100) pins.shift();
-      savePins();
-      return send(res, 201, { ok: true, pin: p });
-    }
-    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'pins' && parts[2]) {
-      replaceList(pins, pins.filter(p => p.id !== parts[2]));
-      savePins();
-      return send(res, 200, { ok: true });
-    }
+    if (await rutinasApi(req, res, url, parts)) return;
+    if (await salasApi(req, res, url, parts)) return;
+    if (await frecuentesApi(req, res, url, parts)) return;
+    if (await despedidosApi(req, res, url, parts)) return;
+    if (await fijadosApi(req, res, url, parts)) return;
     if (req.method === 'POST' && url.pathname === '/api/robots') {
       const out = await launchOrQueue(await readBody(req));
       if (out.queued) return send(res, 202, { ok: true, queued: true, id: out.queued.id, title: out.queued.title, position: out.position });
       return send(res, 201, { ok: true, name: out.robot.name });
     }
-    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'puerta' && parts[2]) { // sacar un encargo tuyo de la puerta
-      const i = spawnQueue.findIndex(q => q.job && q.id === parts[2]);
-      if (i < 0) return send(res, 404, { error: 'Ese encargo ya entró o no estaba en la puerta.' });
-      const [q] = spawnQueue.splice(i, 1);
-      console_(q.name || 'puerta', 'sale de la puerta', q.title);
-      saveState(); emitDoor();
-      return send(res, 200, { ok: true });
-    }
+    if (await puertaApi(req, res, url, parts)) return;
     if (parts[0] === 'api' && parts[1] === 'robots' && parts[2]) {
       const r = robotOr404(res, parts[2]);
       if (!r) return;
@@ -331,26 +203,7 @@ const server = http.createServer(async (req, res) => {
         await say(r, text, attachments);
         return send(res, 200, { ok: true });
       }
-      // Un robot pide robots nuevos (curl desde su consola) y tú decides desde la oficina.
-      if (req.method === 'POST' && action === 'encargos' && !parts[4]) {
-        try { const q = requestSpawn(r, await readBody(req)); const ctx = path.join(SALAS_DIR, q.salaId, 'CONTEXT.md'); const team = q.items.map(i => `${i.name} (${i.title || trunc(i.text.replace(/\s+/g, ' '), 40)})`).join(', '); return send(res, 202, { ok: true, id: q.id, contexto: ctx, equipo: q.items.map(i => ({ nombre: i.name, titulo: i.title })), mensaje: `Petición enviada. Si la aprueba, tus robots se llamarán: ${team}. El usuario la aprueba en la oficina; sigue con tu trabajo. Si la aprueba, tú y ellos quedan en una sala con el contexto compartido en ${ctx}: agrega ahí lo durable que averigües y ellos necesiten. Sus resultados te llegan como mensajes «[Oficina] Resultado…» (juntos los que terminen mientras trabajas).` }); }
-        catch (e) { return send(res, 400, { error: e.message }); }
-      }
-      if (req.method === 'POST' && action === 'encargos' && parts[4]) {
-        const b = await readBody(req);
-        try { return send(res, 200, { ok: true, ...(await decideSpawn(r, parts[4], b.decision === 'approve', b.items)) }); }
-        catch (e) { return send(res, 409, { error: e.message }); }
-      }
-      if (req.method === 'POST' && action === 'cola' && parts[4]) { // quitar uno que espera cupo en la puerta
-        const i = spawnQueue.findIndex(q => q.id === parts[4] && q.parent === r.name);
-        if (i < 0) return send(res, 404, { error: 'Ese robot ya entró o no estaba en la cola.' });
-        const [q] = spawnQueue.splice(i, 1);
-        log(r, 'sys', `Quitaste de la cola «${q.title || trunc(q.text, 40)}»`);
-        for (const s of salas) { const e = s.roster?.find(x => x.qid === q.id); if (e) { e.dropped = true; saveSalas(); writeRoster(s); } }
-        flushIfIdle(r.name);
-        emit(r);
-        return send(res, 200, { ok: true });
-      }
+      if (await equipoRobotApi(req, res, url, parts, r, action)) return;
       if (req.method === 'POST' && action === 'permission') {
         const { decision } = await readBody(req);
         await pressKey(r, decision === 'approve' ? 'approve' : 'reject');
@@ -440,4 +293,4 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-export { server };
+export { readBody, readRaw, send, server };

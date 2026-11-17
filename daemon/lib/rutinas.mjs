@@ -3,13 +3,14 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { now, PERMISSION_MODES, PORT, robots, ROUTINE_TICK_MS, run, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { now, PERMISSION_MODES, PORT, replaceList, robots, ROUTINE_TICK_MS, run, RUNS, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, usage } from './estado.mjs';
 import { log } from './persistencia.mjs';
 import { archive } from './turno.mjs';
 import { retake } from './exportar.mjs';
 import { revive } from './consola.mjs';
 import { launch, say } from './tmux.mjs';
+import { readBody, send } from './http.mjs';
 
 /* ---------- rutinas ---------- */
 // Dos tipos:
@@ -501,4 +502,35 @@ setInterval(() => {
   for (const rt of routines) if (!rt.paused && !rt.running && Number.isFinite(rt.nextAt) && Date.now() >= rt.nextAt) checkRoutine(rt);
 }, ROUTINE_TICK_MS);
 
-export { checkRoutine, createRoutine, emitRoutines, firstRun, previewRoutine, resetRepoIndex, routines, routineView, saveRoutines, updateRoutine };
+// Rutas de la API: rutinas y despertadores. Las llama http.mjs en orden; devuelven algo (true) si atendieron la petición.
+async function rutinasApi(req, res, url, parts) {
+    if (req.method === 'POST' && url.pathname === '/api/routines/preview') {
+      try { return send(res, 200, await previewRoutine(await readBody(req))); } catch (e) { return send(res, 400, { error: trunc(e.stderr || e.message, 300) }); }
+    }
+    if (req.method === 'POST' && url.pathname === '/api/routines') {
+      try { const rt = await createRoutine(await readBody(req)); emitRoutines(); return send(res, 201, { ok: true, id: rt.id }); }
+      catch (e) { return send(res, 400, { error: trunc(e.stderr || e.message, 300) }); }
+    }
+    if (parts[0] === 'api' && parts[1] === 'routines' && parts[2]) {
+      const rt = routines.find(x => x.id === parts[2]);
+      if (!rt) return send(res, 404, { error: 'Esa rutina no existe.' });
+      if (req.method === 'POST' && parts[3] === 'run') { checkRoutine(rt); return send(res, 200, { ok: true }); }
+      if (req.method === 'PUT' && !parts[3]) {
+        try { await updateRoutine(rt, await readBody(req)); emitRoutines(); return send(res, 200, { ok: true }); }
+        catch (e) { return send(res, 400, { error: trunc(e.stderr || e.message, 300) }); }
+      }
+      if (req.method === 'POST' && parts[3] === 'pause') {
+        rt.paused = !rt.paused;
+        if (!rt.paused) { if (rt.type === 'wake') delete rt.fired; rt.doneOnce = false; rt.nextAt = firstRun(rt); } else rt.nextAt = Infinity;
+        saveRoutines(); emitRoutines();
+        return send(res, 200, { ok: true, paused: rt.paused });
+      }
+      if (req.method === 'DELETE' && !parts[3]) {
+        replaceList(routines, routines.filter(x => x !== rt));
+        saveRoutines(); emitRoutines();
+        return send(res, 200, { ok: true });
+      }
+    }
+}
+
+export { checkRoutine, createRoutine, emitRoutines, firstRun, previewRoutine, resetRepoIndex, routines, routineView, rutinasApi, saveRoutines, updateRoutine };

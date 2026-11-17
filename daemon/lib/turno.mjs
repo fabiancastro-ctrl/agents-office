@@ -3,12 +3,13 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { inbox, now, robots, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { inbox, now, replaceList, robots, RUNS, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, bumpStats, emit, view } from './estado.mjs';
 import { log, saveState, setState } from './persistencia.mjs';
 import { maybeFlush, pendingResults, reportToParent } from './equipo.mjs';
 import { removeRobot } from './consola.mjs';
 import { emitSalas, postThread, salas, saveSalas } from './salas.mjs';
+import { readBody, send } from './http.mjs';
 
 /* ---------- ciclo de vida del turno ---------- */
 
@@ -167,4 +168,46 @@ const normText = t => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\
 // único que recibe el robot que retome la tarea.
 const sumDir = () => path.join(WORKSPACE || RUNS, 'docs', 'resumenes-robots');
 
-export { ARCH_FILE, ARCH_MAX, archive, cleanTitle, criticalOf, deliver, emitInbox, favorites, finishTurn, normText, pins, requestOf, ROBOT_HINTS, saveFavorites, savePins, sumDir, SUMMARY_ASK, trackDoc };
+// Rutas de la API: encargos frecuentes. Las llama http.mjs en orden; devuelven algo (true) si atendieron la petición.
+async function frecuentesApi(req, res, url, parts) {
+    if (req.method === 'POST' && url.pathname === '/api/favorites') {
+      const b = await readBody(req);
+      const kind = b.kind === 'libre' ? 'libre' : 'skill';
+      const f = { id: crypto.randomBytes(3).toString('hex'), name: trunc(String(b.name || '').trim(), 40), kind,
+        skill: kind === 'skill' ? String(b.skill || '').replace(/^\//, '').trim() : null, args: kind === 'skill' ? String(b.args || '') : '',
+        text: kind === 'libre' ? String(b.text || '') : '', permissionMode: b.permissionMode || '', title: cleanTitle(b.title) };
+      if (kind === 'skill' ? !f.skill : !f.text.trim()) return send(res, 400, { error: 'Llena el encargo antes de guardarlo.' });
+      f.name ||= f.title || (kind === 'skill' ? trunc(`/${f.skill} ${f.args}`.trim(), 40) : trunc(f.text, 40));
+      favorites.push(f); if (favorites.length > 30) favorites.shift();
+      saveFavorites();
+      return send(res, 201, { ok: true, favorite: f });
+    }
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'favorites' && parts[2]) {
+      replaceList(favorites, favorites.filter(f => f.id !== parts[2]));
+      saveFavorites();
+      return send(res, 200, { ok: true });
+    }
+}
+
+// Rutas de la API: mensajes fijados. Las llama http.mjs en orden; devuelven algo (true) si atendieron la petición.
+async function fijadosApi(req, res, url, parts) {
+    if (req.method === 'POST' && url.pathname === '/api/pins') {
+      const b = await readBody(req);
+      const text = String(b.text || '').slice(0, 60000), robot = trunc(String(b.robot || '').trim(), 40);
+      if (!text.trim() || !robot) return send(res, 400, { error: 'Falta el mensaje.' });
+      const at = String(b.at || new Date().toISOString());
+      const dup = pins.find(p => p.robot === robot && p.at === at);
+      if (dup) return send(res, 200, { ok: true, pin: dup });
+      const p = { id: crypto.randomBytes(4).toString('hex'), robot, title: trunc(String(b.title || ''), 80), at, text, pinnedAt: new Date().toISOString() };
+      pins.push(p); if (pins.length > 100) pins.shift();
+      savePins();
+      return send(res, 201, { ok: true, pin: p });
+    }
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'pins' && parts[2]) {
+      replaceList(pins, pins.filter(p => p.id !== parts[2]));
+      savePins();
+      return send(res, 200, { ok: true });
+    }
+}
+
+export { ARCH_FILE, ARCH_MAX, archive, cleanTitle, criticalOf, deliver, emitInbox, favorites, fijadosApi, finishTurn, frecuentesApi, normText, pins, requestOf, ROBOT_HINTS, saveFavorites, savePins, sumDir, SUMMARY_ASK, trackDoc };

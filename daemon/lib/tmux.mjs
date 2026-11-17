@@ -74,7 +74,7 @@ async function launchReserved({ kind, skill, args, text, permissionMode, name, o
   const rt = routine ? routines.find(x => x.id === routine) : null;
   const sala = salaId ? salas.find(x => x.id === salaId) : null;
   if (salaId && !sala) throw new Error('Esa sala de épica no existe.');
-  if (sala) prompt += salaPreamble(sala);
+  if (sala) prompt += salaPreamble(sala, name);
   const place = sala ? roomSeat(`sala-${sala.id}`, sala.name, { sala: sala.id }) : rt ? roomSeat(rt.id, rt.name) : freeDesk();
   if (!place) throw new Error('No hay escritorios libres en la oficina.');
   if (permissionMode && !PERMISSION_MODES.has(permissionMode)) throw new Error('Modo de permisos inválido.');

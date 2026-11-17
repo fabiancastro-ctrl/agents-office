@@ -78,7 +78,7 @@ function knownDoc(p) {
   return known ? abs : null;
 }
 
-const MAP_THEMES = ['moderna', 'garaje', 'nave', 'biblioteca', 'cafeteria'];
+const MAP_THEMES = ['moderna', 'garaje', 'nave', 'biblioteca', 'cafeteria', 'bosque'];
 // Contadores de la oficina para la decoración que crece: trabajos terminados (total y hoy) y reviews.
 const STATS_FILE = path.join(RUNS, 'estadisticas.json');
 let stats = { total: 0, reviews: 0, day: '', today: 0 };

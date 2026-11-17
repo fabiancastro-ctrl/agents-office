@@ -278,6 +278,10 @@ function lobbyServe(port) {
   });
   http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
+    // Solo local, como cada oficina: a 127.0.0.1/localhost en su puerto y sin peticiones desde otra página.
+    const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
+    const origin = req.headers.origin;
+    if (!hosts.has(String(req.headers.host || '')) || (origin && !hosts.has(origin.replace(/^https?:\/\//, '')))) return send(res, 403, { error: 'Solo local: petición rechazada.' });
     try {
       if (req.method === 'POST' && url.pathname === '/api/offices') {
         if (!sameOrigin(req)) return send(res, 403, { error: 'Origen no permitido' });
