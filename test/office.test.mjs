@@ -188,29 +188,33 @@ test('plantas: crecen con las tareas de la semana de la cuota y al renovarse se 
   } finally { await o.stop(); }
 });
 
-test('resultados de los hijos: llegan juntos en un solo mensaje al padre, con la nota de la sala y sin turno extra al aprobar', async () => {
-  const o = await startOffice({ maxRobots: 4 });
-  const pane = n => execFileSync('tmux', ['capture-pane', '-p', '-J', '-S', '-300', '-t', `${o.session}:${n}`], { encoding: 'utf8' });
+test('resultados de los hijos: sin esperar a los hermanos si el padre está libre, juntos si llegan mientras trabaja, y sin turno extra al aprobar', async () => {
+  const o = await startOffice({ maxRobots: 5, env: { OFFICE_RESULT_DEBOUNCE_MS: '300' } });
+  const sentLog = async () => (await o.robot('jefe')).log.filter(l => /^Te lleg/.test(l.text)).map(l => l.text);
   try {
     await o.api('POST', '/api/robots', libre('jefe'));
-    const req = await o.api('POST', '/api/robots/jefe/encargos', { contexto: 'Dato que todos deben saber', encargos: [{ titulo: 'Uno', encargo: 'a' }, { titulo: 'Dos', encargo: 'b' }] });
+    await turn(o, 'jefe', 'arranca', 'Pido robots'); // el padre queda libre
+    const req = await o.api('POST', '/api/robots/jefe/encargos', { contexto: 'Dato que todos deben saber', encargos: [{ titulo: 'Uno', encargo: 'a' }, { titulo: 'Dos', encargo: 'b' }, { titulo: 'Tres', encargo: 'c' }] });
+    assert.match(req.body.mensaje, /CONTEXT\.md/, 'el padre sabe desde ya dónde estará el contexto compartido');
     const ok = await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' });
-    await sleep(800);
-    assert.doesNotMatch(pane('jefe'), /\[Oficina\]/, 'aprobar no le escribe al padre (no le abre un turno)');
-    // Cada hijo arranca con el contexto compartido copiado en su encargo.
-    await waitFor(() => o.claudeCalls().filter(c => c.includes('Dato que todos deben saber')).length >= 2, { what: 'que los hijos arranquen con el contexto' });
-    const [k1, k2] = ok.body.launched;
+    assert.equal((await o.snapshot()).salas.find(x => x.id === ok.body.sala).context, req.body.contexto, 'es la misma ruta');
+    await sleep(600);
+    assert.deepEqual(await sentLog(), [], 'aprobar no le escribe al padre (no le abre un turno)');
+    await waitFor(() => o.claudeCalls().filter(c => c.includes('Dato que todos deben saber')).length >= 3, { what: 'que los hijos arranquen con el contexto' });
+    const [k1, k2, k3] = ok.body.launched;
+    // Padre libre: el primero le llega sin esperar a sus hermanos.
     await turn(o, k1, 'encargo', 'Resultado UNO');
-    await sleep(800);
-    assert.doesNotMatch(pane('jefe'), /Resultado UNO/, 'el primero espera al otro');
+    await waitFor(async () => (await sentLog()).length === 1, { what: 'el primer resultado' });
+    assert.match((await sentLog())[0], new RegExp(k1));
+    // Padre ocupado: los que terminan mientras trabaja se guardan y le llegan juntos al cerrar su turno.
+    await o.hook('jefe', { hook_event_name: 'UserPromptSubmit', prompt: 'integra' });
     await turn(o, k2, 'encargo', 'Resultado DOS');
-    await waitFor(() => /Resultado DOS/.test(pane('jefe')), { what: 'que lleguen los resultados' });
-    const p = pane('jefe');
-    assert.match(p, /Resultado UNO[\s\S]*Resultado DOS/, 'los dos en el mismo mensaje');
-    assert.match(p, /Aprobé tus robots/, 'con la nota de la sala');
-    const sent = (await o.robot('jefe')).log.filter(l => /Te llegaron juntos/.test(l.text));
-    assert.equal(sent.length, 1, 'un solo mensaje');
-    assert.match(sent[0].text, new RegExp(`${k1}, ${k2}`));
+    await turn(o, k3, 'encargo', 'Resultado TRES');
+    await sleep(800);
+    assert.equal((await sentLog()).length, 1, 'mientras trabaja no se le escribe');
+    await o.hook('jefe', { hook_event_name: 'Stop', last_assistant_message: 'Integré UNO' });
+    await waitFor(async () => (await sentLog()).length === 2, { what: 'los resultados guardados' });
+    assert.match((await sentLog())[1], new RegExp(`juntos los resultados de ${k2}, ${k3}`));
   } finally { await o.stop(); }
 });
 
