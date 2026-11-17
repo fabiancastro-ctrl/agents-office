@@ -36,7 +36,7 @@ function snippet(text, qn) {
 }
 function searchResults(q) {
   const qn = norm(q.trim());
-  if (qn.length < 2) return '<p class="muted">Escribe al menos 2 letras. Busca en lo que dijeron los robots y lo que les escribiste, también en las salas.</p>';
+  if (qn.length < 2) return '<p class="muted">Escribe al menos 2 letras. Busca en lo que dijeron los robots y lo que les escribiste, también en las salas (abiertas y cerradas).</p>';
   const groups = [];
   for (const a of st.robots.values()) {
     const hits = [];
@@ -73,6 +73,17 @@ async function searchArchive() {
     }
     const qn = norm(q);
     box.innerHTML = r.results.length ? `<h4 class="sr-sep">Robots que ya se fueron</h4>` + r.results.map(a => `<section class="sr-g"><h4>${av(a)}<b>${esc(a.name)}</b><small>${a.title ? `📌 ${esc(a.title)} · ` : ''}se fue ${when(a)}</small></h4>${a.hits.length ? a.hits.map(h => `<button type="button" class="sr-hit" data-arch="${esc(a.id)}" data-i="${h.i}"><span class="sr-w">${esc(h.who || (h.kind === 'user' ? 'Tú' : a.name))} · ${hhmm(h.at)}</span><span class="sr-t">${snippet(h.text, qn) || esc(plainMd(h.text).slice(0, 160))}</span></button>`).join('') : `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-t">${esc(a.label)}</span></button>`}</section>`).join('') : '';
+  } catch { /* sin archivo: solo no se muestra */ }
+  searchClosedSalas(q, box);
+}
+// Salas cerradas: su hilo y su contexto (los busca el daemon en los archivos). Clic abre el archivo.
+async function searchClosedSalas(q, box) {
+  if (q.length < 2) return;
+  try {
+    const r = await (await fetch(`/api/salas-cerradas?q=${encodeURIComponent(q)}`)).json();
+    if ($('#search-arch', PANEL) !== box || searchUi.q.trim() !== q || !r.results?.length) return;
+    const qn = norm(q), when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short'});
+    box.insertAdjacentHTML('beforeend', `<h4 class="sr-sep">Salas cerradas</h4>` + r.results.map(s => `<section class="sr-g" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><h4>🚪 <b>${esc(s.name)}</b><small>cerrada ${when(s.closedAt)}</small></h4>${s.hits.length ? s.hits.map(h => `<button type="button" class="sr-hit" data-docpath="${esc(h.path)}"><span class="sr-w">${h.where === 'hilo' ? `💬 ${esc(h.who)}` : '📋 contexto'}</span><span class="sr-t">${snippet(h.text, qn) || esc(plainMd(h.text).slice(0, 160))}</span></button>`).join('') + (s.more ? `<small class="muted">y ${s.more} más</small>` : '') : `<button type="button" class="sr-hit" data-docpath="${esc(s.context)}"><span class="sr-t">${esc(s.purpose || 'Abrir su contexto')}</span></button>`}</section>`).join(''));
   } catch { /* sin archivo: solo no se muestra */ }
 }
 document.addEventListener('click', async e => {

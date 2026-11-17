@@ -898,6 +898,10 @@ html[data-theme=light] .sub-row{background:#ece9fb;color:#3b2f86}
 .map-wrap[data-mt=biblioteca] .r-open{background:repeating-linear-gradient(90deg,rgba(0,0,0,.14) 0 1px,transparent 1px 22px),repeating-linear-gradient(0deg,rgba(255,220,170,.03) 0 1px,transparent 1px 11px),var(--open)}
 .map-wrap[data-mt=cafeteria]{--floor:#5a3528;--tile:#6a4031;--wall:#b98a5e;--open:#4a2e24;--cron:#3d2a2c;--war:#4a2a26;--coord:#3c3522;--desk-a:#e2cba5;--desk-b:#c8ab80;--desk-e:#8f7350;--brk:#3e2a22}
 .map-wrap[data-mt=cafeteria] .r-open{background:conic-gradient(rgba(0,0,0,.14) 25%,transparent 0 50%,rgba(0,0,0,.14) 0 75%,transparent 0) 0 0/28px 28px,var(--open)}
+.map-wrap[data-mt=bosque]{--floor:#1c2a1b;--tile:#253624;--wall:#6b5a3a;--open:#1f2e1e;--cron:#26301f;--war:#2e3324;--coord:#2a3020;--desk-a:#a8835a;--desk-b:#8a6843;--desk-e:#5a4229;--brk:#22301f}
+.map-wrap[data-mt=bosque] .r-open{background:radial-gradient(circle at 20% 30%,rgba(140,190,110,.12) 0 2px,transparent 3px) 0 0/26px 22px,radial-gradient(circle at 70% 70%,rgba(110,170,90,.1) 0 1.5px,transparent 2.5px) 0 0/34px 30px,linear-gradient(rgba(255,255,255,.015),rgba(0,0,0,.08)),var(--open)}
+.map-wrap[data-mt=bosque] .room{border-top-color:#8a6c50}
+.map-wrap[data-mt=bosque] .map[data-tod=day] .win,.map-wrap[data-mt=bosque] .map[data-tod=morning] .win{background:linear-gradient(#bfe3a8,#7fc48a)}
 /* detalles de cada estilo */
 #tdeco{position:absolute;inset:0;pointer-events:none;z-index:2}
 #tdeco i{position:absolute;display:block}
@@ -1415,3 +1419,46 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 .sala-board .sb-spend{font-size:11.5px;color:#5b4433;padding:2px 2px 0}
 .sala-board .sb-spend b{font-family:var(--mono)}
 [data-sala-dismiss].armed{border-color:var(--rose);color:var(--rose)}
+.sala-board .sb-team{display:flex;flex-wrap:wrap;gap:3px 8px;font-size:11px;line-height:1.35}
+.sala-board .sb-team>b{flex-basis:100%;font-size:12px;color:#5b4433}
+.sala-board .sb-mem code{background:#e7dfcc;color:#3b2c22;padding:0 3px;border-radius:3px}
+.sala-board .sb-mem i{font-style:normal;color:#8a7d68}
+.sala-board .sb-mem.st-entregó i{color:#4f7a55} .sala-board .sb-mem.st-trabajando i{color:#3f6fc9} .sala-board .sb-mem.st-se-fue i{color:#a89c88}
+
+/* E · Estela del propulsor de los hijos */
+.trail{position:absolute;width:9px;height:9px;margin:-3px 0 0 -4.5px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(220,226,236,.75),rgba(160,170,186,.35) 60%,transparent 70%);animation:trail-out .9s ease-out forwards}
+.trail.spark{width:4px;height:4px;margin:-1px 0 0 -2px;background:radial-gradient(circle,#fff7d6,#ffd36b 50%,transparent 70%);animation-name:spark-out}
+@keyframes trail-out{from{transform:translate(0,0) scale(.6);opacity:.85}to{transform:translate(var(--dx),10px) scale(2.2);opacity:0}}
+@keyframes spark-out{from{transform:translate(0,0);opacity:1}to{transform:translate(calc(var(--dx) * 2),16px);opacity:0}}
+/* F · De noche se enciende la lámpara de cada escritorio ocupado */
+.desk .lampg{display:none;position:absolute;right:4%;top:-26%;width:9%;height:34%;pointer-events:none}
+.desk .lampg::before{content:"";position:absolute;left:30%;bottom:0;width:12%;height:70%;background:#3a4558}
+.desk .lampg::after{content:"";position:absolute;left:-10%;top:0;width:90%;height:38%;border-radius:50% 50% 12% 12%;background:#2f8f5b}
+.map[data-tod=night] .desk.occ .lampg,.map[data-tod=evening] .desk.occ .lampg{display:block}
+.map[data-tod=night] .desk.occ .lampg::after{box-shadow:0 3px 8px 2px rgba(255,214,130,.6),0 10px 26px 14px rgba(255,214,130,.16)}
+.map[data-tod=evening] .desk.occ .lampg::after{box-shadow:0 3px 6px 1px rgba(255,214,130,.4),0 8px 20px 10px rgba(255,214,130,.1)}
+/* G · Reloj de la cuota */
+.qclock{position:absolute;z-index:3;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:help;font-family:var(--mono)}
+.qclock svg{width:100%;max-width:46px;aspect-ratio:1;filter:drop-shadow(0 3px 2px rgba(0,0,0,.4))}
+.qc-face{fill:#f4efe2;stroke:#8a6c50;stroke-width:2.4}
+.qc-tick{stroke:#5b4433;stroke-width:1.2} .qc-h{stroke:#2a2620;stroke-width:2.2;stroke-linecap:round} .qc-m{stroke:#2a2620;stroke-width:1.4;stroke-linecap:round} .qc-c{fill:#ef7f8a}
+.qclock b{font-size:9px;color:var(--ink);background:rgba(17,23,34,.75);padding:0 3px;border-radius:3px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:clip}
+.qclock small{font-size:7px;letter-spacing:.12em;color:var(--muted)}
+.qclock.soon b{color:#ffd36b;animation:pulse-soft 1.4s ease-in-out infinite}
+@keyframes pulse-soft{50%{opacity:.55}}
+/* H · Probador de apariencia */
+.lk-prev{display:inline-flex;align-items:flex-end;justify-content:center;width:64px;height:76px;border-radius:10px;background:radial-gradient(circle at 50% 85%,rgba(255,255,255,.12),transparent 60%),repeating-linear-gradient(45deg,rgba(255,255,255,.03) 0 6px,transparent 6px 12px),#141a26;box-shadow:inset 0 0 0 1px var(--line);perspective:220px}
+.lk-prev svg{width:51px;height:62px;overflow:visible;transform-origin:50% 100%}
+.lk-prev .f,.lk-prev .p{display:none}
+/* J · Estilo Bosque: árboles, hongos, tronco, letrero y luciérnagas (de noche) */
+.td-tree{width:4.4%;aspect-ratio:3/4;background:radial-gradient(circle at 50% 34%,#4f9a5a 0 30%,transparent 31%),radial-gradient(circle at 28% 52%,#3f8a4c 0 24%,transparent 25%),radial-gradient(circle at 72% 52%,#3f8a4c 0 24%,transparent 25%),linear-gradient(90deg,transparent 42%,#6b4a2f 42% 58%,transparent 58%) 0 100%/100% 34% no-repeat;filter:drop-shadow(0 4px 2px rgba(0,0,0,.35))}
+.td-tree.t2{width:3.6%}
+.td-log{background:linear-gradient(#8a6843,#5a4229);border-radius:999px;box-shadow:inset -6px 0 0 #c9a77a,0 3px 0 rgba(0,0,0,.3)}
+.td-mush{width:1.3%;aspect-ratio:1;border-radius:50% 50% 20% 20%/60% 60% 20% 20%;background:radial-gradient(circle at 35% 35%,#fff 0 12%,transparent 14%),radial-gradient(circle at 68% 45%,#fff 0 10%,transparent 12%),#d1585d;box-shadow:0 5px 0 -2px #efe3c8}
+.td-mush.m2{width:.9%}
+.td-sign{background:#6b4a2f;border:2px solid #4a3220;border-radius:3px}
+.td-sign::before{content:"";position:absolute;inset:22% 12%;background:repeating-linear-gradient(#e7d9b8 0 2px,transparent 2px 7px)}
+.td-fly{width:5px;height:5px;border-radius:50%;background:#e8ff8a;opacity:0;box-shadow:0 0 6px 2px rgba(232,255,138,.7)}
+.map[data-tod=night] ~ #tdeco .td-fly,.map-wrap .map[data-tod=night] #tdeco .td-fly,.map-wrap[data-mt=bosque] .map[data-tod=night] .td-fly{animation:firefly 4.2s ease-in-out infinite}
+.td-fly.f2{animation-delay:-1.1s!important} .td-fly.f3{animation-delay:-2.3s!important} .td-fly.f4{animation-delay:-3.1s!important}
+@keyframes firefly{0%,100%{opacity:0;transform:translate(0,0)}20%{opacity:1}50%{opacity:.85;transform:translate(14px,-10px)}80%{opacity:0;transform:translate(26px,4px)}}

@@ -48,7 +48,7 @@ function upsert(d, fromSnapshot = false) {
 
 function vacate(place, a) {
   const desk = deskFor(place);
-  if (desk) { desk.el.classList.remove('on', 'deleg'); desk.paper.hidden = true; desk.el.dataset.cl = 0; desk.el.title = ''; delete desk.el.dataset.ctx; desk.el.classList.remove('noted'); }
+  if (desk) { desk.el.classList.remove('on', 'deleg', 'occ'); desk.paper.hidden = true; desk.el.dataset.cl = 0; desk.el.title = ''; delete desk.el.dataset.ctx; desk.el.classList.remove('noted'); }
   for (const el of a.subEls.values()) el.remove();
   a.subEls.clear();
   a.extraEl?.remove(); a.extraEl = null;
@@ -106,7 +106,7 @@ function declutterBubbles() {
       let up = 0;
       for (let floor = 0; floor < 3; floor++) {
         const top = r.top - up, bottom = r.bottom - up;
-        if (!placed.some(p => r.left < p.right + 2 && r.right > p.left - 2 && top < p.bottom + 2 && bottom > p.top - 2)) break;
+        if (!placed.some(p => r.left < p.right + 8 && r.right > p.left - 8 && top < p.bottom + 3 && bottom > p.top - 3)) break; // con aire: que no queden pegados
         up += r.height + 4;
       }
       if (up) b.style.setProperty('--by', up + 'px');
@@ -149,6 +149,7 @@ function paint(a) {
   const pend = d.docs.filter(x => !x.delivered).length;
   if (desk) {
     desk.el.classList.toggle('on', busy);
+    desk.el.classList.add('occ'); // ocupado: de noche se le prende la lámpara
     desk.el.classList.toggle('deleg', d.state === 'delegating');
     desk.el.dataset.tool = busy ? tool : '';
     // Desorden del escritorio según qué tan lleno tiene el contexto: hojas, tazas y bolas de papel.
@@ -197,7 +198,7 @@ function paintSubs(a) {
   if (extra > 0) {
     if (!a.extraEl) { a.extraEl = document.createElement('div'); a.extraEl.className = 'extra'; MAP.appendChild(a.extraEl); }
     a.extraEl.textContent = `+${extra}`;
-    a.extraEl.style.left = (seat.x + 9.2) + '%'; a.extraEl.style.top = py(seat.y + 5);
+    a.extraEl.style.left = (seat.x + 9.6) + '%'; a.extraEl.style.top = py(seat.y - 0.6);
   } else if (a.extraEl) { a.extraEl.remove(); a.extraEl = null; }
   viewClass(a);
 }

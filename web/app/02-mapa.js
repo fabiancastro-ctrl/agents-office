@@ -10,7 +10,7 @@ function ensureDesks(n) {
     el.className = 'desk'; el.dataset.desk = i;
     // Silla y algún objeto (taza o planta) para que los escritorios no sean todos iguales.
     const item = i % 3 === 1 ? '<i class="mug"></i>' : i % 4 === 2 ? '<i class="dplant"></i>' : '';
-    el.innerHTML = `<i class="ctxm" aria-hidden="true"><b></b></i><i class="chair"></i><div class="mon"><i></i></div><div class="mon m2"><i></i></div><div class="kb"></div><i class="mpad"></i><i class="mouse"></i>${item}<i class="clutter"></i><i class="dnote" aria-hidden="true"></i><div class="paper" hidden></div><span class="dn">${String(i + 1).padStart(2, '0')}</span>`;
+    el.innerHTML = `<i class="ctxm" aria-hidden="true"><b></b></i><i class="chair"></i><div class="mon"><i></i></div><div class="mon m2"><i></i></div><div class="kb"></div><i class="mpad"></i><i class="mouse"></i>${item}<i class="clutter"></i><i class="lampg" aria-hidden="true"></i><i class="dnote" aria-hidden="true"></i><div class="paper" hidden></div><span class="dn">${String(i + 1).padStart(2, '0')}</span>`;
     MAP.appendChild(el);
     deskEls.push({el, paper: el.querySelector('.paper')});
   }
@@ -73,6 +73,7 @@ function layout(incoming) {
   setRect($('#alarm'), 88.1, 77 + e, 2.2, null);
   setRect($('#me'), 91, 74 + e, 5, 11);
   setRect($('#eotm'), 80.2, 44, 11, 20.5); // cuadro del empleado de la semana, colgado arriba en tu escritorio
+  setRect($('#qclock'), 92.3, 45.5, 5.2, 12); // reloj de la cuota semanal
   setRect($('.door'), 36, 97.2 + e, 8, 2.8);
   document.querySelectorAll('.win').forEach((w, k) => setRect(w, 18.6 + k * 18, 37.1, 4.2, 1.8)); // en los huecos entre escritorios
   setRect($('.deco.plant.p1'), 2.9, 27.8, 1.7, 4.5);
@@ -80,7 +81,7 @@ function layout(incoming) {
   setRect($('.deco.plant.p2'), 76.15, 28.5, 1.7, 4.5);
   placeGrowth(e);
   setRect($('#trophies'), 79.6, 89.2 + e); // repisa al pie de tu escritorio, debajo de la bandeja
-  setRect($('#archivador'), 88.4, 81.6 + e, 2.8, 8); // archivador: robots despedidos con su resumen
+  setRect($('#archivador'), 87.5, 80.8 + e, 2.8, 8); // archivador: robots despedidos con su resumen
   ensureDesks(rows * COLS);
   // Mesas un poco más chicas que su lugar (13 × 10): mismo centro y mismo borde de abajo, así los robots no se mueven.
   deskEls.forEach((d, i) => { const p = deskPos(i); setRect(d.el, p.x + 1, p.y + 1.5, null, 8.5); d.el.hidden = i >= rows * COLS; });
@@ -222,6 +223,7 @@ function renderBoard() {
   el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></div>
     <div class="sb-why" title="Por qué se creó esta sala">${esc(why)}</div>
     ${s.spend ? `<div class="sb-spend" title="Lo que gastaron todos los que pasaron por esta sala (padre e hijos, también los que ya se fueron, con sus subagentes) desde que se armó. Entrada + salida + caché escrita, como los KPI. Se recalcula cada minuto y no gasta cuota.">💸 Gasto del equipo: <b>${fmtTok(s.spend)}</b> tokens desde que se armó</div>` : ''}
+    ${s.roster?.length ? `<div class="sb-team"><b>Reparto</b>${s.roster.map(e => `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}"><code>${esc(e.name)}</code> ${esc(e.title || '')} <i>${esc(e.state)}</i></span>`).join('')}</div>` : ''}
     <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
     <div class="sb-notes">${notes.length ? notes.map((m, i) => `<div class="sb-note n${i}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 110))}</div>`).join('') : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
   el.querySelector('.sb-ctx').scrollTop = keep;
@@ -315,11 +317,23 @@ async function walkTo(a, dest) {
   a.transit = true; viewClass(a);
   try { await walkSteps(a, dest); } finally { a.transit = false; viewClass(a); }
 }
+// Un soplo de la estela donde está ahora el robot (en plena transición: getComputedStyle da la posición actual).
+function dropTrail(a) {
+  if (!a.el.isConnected || a.el.classList.contains('offview')) return;
+  const cs = getComputedStyle(a.el), i = document.createElement('i');
+  i.className = Math.random() < .35 ? 'trail spark' : 'trail';
+  i.style.left = cs.left; i.style.top = cs.top; i.style.zIndex = Math.max(1, (parseInt(a.el.style.zIndex) || 500) - 1);
+  i.style.setProperty('--dx', `${(Math.random() * 10 - 5).toFixed(1)}px`);
+  MAP.appendChild(i);
+  setTimeout(() => i.remove(), 900);
+}
 async function walkSteps(a, dest) {
   a.el.classList.add('moving');
   // En la sala que estás viendo, el que llega trae su portátil en las manos (el que se va ya lleva su caja).
   a.el.classList.toggle('carry-laptop', !!st.view && a.data?.place?.sala === st.view && !a.el.classList.contains('leaving'));
   syncLaptops();
+  // Los hijos flotantes dejan una estela de humo y chispas mientras se mueven (solo si se ven).
+  const trail = a.el.classList.contains('flyer') && !a.el.classList.contains('offview') ? setInterval(() => dropTrail(a), 90) : 0;
   for (const p of (st.view ? salaRoute : route)(a.pos, dest)) {
     const ms = Math.max(200, Math.hypot(p.x - a.pos.x, p.y - a.pos.y) * 30);
     void a.el.offsetWidth; // sin este reflow el navegador junta el cambio y el robot "salta"
@@ -330,6 +344,7 @@ async function walkSteps(a, dest) {
     a.pos = {...p};
     await new Promise(r => setTimeout(r, ms));
   }
+  clearInterval(trail);
   a.el.classList.remove('moving', 'carry-laptop');
   syncLaptops();
   delete a.el.dataset.dir;

@@ -34,7 +34,9 @@ const door = () => ({x: 40, y: 99 + extra()});
 const coordDrop = () => ({x: 86, y: 92 + extra()});
 const deskPos = i => ({x: 5 + (i % COLS) * 18, y: 43 + Math.floor(i / COLS) * ROW_H});
 // Lugares de los subagentes alrededor del robot: dos a los lados y cinco debajo.
-const MINI_SLOTS = [[-4.8, 0], [4.8, 0], [-6.6, 6], [-3.3, 6], [0, 6], [3.3, 6], [6.6, 6]];
+// Subagentes alrededor de su robot: a los lados, en su pasillo. Nunca más abajo de ~2,5 unidades: ahí empieza la fila
+// de escritorios siguiente y se le subían a los monitores. Los que no caben se cuentan en «+N».
+const MINI_SLOTS = [[-4.8, 0], [4.8, 0], [-7.6, -3.4], [7.6, -3.4], [-7.4, 2.4], [7.4, 2.4]];
 
 const st = {robots: new Map(), pins: [], side: null, jump: null, inbox: [], door: [], fame: null, routines: [], salas: [], view: null, config: {}, selected: null, att: {}, weeks: [], claude: null, claudeLoading: false, claudeError: ''};
 const ATTACH_MAX = 20 * 1024 * 1024;

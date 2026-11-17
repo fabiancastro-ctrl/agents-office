@@ -13,6 +13,7 @@ const TDECO = {
   garaje: '<i class="td-box" style="left:3%;top:89%"></i><i class="td-box" style="left:5.8%;top:89%"></i><i class="td-box" style="left:4.4%;top:84.6%"></i><i class="td-box" style="left:71%;top:90%"></i><i class="td-board" style="left:31%;top:33.4%;width:8%;height:4.2%"></i>',
   nave: '<i class="td-pipe" style="left:3%;top:96.2%;width:72%"></i><i class="td-light" style="left:3.2%;top:39.6%"></i><i class="td-light" style="left:74%;top:39.6%"></i><i class="td-light" style="left:3.2%;top:94%"></i><i class="td-light" style="left:74%;top:94%"></i>',
   biblioteca: '<i class="td-shelf" style="left:3%;top:88.4%;width:13%;height:7%"></i><i class="td-shelf" style="left:61%;top:88.4%;width:13%;height:7%"></i><i class="td-lamp" style="left:18%;top:90%"></i><i class="td-lamp" style="left:58%;top:90%"></i>',
+  bosque: '<i class="td-tree" style="left:2.6%;top:84%"></i><i class="td-tree t2" style="left:68.5%;top:85%"></i><i class="td-log" style="left:8%;top:93.2%;width:7%;height:2.4%"></i><i class="td-mush" style="left:62.5%;top:93%"></i><i class="td-mush m2" style="left:64.2%;top:93.8%"></i><i class="td-sign" style="left:31%;top:33.3%;width:7%;height:4.4%"></i><i class="td-fly" style="left:20%;top:88%"></i><i class="td-fly f2" style="left:45%;top:90%"></i><i class="td-fly f3" style="left:58%;top:86%"></i><i class="td-fly f4" style="left:12%;top:80%"></i>',
   cafeteria: '<i class="td-bar" style="left:3%;top:90.6%;width:16%;height:4.6%"></i><i class="td-menu" style="left:31%;top:33.2%;width:7%;height:4.4%"></i>'
 };
 // Decoración que crece con el trabajo: en cada nivel aparecen plantas nuevas (y las de siempre crecen y florecen),
@@ -27,7 +28,26 @@ function placeGrowth(e) {
 const POTS = ['#8a5a3c', '#b4563f', '#3f6f8a', '#6b5a9a', '#c08a3e', '#4f7a55', '#9a4f6b'];
 const growUi = {lvl: null, timer: 0};
 function setGrowLevel(lvl) { for (let i = 0; i <= 4; i++) MAP.classList.toggle(`grow-${i}`, i === lvl); growUi.lvl = lvl; }
+// Reloj de pared con la cuenta regresiva a la renovación de tu cuota semanal (cuando también se cambian las materas).
+// Las manecillas marcan la hora real; abajo, cuánto falta. No gasta cuota: la fecha sale de /usage (config.json).
+function renderClock() {
+  const box = $('#qclock'), to = st.config?.stats?.weekTo;
+  box.hidden = !to;
+  if (!to) return;
+  const now = new Date(), left = Math.max(0, to - now.getTime());
+  const d = Math.floor(left / 86400e3), h = Math.floor(left % 86400e3 / 3600e3), mi = Math.floor(left % 3600e3 / 60e3);
+  const txt = d ? `${d} d ${h} h` : h ? `${h} h ${mi} min` : `${mi} min`;
+  const short = d ? `${d}d ${h}h` : h ? `${h}h ${mi}m` : `${mi}m`; // corto: cabe bajo el reloj sin salirse de tu escritorio
+  const hr = (now.getHours() % 12 + now.getMinutes() / 60) * 30, mn = now.getMinutes() * 6;
+  const soon = left < 3600e3;
+  const html = `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" class="qc-face"/>${Array.from({length: 12}, (_, k) => `<line x1="20" y1="4" x2="20" y2="${k % 3 ? 6 : 7.5}" transform="rotate(${k * 30} 20 20)" class="qc-tick"/>`).join('')}<line x1="20" y1="20" x2="20" y2="11" class="qc-h" transform="rotate(${hr} 20 20)"/><line x1="20" y1="20" x2="20" y2="7" class="qc-m" transform="rotate(${mn} 20 20)"/><circle cx="20" cy="20" r="1.6" class="qc-c"/></svg><b>${short}</b><small>CUOTA</small>`;
+  if (box._html !== html) { box._html = html; box.innerHTML = html; }
+  box.classList.toggle('soon', soon);
+  box.title = `Tu cuota semanal se renueva el ${new Date(to).toLocaleString('es', {weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit'})}: faltan ${txt}. Ese momento también se cambian las materas.`;
+}
+setInterval(renderClock, 30e3);
 function renderGrowth() {
+  renderClock();
   const s = st.config?.stats || {total: 0, reviews: 0, today: 0};
   const week = s.week ?? s.total;
   const lvl = GROW_AT.filter(n => week >= n).length;

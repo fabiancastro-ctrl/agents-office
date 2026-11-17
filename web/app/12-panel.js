@@ -258,7 +258,8 @@ function lookEditor(d) {
   if (lookUi.open !== d.name) return `<button type="button" class="btn sm ghost lk-open" data-look="open" title="Cambiar color, antena, visor y accesorio">🎨 Apariencia</button>`;
   const L = lookOf(d.name, d.place, d);
   const cyc = (k, n, label, names) => `<span class="lk-c"><small>${label}</small><button type="button" data-look="${k}" data-dir="-1" aria-label="${label} anterior">◀</button><b title="${L[k] + 1} de ${n}">${names ? esc(names[L[k]]) : `${L[k] + 1}/${n}`}</b><button type="button" data-look="${k}" data-dir="1" aria-label="${label} siguiente">▶</button></span>`;
-  return `<div class="lk" id="look-ed"><span class="lk-sw">${COLORS.map((c, i) => `<button type="button" class="${d.color % COLORS.length === i ? 'on' : ''}" style="background:${c}" data-look="color" data-v="${i}" aria-label="Color ${COLOR_NAMES[i] || i + 1}" title="${COLOR_NAMES[i] || ""}"></button>`).join('')}</span>${cyc('ant', ANTENNAS.length, 'Antena')}${cyc('visor', VISORS.length, 'Visor', VISOR_NAMES)}${cyc('acc', HEAD_ACC.length, 'Accesorio', ACC_NAMES)}<button type="button" class="btn sm ghost" data-look="reset">Restablecer</button><button type="button" class="btn sm ghost" data-look="close">Listo</button></div>`;
+  // Probador: el robot en grande con lo que vas eligiendo; da una vuelta en cada cambio.
+  return `<div class="lk" id="look-ed"><span class="lk-prev" title="Así se ve ${esc(d.name)}">${robotSVG(COLORS[d.color % COLORS.length], L)}</span><span class="lk-sw">${COLORS.map((c, i) => `<button type="button" class="${d.color % COLORS.length === i ? 'on' : ''}" style="background:${c}" data-look="color" data-v="${i}" aria-label="Color ${COLOR_NAMES[i] || i + 1}" title="${COLOR_NAMES[i] || ""}"></button>`).join('')}</span>${cyc('ant', ANTENNAS.length, 'Antena')}${cyc('visor', VISORS.length, 'Visor', VISOR_NAMES)}${cyc('acc', HEAD_ACC.length, 'Accesorio', ACC_NAMES)}<button type="button" class="btn sm ghost" data-look="reset">Restablecer</button><button type="button" class="btn sm ghost" data-look="close">Listo</button></div>`;
 }
 PANEL.addEventListener('click', async e => {
   const b = e.target.closest('[data-look]'); if (!b) return;
@@ -267,6 +268,9 @@ PANEL.addEventListener('click', async e => {
   if (k === 'open' || k === 'close') { lookUi.open = k === 'open' ? d.name : null; return renderPanel(); }
   const L = lookOf(d.name, d.place, d), N = {ant: ANTENNAS.length, visor: VISORS.length, acc: HEAD_ACC.length};
   const body = k === 'reset' ? {reset: true} : k === 'color' ? {color: +b.dataset.v} : {[k]: (L[k] + +b.dataset.dir + N[k]) % N[k]};
+  // Una vuelta mientras llega el cambio. Con la API de animaciones y no con una clase: al redibujar, el panel
+  // sincroniza los atributos y le borraría la clase a mitad del giro.
+  $('#look-ed .lk-prev svg', PANEL)?.animate([{transform: 'rotateY(0) scale(1)'}, {transform: 'rotateY(180deg) scale(1.12)', offset: .45}, {transform: 'rotateY(360deg) scale(1)'}], {duration: 550, easing: 'cubic-bezier(.3,1.4,.5,1)'});
   try { await api('POST', `/api/robots/${d.name}/look`, body); } catch { /* toast ya mostrado */ }
 });
 // El título que pusiste o, si no hay, uno sugerido a partir del encargo (se ve más tenue).

@@ -307,6 +307,42 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
   .roof{margin:0 10px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+/* Edificio vivo: la pantalla de cada robot que trabaja brilla en el color de su oficina y parpadea; las oficinas
+   encendidas sin nadie trabajando se ven más apagadas; el letrero del techo cuenta los que trabajan. */
+.on .win.r:is(.s-working,.s-delegating,.s-walking)::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at 50% 30%,hsl(var(--oh) 80% 70% / .55),transparent 70%);animation:screen-flicker 2.6s steps(1) infinite}
+.on .win.r:is(.s-working,.s-delegating,.s-walking){box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),0 7px 0 -2px #6b7891,0 9px 0 -2px rgba(0,0,0,.35),0 0 16px hsl(var(--oh) 80% 60% / .35)}
+.win.r:nth-child(2n)::before{animation-delay:-.9s} .win.r:nth-child(3n)::before{animation-delay:-1.7s}
+@keyframes screen-flicker{0%{opacity:1}12%{opacity:.75}13%{opacity:1}47%{opacity:.85}48%{opacity:1}71%{opacity:.7}72%{opacity:1}}
+.floor.quiet .win{filter:brightness(.72) saturate(.85)}
+.sign .sign-n{font-family:var(--mono);font-size:12px;color:#7dffb0;text-shadow:0 0 8px rgba(125,255,176,.7);margin-left:4px;animation:pulse-sign 2.4s ease-in-out infinite}
+@keyframes pulse-sign{50%{opacity:.6}}
+/* Easter egg: doble clic al ascensor → despega como cohete, choca contra la torre de atrás y el ingeniero lo repara */
+.car{cursor:default}
+.car.egg-shake{animation:egg-shake .09s linear infinite}
+@keyframes egg-shake{0%{translate:-1.5px 0}50%{translate:1.5px -1px}100%{translate:-1px 1px}}
+.egg-rocket{pointer-events:none}
+.egg-flame{position:absolute;left:50%;top:100%;width:46%;height:70%;margin-left:-23%;border-radius:50% 50% 50% 50%/30% 30% 70% 70%;background:radial-gradient(ellipse at 50% 20%,#fff7d6 0 18%,#ffd36b 40%,#ff7a3c 68%,transparent 72%);transform-origin:50% 0;animation:egg-flame .08s ease-in-out infinite alternate}
+@keyframes egg-flame{from{scale:1 .8}to{scale:.9 1.25}}
+.egg-smoke,.egg-part,.egg-flash,.egg-boom,.egg-cloud{position:fixed;pointer-events:none;z-index:49}
+.egg-smoke{width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:radial-gradient(circle,rgba(220,224,232,.8),rgba(150,158,172,.4) 60%,transparent 70%)}
+.egg-part{width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:2px}
+.egg-flash{width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:radial-gradient(circle,#fff,#ffd36b 35%,#ff7a3c 60%,transparent 70%)}
+.egg-boom{font:900 34px/1 var(--display);color:#ffd36b;text-shadow:0 0 12px #ff7a3c,3px 3px 0 #7a2b10;transform:translate(-50%,-50%)}
+.egg-cloud{width:70px;height:110px;margin-left:-35px;border-radius:50%;background:radial-gradient(ellipse at 50% 90%,rgba(60,64,74,.85),rgba(90,96,108,.45) 45%,transparent 70%);filter:blur(2px);transform-origin:50% 100%}
+.fcp-tower.egg-hit svg{animation:egg-tower .5s ease-in-out 3}
+@keyframes egg-tower{25%{transform:translateX(-4px) rotate(-.6deg)}75%{transform:translateX(4px) rotate(.6deg)}}
+.egg-eng{position:fixed;z-index:48;width:51px;height:62px;pointer-events:none;transform:translate(-50%,-100%)}
+.egg-eng>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.egg-eng .p,.egg-eng .f{display:none}
+.egg-eng.walk>svg:first-child{animation:egg-bob .32s ease-in-out infinite}
+@keyframes egg-bob{50%{translate:0 -3px}}
+.egg-eng .egg-say{position:absolute;bottom:calc(100% + 14px);left:50%;transform:translateX(-50%);white-space:nowrap;background:#f4efe2;color:#2a2620;font:600 11px/1.2 var(--mono);padding:3px 7px;border-radius:7px}
+.egg-eng .egg-wrench{position:absolute;right:-12px;top:44%;width:16px;height:16px;transform-origin:20% 80%}
+.egg-eng.fix .egg-wrench{animation:egg-wrench .25s ease-in-out infinite alternate}
+@keyframes egg-wrench{from{rotate:-35deg}to{rotate:25deg}}
+.egg-ladder{position:fixed;z-index:47;width:16px;pointer-events:none;background:repeating-linear-gradient(transparent 0 7px,#b7c0cf 7px 9px) 0 0/100% 100%,linear-gradient(90deg,#b7c0cf 0 2px,transparent 2px calc(100% - 2px),#b7c0cf calc(100% - 2px));opacity:.9}
+.car.egg-new{animation:egg-drop .9s cubic-bezier(.3,1.5,.5,1)}
+@keyframes egg-drop{from{translate:0 -260px;opacity:0}60%{opacity:1}}
 </style>
 </head>
 <body>
@@ -333,7 +369,7 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
       <span class="cat sit" style="left:calc(12% + 46px);bottom:18px"><svg viewBox="0 0 26 26"><g fill="#2b2f38"><path class="tail" d="M19 22q7 0 5-8" stroke="#2b2f38" stroke-width="2.4" fill="none" stroke-linecap="round"/><ellipse cx="13" cy="19" rx="7" ry="6.5"/><circle cx="13" cy="9" r="5.5"/><path d="M8.6 6.4l.4-5 3.4 3.4zM17.4 6.4l-.4-5-3.4 3.4z"/></g><circle cx="11" cy="9" r="1" fill="#ffd27a"/><circle cx="15" cy="9" r="1" fill="#ffd27a"/><path d="M12.3 11.2l.7.5.7-.5" stroke="#ffd27a" stroke-width=".5" fill="none"/></svg><b class="say">@dexterfcp</b></span>
       <div class="solar"><i></i><i></i><i></i></div>
       <div class="garden"><i></i><i></i><i></i><i></i></div>
-      <div class="sign">EDIFICIO DE OFICINAS<i></i></div>
+      <div class="sign">EDIFICIO DE OFICINAS<b class="sign-n" id="sign-n" hidden></b><i></i></div>
       <div class="antenna" id="antenna"><i></i></div>
       <div class="parapet"></div>
     </div>
@@ -473,7 +509,9 @@ function render() {
       if (fresh === o.name) { el.classList.add('build'); fresh = null; setTimeout(() => el.classList.remove('build'), 1700); }
     }
     el.style.setProperty('--oh', hue(o.title));
-    el.className = ['floor', o.running ? 'on' : 'off', o.running && o.need ? 'need' : '', !o.running && o.orphans ? 'orph' : '', el.classList.contains('build') ? 'build' : ''].filter(Boolean).join(' ');
+    // Edificio vivo: una oficina encendida sin nadie trabajando se ve más apagada.
+    const busy = o.running ? (o.robotList || []).filter(r => ['working', 'delegating', 'walking'].includes(r.state)).length : 0;
+    el.className = ['floor', o.running ? 'on' : 'off', o.running && !busy ? 'quiet' : '', o.running && o.need ? 'need' : '', !o.running && o.orphans ? 'orph' : '', el.classList.contains('build') ? 'build' : ''].filter(Boolean).join(' ');
     el.setAttribute('aria-label', `Piso ${i + 1}: ${o.title}, ${o.running ? 'corriendo' : 'detenida'}${o.need ? `, ${o.need} te necesitan` : ''}. Abrir detalles`);
     const html = floorInner(o, i);
     if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
@@ -482,6 +520,9 @@ function render() {
   // El más nuevo arriba. Solo se mueve el que esté fuera de lugar: reinsertar un nodo reinicia sus animaciones.
   els.reverse().forEach((el, k) => { if (box.children[k] !== el) box.insertBefore(el, box.children[k] || null); });
   box.querySelectorAll('[data-floor]').forEach(el => { if (!seen.has(el.dataset.floor)) el.remove(); });
+  // Letrero del techo: cuántos robots trabajan ahora en todo el edificio.
+  const working = list.filter(o => o.running).reduce((n, o) => n + (o.robotList || []).filter(r => ['working', 'delegating', 'walking'].includes(r.state)).length, 0);
+  const sn = $('sign-n'); sn.hidden = !working; sn.textContent = ` · ${working} TRABAJANDO`;
   let empty = box.querySelector('.empty-lot');
   if (!list.length && !empty) box.insertAdjacentHTML('beforeend', '<div class="empty-lot"><b>Terreno listo para construir</b>Crea la primera oficina con la puerta de abajo.</div>');
   if (list.length && empty) empty.remove();
@@ -794,6 +835,104 @@ function burst(r) {
 }
 
 load(); setInterval(load, 5000);
+// ---------- Easter egg: doble clic al ascensor ----------
+// Tiembla, despega como cohete dejando humo, cae en la torre de atrás con una explosión, y un robot blanco con barba
+// (el ingeniero del edificio) sale de la recepción, sube por una escalera, lo repara y vuelve. Solo dibujo: no toca nada.
+let eggBusy = false;
+$('car').addEventListener('dblclick', e => { e.stopPropagation(); e.preventDefault(); if (!eggBusy) launchElevator().catch(() => {}).finally(() => { eggBusy = false; }); });
+const centerOf = r => ({x: r.left + r.width / 2, y: r.top + r.height / 2});
+function eggPuff(x, y, cls = 'egg-smoke', ms = 900, dx = 0, dy = 30, scale = 2.6) {
+  const i = document.createElement('i'); i.className = cls; i.style.left = x + 'px'; i.style.top = y + 'px';
+  document.body.appendChild(i);
+  i.animate([{transform: 'translate(0,0) scale(.6)', opacity: .9}, {transform: `translate(${dx}px,${dy}px) scale(${scale})`, opacity: 0}], {duration: ms, easing: 'ease-out', fill: 'forwards'}).finished.then(() => i.remove());
+}
+function eggBoom(x, y) {
+  const flash = document.createElement('i'); flash.className = 'egg-flash'; flash.style.left = x + 'px'; flash.style.top = y + 'px'; document.body.appendChild(flash);
+  flash.animate([{transform: 'scale(.4)', opacity: 1}, {transform: 'scale(9)', opacity: .9, offset: .3}, {transform: 'scale(12)', opacity: 0}], {duration: 700, fill: 'forwards'}).finished.then(() => flash.remove());
+  const colors = ['#ffd36b', '#ff7a3c', '#ef7f8a', '#c9d2de', '#8b98ad', '#fff7d6'];
+  for (let k = 0; k < 26; k++) {
+    const p = document.createElement('i'); p.className = 'egg-part'; p.style.left = x + 'px'; p.style.top = y + 'px'; p.style.background = colors[k % colors.length];
+    document.body.appendChild(p);
+    const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * 120;
+    p.animate([{transform: 'translate(0,0) rotate(0)', opacity: 1}, {transform: `translate(${Math.cos(a) * d}px,${Math.sin(a) * d + 60}px) rotate(${Math.random() * 720}deg)`, opacity: 0}], {duration: 900 + Math.random() * 500, easing: 'cubic-bezier(.2,.7,.4,1)', fill: 'forwards'}).finished.then(() => p.remove());
+  }
+  const t = document.createElement('b'); t.className = 'egg-boom'; t.textContent = '¡BUM!'; t.style.left = x + 'px'; t.style.top = (y - 40) + 'px'; document.body.appendChild(t);
+  t.animate([{transform: 'translate(-50%,-50%) scale(.2)', opacity: 0}, {transform: 'translate(-50%,-50%) scale(1.25)', opacity: 1, offset: .25}, {transform: 'translate(-50%,-70%) scale(1)', opacity: 0}], {duration: 1500, fill: 'forwards'}).finished.then(() => t.remove());
+  // humo negro que sale de la torre un rato
+  const cloud = document.createElement('i'); cloud.className = 'egg-cloud'; cloud.style.left = x + 'px'; cloud.style.top = (y - 100) + 'px'; document.body.appendChild(cloud);
+  cloud.animate([{opacity: 0, transform: 'scale(.4)'}, {opacity: 1, transform: 'scale(1)', offset: .1}, {opacity: .8, transform: 'scale(1.1) translateY(-12px)', offset: .8}, {opacity: 0, transform: 'scale(1.3) translateY(-30px)'}], {duration: 9000, fill: 'forwards'}).finished.then(() => cloud.remove());
+  document.querySelector('.bldg, .building, main')?.animate([{translate: '0 0'}, {translate: '-3px 2px'}, {translate: '3px -2px'}, {translate: '0 0'}], {duration: 260, iterations: 2});
+}
+const BEARD = '<svg viewBox="0 0 40 48" aria-hidden="true"><path d="M10.5 19.5q9.5 15 19 0q-.5 10-9.5 13.5q-9-3.5-9.5-13.5z" fill="#f7f7f5" stroke="#cfd2d8" stroke-width=".7"/><path d="M14 20.2q3-1.6 6 0q3-1.6 6 0q-3 2.4-6 1q-3 1.4-6-1z" fill="#ffffff" stroke="#cfd2d8" stroke-width=".5"/></svg>';
+const WRENCH = '<svg class="egg-wrench" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13l6-6" stroke="#8b98ad" stroke-width="2.6" stroke-linecap="round"/><path d="M9.5 3.5a3 3 0 1 0 3 3l-1.8.3-1.5-1.5z" fill="#8b98ad"/></svg>';
+function eggMove(el, from, to, ms) { return el.animate([{left: from.x + 'px', top: from.y + 'px'}, {left: to.x + 'px', top: to.y + 'px'}], {duration: ms, easing: 'linear', fill: 'forwards'}).finished; }
+// A dónde va a dar: la torre de atrás, en la parte que asoma sobre la azotea (más abajo la tapa el edificio de
+// oficinas y parecería que explota en el mismo edificio).
+function eggTarget() {
+  const t = $('fcp-tower').getBoundingClientRect(), roof = document.querySelector('.roof')?.getBoundingClientRect();
+  return {x: t.left + t.width * .5, y: roof ? Math.max(t.top + 40, Math.min(t.top + 90, roof.top - 10)) : t.top + 60};
+}
+async function launchElevator() {
+  eggBusy = true;
+  const car = $('car'), tower = $('fcp-tower');
+  car.classList.add('egg-shake');
+  for (let k = 0; k < 6; k++) { const c = centerOf(car.getBoundingClientRect()); eggPuff(c.x + (Math.random() * 30 - 15), c.y + 26, 'egg-smoke', 700, Math.random() * 20 - 10, 14, 1.8); await sleep(110); }
+  const c = car.getBoundingClientRect(), t = tower.getBoundingClientRect();
+  const rk = car.cloneNode(true); rk.removeAttribute('id'); rk.className = 'car egg-rocket';
+  Object.assign(rk.style, {position: 'fixed', left: c.left + 'px', top: c.top + 'px', width: c.width + 'px', height: c.height + 'px', right: 'auto', margin: 0, transition: 'none', zIndex: 50});
+  rk.insertAdjacentHTML('beforeend', '<i class="egg-flame"></i>');
+  document.body.appendChild(rk);
+  car.classList.remove('egg-shake'); car.style.visibility = 'hidden';
+  const smoke = setInterval(() => { const r = rk.getBoundingClientRect(); eggPuff(r.left + r.width / 2, r.bottom, 'egg-smoke', 1100, Math.random() * 16 - 8, 26, 3); }, 55);
+  const hit = eggTarget(), from = centerOf(c);
+  const dx = hit.x - from.x, dy = hit.y - from.y;
+  const fly = rk.animate([
+    {transform: 'translate(0,0) rotate(0deg) scale(1)'},
+    {transform: 'translate(0px,-230px) rotate(0deg) scale(1)', offset: .32},
+    {transform: `translate(${dx * .55}px,${Math.min(dy, -230) - 140}px) rotate(40deg) scale(.8)`, offset: .68},
+    {transform: `translate(${dx}px,${dy}px) rotate(160deg) scale(.42)`}
+  ], {duration: 2300, easing: 'cubic-bezier(.45,0,.7,1)', fill: 'forwards'});
+  await fly.finished;
+  clearInterval(smoke);
+  const end = centerOf(rk.getBoundingClientRect()); rk.remove();
+  eggBoom(end.x, end.y);
+  tower.classList.add('egg-hit'); setTimeout(() => tower.classList.remove('egg-hit'), 1600); // la torre se sacude
+
+  await sleep(1500);
+  await eggEngineer(car);
+}
+async function eggEngineer(car) {
+  const lobby = document.querySelector('.lobby').getBoundingClientRect(), shaft = car.parentElement.getBoundingClientRect();
+  const home = car.getBoundingClientRect(); // donde va el ascensor (aunque esté oculto)
+  const ground = lobby.bottom - 6, door = {x: lobby.left + lobby.width / 2, y: ground}, under = {x: shaft.left + shaft.width / 2, y: ground}, top = {x: under.x, y: home.bottom - 4};
+  const eng = document.createElement('div'); eng.className = 'egg-eng walk';
+  eng.innerHTML = robotSVG('#e9e4d8', {ant: 0, visor: 0, acc: 0}) + BEARD + WRENCH;
+  eng.style.left = door.x + 'px'; eng.style.top = door.y + 'px';
+  document.body.appendChild(eng);
+  eng.animate([{opacity: 0}, {opacity: 1}], {duration: 300, fill: 'forwards'});
+  const say = txt => { eng.querySelector('.egg-say')?.remove(); if (txt) eng.insertAdjacentHTML('beforeend', `<span class="egg-say">${txt}</span>`); };
+  say('¡Uy! Ya voy…');
+  await eggMove(eng, door, under, Math.abs(under.x - door.x) * 6 + 300);
+  // escalera hasta el hueco del ascensor
+  const ladder = document.createElement('i'); ladder.className = 'egg-ladder';
+  Object.assign(ladder.style, {left: (under.x - 8) + 'px', top: top.y + 'px', height: Math.max(0, ground - top.y) + 'px'});
+  document.body.appendChild(ladder);
+  say('');
+  await eggMove(eng, under, top, Math.max(400, (ground - top.y) * 5));
+  eng.classList.remove('walk'); eng.classList.add('fix'); say('🔧 tac tac tac');
+  for (let k = 0; k < 12; k++) { eggPuff(top.x + 18, top.y - 30 + Math.random() * 16, 'egg-part', 450, Math.random() * 30 - 15, -20 - Math.random() * 20, 1); await sleep(180); }
+  // el ascensor nuevo baja por el hueco
+  car.style.visibility = ''; car.classList.add('egg-new'); setTimeout(() => car.classList.remove('egg-new'), 1000);
+  eng.classList.remove('fix'); say('¡Como nuevo! 👍');
+  await sleep(1300);
+  say(''); eng.classList.add('walk');
+  await eggMove(eng, top, under, Math.max(400, (ground - top.y) * 4));
+  ladder.remove();
+  await eggMove(eng, under, door, Math.abs(under.x - door.x) * 6 + 300);
+  await eng.animate([{opacity: 1}, {opacity: 0}], {duration: 300, fill: 'forwards'}).finished;
+  eng.remove();
+}
+
 })();
 </script>
 </body>

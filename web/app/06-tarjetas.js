@@ -7,10 +7,11 @@ const GROUP_OF = {input: 'need', working: 'work', walking: 'work', delegating: '
 const groupOf = d => d.spawnReq || d.consoleLost ? 'need' : GROUP_OF[d.state] || 'work';
 const fmtDur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
 const tokOf = d => (d.usage?.out || 0) + (d.usage?.in || 0) + (d.usage?.cacheWrite || 0);
-// Gasto del robot (lo calcula el daemon cada minuto): su parte del gasto de la OFICINA esta semana, no del límite
+// Gasto del robot (lo calcula el daemon cada minuto): su parte del gasto de la OFICINA en la semana de tu cuota (la
+// misma del empleado de la semana), no del límite
 // de tu suscripción. 🔥 si se disparó (mucho en la última hora o más de la cuarta parte de la semana).
 const spendText = d => { const s = d.spend; if (!s?.officeWeek) return '';
-  return `${fmtTok(s.week)} esta semana (${s.pct} % de la oficina) · ${fmtTok(s.hour)} en la última hora${s.hot ? ` · 🔥 se disparó: ${s.hot === 'hour' ? 'mucho en la última hora' : 'más de la cuarta parte de la semana'}` : ''}`; };
+  return `${fmtTok(s.week)} desde que se renovó tu cuota (${s.pct} % de la oficina; la misma semana del empleado de la semana) · ${fmtTok(s.hour)} en la última hora${s.hot ? ` · 🔥 se disparó: ${s.hot === 'hour' ? 'mucho en la última hora' : 'más de la cuarta parte de la semana'}` : ''}`; };
 const spendChip = d => d.spend?.officeWeek ? `<span class="rc-spend${d.spend.hot ? ' hot' : ''}" title="Gasto: ${esc(spendText(d))}. Es su parte de lo que gastó la oficina, no del límite de tu suscripción.">${d.spend.hot ? '🔥 ' : ''}${d.spend.pct} % sem.</span>` : '';
 const runningSubs = d => d.subs.filter(s => s.status !== 'done').length;
 const prefGet = (k, def) => { try { return localStorage.getItem('office.' + k) ?? def; } catch { return def; } };
