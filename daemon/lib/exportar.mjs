@@ -1,0 +1,167 @@
+// Oficina de Agentes · exportar conversaciones y resúmenes de despedidos.
+// Parte de daemon/daemon.mjs, que carga los módulos de daemon/lib/ en orden y arranca la oficina.
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { console_, now, replaceList, robots, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { broadcast, emit } from './estado.mjs';
+import { lookFromName } from './equipo.mjs';
+import { ARCH_FILE, ARCH_MAX, archive, normText, sumDir } from './turno.mjs';
+import { launch } from './tmux.mjs';
+
+/* ---------- exportar una conversación ---------- */
+// Copia limpia de la conversación de un robot (vivo o del archivo) en docs/conversaciones-robots/, por si un resumen
+// falla o queda corto. Sale del transcript completo de Claude: la oficina solo guarda los últimos 400 eventos. Lleva tus
+// mensajes y los suyos en orden, con hora; los avances («Ahora reviso…») se marcan aparte de sus respuestas y las
+// herramientas quedan como una línea con cuántas usó. Si el transcript ya no está, usa lo que guardó la oficina.
+const flat = t => String(t ?? '').replace(/\s+/g, ' ').trim();
+const convDir = () => path.join(WORKSPACE || RUNS, 'docs', 'conversaciones-robots');
+const NOISE_RE = /^\s*<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|bash-stdout|bash-stderr|task-notification)\b|^\s*\[Request interrupted/;
+const cleanText = t => String(t ?? '').replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+  .replace(/<\\?\/?pasted_content(?:\s+id=["']?[\w-]*["']?)?\s*>/gi, '').trim();
+function transcriptTurns(file) {
+  let lines;
+  try { lines = fs.readFileSync(file, 'utf8').split('\n'); } catch { return null; }
+  const items = [], seen = new Set();
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let e; try { e = JSON.parse(line); } catch { continue; }
+    if (e.isMeta || e.isCompactSummary || e.isSidechain) continue;
+    const at = e.timestamp, c = e.message?.content;
+    if (e.type === 'user') {
+      const parts = typeof c === 'string' ? [c] : Array.isArray(c) && !c.some(b => b.type === 'tool_result') ? c.filter(b => b.type === 'text').map(b => b.text) : [];
+      for (const raw of parts) {
+        const bash = String(raw).match(/^\s*<bash-input>([\s\S]*?)<\/bash-input>/);
+        if (bash) { items.push({ who: 'user', text: '`! ' + bash[1].trim() + '`', at }); continue; }
+        if (NOISE_RE.test(raw)) continue;
+        const text = cleanText(raw);
+        if (text) items.push({ who: /^\[Oficina\]/.test(text) ? 'office' : 'user', text, at });
+      }
+    } else if (e.type === 'assistant' && Array.isArray(c)) {
+      for (const b of c) {
+        const key = `${e.message?.id}|${b.type}|${b.type === 'text' ? b.text : b.id}`;
+        if (seen.has(key)) continue; // Claude repite el mismo mensaje en varias líneas mientras lo escribe
+        seen.add(key);
+        if (b.type === 'text' && cleanText(b.text)) items.push({ who: 'agent', text: cleanText(b.text), at });
+        else if (b.type === 'tool_use') items.push({ who: 'tool', at });
+      }
+    }
+  }
+  return items;
+}
+function convMarkdown(src, items) {
+  const when = t => t ? new Date(t).toLocaleString('es', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const hhmm = t => t ? new Date(t).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '';
+  const out = [`# Conversación de ${src.name}${src.title ? ` · ${src.title}` : ''}`, '',
+    `_Exportada por la Oficina de Agentes el ${when(Date.now())} · entró ${when(src.startedAt)}${src.leftAt ? ` · se fue ${when(src.leftAt)}` : ''}${src.fromLog ? ' · desde lo que guardó la oficina (el transcript ya no estaba)' : ''}_`, '',
+    `- **Encargo:** ${flat(src.label)}`];
+  if (src.origin) out.push(`- **Origen:** ${flat(src.origin)}`);
+  if (src.note) out.push(`- **Nota:** ${flat(src.note)}`);
+  if (src.sessionId) out.push(`- **Sesión de Claude:** \`${src.sessionId}\` (para retomarla: \`claude --resume ${src.sessionId}\`)`);
+  out.push('', '---', '');
+  let tools = 0, msgs = 0;
+  const flushTools = () => { if (tools) out.push(`_… usó ${tools} herramienta${tools === 1 ? '' : 's'} …_`, ''); tools = 0; };
+  items.forEach((it, i) => {
+    if (it.who === 'tool') { tools++; return; }
+    flushTools();
+    msgs++;
+    if (it.who === 'agent') {
+      // Avance: después vienen más herramientas o mensajes suyos antes de que le vuelvas a escribir.
+      let interim = false;
+      for (let k = i + 1; k < items.length && items[k].who !== 'user'; k++) if (items[k].who === 'tool' || items[k].who === 'agent') { interim = true; break; }
+      out.push(interim ? `#### 🤖 ${src.name} · avance · ${hhmm(it.at)}` : `### 🤖 ${src.name} · ${hhmm(it.at)}`, '', it.text, '');
+    } else out.push(`### ${it.who === 'office' ? '🏢 Oficina' : '🧑 Tú'} · ${hhmm(it.at)}`, '', it.text, '');
+  });
+  flushTools();
+  if (src.summary) out.push('---', '', `## Su resumen al irse (${src.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'})`, '', String(src.summary).trim(), '');
+  return { md: out.join('\n'), msgs };
+}
+function exportConversation(src) {
+  let items = src.transcript ? transcriptTurns(src.transcript) : null;
+  const fromLog = !items || !items.some(x => x.who !== 'tool');
+  if (fromLog) items = (src.log || []).filter(l => ['user', 'agent', 'bg'].includes(l.kind))
+    .map(l => ({ who: l.kind === 'agent' ? 'agent' : /^\[Oficina\]/.test(l.text) ? 'office' : 'user', text: cleanText(l.text), at: l.at })).filter(x => x.text);
+  if (!items.length) throw new Error(`${src.name} todavía no tiene conversación para exportar.`);
+  const { md, msgs } = convMarkdown({ ...src, fromLog }, items);
+  const file = path.join(convDir(), `${now().slice(0, 10)}-${src.name}-${crypto.randomBytes(2).toString('hex')}.md`);
+  fs.mkdirSync(convDir(), { recursive: true });
+  fs.writeFileSync(file, md + '\n');
+  console_(src.name, 'exportada', path.relative(WORKSPACE || RUNS, file));
+  return { path: file, shown: path.relative(WORKSPACE || RUNS, file), messages: msgs, fromLog };
+}
+// Los resúmenes de antes vivían en la carpeta de datos de la oficina (runs/resumenes): se mudan a la nueva.
+function migrateSummaries() {
+  const old = path.join(RUNS, 'resumenes');
+  if (!WORKSPACE || !fs.existsSync(old)) return;
+  let moved = 0;
+  try {
+    fs.mkdirSync(sumDir(), { recursive: true });
+    for (const f of fs.readdirSync(old)) {
+      const from = path.join(old, f), to = path.join(sumDir(), f);
+      if (!f.endsWith('.md') || fs.existsSync(to)) continue;
+      fs.copyFileSync(from, to); fs.unlinkSync(from); moved++;
+      for (const a of archive) if (a.summaryPath === from) a.summaryPath = to;
+    }
+    if (!fs.readdirSync(old).length) fs.rmdirSync(old);
+  } catch (e) { console.error(`No se pudieron mudar los resúmenes a ${sumDir()}: ${e.message}`); }
+  if (moved) { fs.writeFileSync(ARCH_FILE, JSON.stringify(archive)); console.log(`Resúmenes mudados a ${sumDir()}: ${moved}`); }
+}
+function writeSummary(r, summary, by) {
+  const day = now().slice(0, 10);
+  const file = path.join(sumDir(), `${day}-${r.name}-${crypto.randomBytes(2).toString('hex')}.md`);
+  const head = `# ${r.name}${r.title ? ` · ${r.title}` : ''}\n\n_${by === 'robot' ? 'Resumen escrito por el robot al despedirlo' : 'Resumen armado por la oficina al despedirlo'} · entró ${r.startedAt?.slice(0, 16).replace('T', ' ')} · se fue ${now().slice(0, 16).replace('T', ' ')}_\n\n`;
+  try { fs.mkdirSync(sumDir(), { recursive: true }); fs.writeFileSync(file, head + summary.trim() + '\n'); return file; } catch { return null; }
+}
+// Solo se archiva (con su documento en docs/resumenes-robots/) quien se fue con «📝 Despedir con su resumen».
+// «Dar de baja» es solo eso: se va sin resumen ni archivo.
+function archiveRobot(r, reason, robotSummary) {
+  const summary = String(robotSummary || '').trim();
+  if (!summary) return;
+  const by = 'robot';
+  const summaryPath = writeSummary(r, summary, by);
+  const log = r.log.filter(l => ['user', 'agent', 'bg', 'doc'].includes(l.kind)).slice(-80)
+    .map(l => ({ kind: l.kind, at: l.at, text: String(l.text ?? '').slice(0, 6000), ...(l.who ? { who: l.who } : {}) }));
+  archive.push({ id: crypto.randomBytes(4).toString('hex'), name: r.name, title: r.title || '', label: r.label, kind: r.kind, skill: r.skill,
+    origin: r.origin, color: r.color, look: { ...lookFromName(r.name), ...(r.look || {}) }, parent: r.parent || null, note: r.note || '',
+    summary, summaryBy: by, summaryPath, permissionMode: r.permissionMode || '', request: r.request || null, transcript: r.transcript || null, sessionId: r.sessionId || null,
+    startedAt: r.startedAt, leftAt: now(), reason, docs: r.docs.map(d => d.path), log });
+  if (archive.length > ARCH_MAX) replaceList(archive, archive.slice(-ARCH_MAX));
+  fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+  emitArchive();
+}
+const archMeta = a => ({ id: a.id, name: a.name, title: a.title, label: a.label, color: a.color, look: a.look, startedAt: a.startedAt, leftAt: a.leftAt, docs: a.docs.length, note: a.note || '',
+  summaryBy: a.summaryBy || 'oficina', summaryPath: a.summaryPath || null, excerpt: trunc(String(a.summary || '').replace(/[#*_`>|-]+/g, ' '), 260) });
+const emitArchive = () => broadcast({ type: 'archive', count: archive.length });
+// Busca en el archivo (sin tildes ni mayúsculas): devuelve por robot las posiciones de los mensajes que coinciden.
+function searchArchive(q) {
+  const qn = normText(q).trim();
+  if (qn.length < 2) return [];
+  const out = [];
+  for (const a of archive.slice().reverse()) {
+    const hits = [];
+    a.log.forEach((l, i) => { if (hits.length < 25 && normText(l.text).includes(qn)) hits.push({ i, at: l.at, kind: l.kind, who: l.who || null, text: l.text.slice(0, 1500) }); });
+    const inMeta = !hits.length && normText(`${a.name} ${a.title} ${a.label} ${a.note || ''} ${a.summary || ''}`).includes(qn);
+    if (hits.length || inMeta) out.push({ ...archMeta(a), hits });
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
+// Retomar: entra un robot nuevo (sesión nueva) con solo el super resumen del que se fue y tu instrucción. Si necesita
+// más contexto, se lo das tú o lo busca en los documentos y la memoria del proyecto.
+async function retake(id, text) {
+  const a = archive.find(x => x.id === id);
+  if (!a) throw new Error('Ese robot ya no está en el archivo.');
+  const summary = a.summary || '(sin resumen)';
+  const prompt = `Retomas una tarea que dejó el robot ${a.name}${a.title ? ` («${a.title}»)` : ''}, que se fue el ${new Date(a.leftAt).toLocaleString('es')}. `
+    + `No tienes su contexto: solo este resumen${a.summaryPath ? ` (también en ${a.summaryPath})` : ''}.\n\n---\n${summary}\n---\n\n`
+    + `Si necesitas más contexto, pídemelo o búscalo en los documentos que menciona y en la memoria del proyecto.`
+    + (String(text || '').trim() ? `\n\n${String(text).trim()}` : '');
+  const r = await launch({ kind: 'libre', text: prompt, name: robots.has(a.name) ? undefined : a.name, title: a.title, label: `Retoma: ${a.title || a.label}`,
+    color: a.color, look: a.look, origin: `Retoma la tarea de ${a.name} con su resumen (se había ido el ${new Date(a.leftAt).toLocaleString('es')})` });
+  r.note = a.note || '';
+  emit(r);
+  return r;
+}
+
+export { archiveRobot, archMeta, convDir, emitArchive, exportConversation, migrateSummaries, retake, searchArchive };

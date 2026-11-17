@@ -1,0 +1,299 @@
+// Oficina de Agentes · uso de tokens, gasto por robot, empleado de la semana y estado de la suscripción.
+// Parte de daemon/daemon.mjs, que carga los módulos de daemon/lib/ en orden y arranca la oficina.
+import fs from 'node:fs';
+import path from 'node:path';
+import { CLAUDE_BIN, console_, now, robots, run, RUNS, SESSION, WORKSPACE } from './base.mjs';
+import { broadcast, emit, fmtK } from './estado.mjs';
+import { readConfig, saveConfig } from './carpeta.mjs';
+import { log } from './persistencia.mjs';
+import { lookFromName } from './equipo.mjs';
+import { archive } from './turno.mjs';
+import { ensureSession } from './tmux.mjs';
+
+/* ---------- uso de tokens de toda la oficina, por semana ---------- */
+// Se calcula desde los transcripts de las sesiones que lanzó la oficina (el hook SessionStart queda en
+// runs/events-*.jsonl), incluidos sus subagentes. Así sobrevive a reinicios del daemon y no cuenta dos veces.
+const officeSessions = new Map(); // sessionId -> { transcript, robot }
+function registerSession(e) {
+  if (e.session_id && e.transcript_path && !officeSessions.has(e.session_id)) officeSessions.set(e.session_id, { transcript: e.transcript_path, robot: e.robot });
+}
+function loadSessions() {
+  for (const f of fs.readdirSync(RUNS).filter(f => /^events.*\.jsonl$/.test(f))) {
+    for (const line of fs.readFileSync(path.join(RUNS, f), 'utf8').split('\n')) {
+      if (!line.includes('"SessionStart"')) continue;
+      try { registerSession(JSON.parse(line)); } catch { /* linea cortada */ }
+    }
+  }
+}
+
+// Lunes (hora local) de la semana del instante dado, como AAAA-MM-DD.
+function weekOf(ts) {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const usageCache = new Map(); // archivo -> { size, msgs: Map(id -> { at, u }) }
+function fileUsage(file) {
+  let size;
+  try { size = fs.statSync(file).size; } catch { return null; }
+  const c = usageCache.get(file);
+  if (c && c.size === size) return c.msgs;
+  const msgs = new Map();
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.includes('"usage"')) continue;
+    let e;
+    try { e = JSON.parse(line); } catch { continue; }
+    const m = e.message;
+    if (e.type !== 'assistant' || !m?.id || !m.usage) continue;
+    // Un mensaje llega en varias lineas con el mismo id; la ultima trae el usage final.
+    msgs.set(m.id, { at: msgs.get(m.id)?.at || e.timestamp, u: m.usage });
+  }
+  usageCache.set(file, { size, msgs });
+  return msgs;
+}
+
+function officeUsage() {
+  const weeks = new Map();
+  for (const [sid, s] of officeSessions) {
+    const files = [s.transcript];
+    const subDir = path.join(s.transcript.replace(/\.jsonl$/, ''), 'subagents');
+    try { files.push(...fs.readdirSync(subDir).filter(f => f.endsWith('.jsonl')).map(f => path.join(subDir, f))); } catch { /* sin subagentes */ }
+    for (const f of files) {
+      const msgs = fileUsage(f);
+      if (!msgs) continue;
+      for (const { at, u } of msgs.values()) {
+        const k = weekOf(at);
+        let w = weeks.get(k);
+        if (!w) weeks.set(k, w = { week: k, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, sessions: new Set() });
+        w.in += u.input_tokens || 0;
+        w.out += u.output_tokens || 0;
+        w.cacheRead += u.cache_read_input_tokens || 0;
+        w.cacheWrite += u.cache_creation_input_tokens || 0;
+        w.sessions.add(sid);
+      }
+    }
+  }
+  return [...weeks.values()].sort((a, b) => b.week.localeCompare(a.week)).slice(0, 8).map(w => ({ ...w, sessions: w.sessions.size }));
+}
+
+/* ---------- gasto por robot ---------- */
+// Cuánto lleva cada robot esta semana (con sus subagentes) y en la última hora, y qué parte es del gasto de la
+// oficina esta semana. Es la parte de lo que gastó la OFICINA, no del límite de tu suscripción (Claude no lo
+// expone por robot). «Gasto» = entrada + salida + caché escrita, como los KPI de la oficina. No gasta cuota: son
+// cuentas sobre los transcripts. Avisa una vez cuando un robot se dispara: mucho en la última hora (en NR el 95 %
+// de las horas de un robot quedan bajo 1,65 M) o más de la cuarta parte de la semana con la semana ya avanzada.
+const SPEND_HOUR_HOT = Number(process.env.OFFICE_SPEND_HOUR_HOT || 1.5e6);
+const SPEND_SHARE_HOT = 25, SPEND_SHARE_MIN_WEEK = Number(process.env.OFFICE_SPEND_MIN_WEEK || 5e6);
+const SPEND_TICK_MS = Number(process.env.OFFICE_SPEND_TICK_MS || 60000);
+const fmtM = n => n >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')} M` : fmtK(n);
+const spendTok = u => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_creation_input_tokens || 0);
+function sessionFiles(transcript) {
+  if (!transcript) return [];
+  const files = [transcript];
+  const subDir = path.join(transcript.replace(/\.jsonl$/, ''), 'subagents');
+  try { files.push(...fs.readdirSync(subDir).filter(f => f.endsWith('.jsonl')).map(f => path.join(subDir, f))); } catch { /* sin subagentes */ }
+  return files;
+}
+function robotSpend(r, wk, hourAgo) {
+  let week = 0, hour = 0;
+  for (const f of sessionFiles(r.transcript)) {
+    const msgs = fileUsage(f);
+    if (!msgs) continue;
+    for (const { at, u } of msgs.values()) {
+      if (weekOf(at) !== wk) continue;
+      const t = spendTok(u);
+      week += t;
+      if (Date.parse(at) >= hourAgo) hour += t;
+    }
+  }
+  return { week, hour };
+}
+/* ---------- empleado de la semana ---------- */
+// El que más tokens gastó en la semana de tu cuota (entrada + salida + caché escrita, con sus subagentes; esté o no
+// en la oficina) sale en el cuadro «Empleado de la semana». Se reinicia cuando se renueva tu cuota semanal (la hora
+// que muestra /usage, guardada en la configuración; si no se conoce, el lunes 00:00). Si está en la oficina lleva el
+// accesorio secreto: corona con un fuego, o con dos si además es el que más gastó en la sesión actual de 5 h de tu
+// cuota. Se suma por nombre: retomar conserva el nombre.
+const WEEK_MS = 7 * 86400e3, SESSION_MS = 5 * 3600e3;
+function quotaPeriods(t = Date.now()) {
+  const q = readConfig().quota || {};
+  let weekEnd = Number(q.weekEnd) || 0;
+  if (weekEnd) while (weekEnd <= t) weekEnd += WEEK_MS; // ya se renovó: la siguiente, 7 días después
+  const monday = new Date(weekOf(t) + 'T00:00:00').getTime();
+  const sessionEnd = Number(q.sessionEnd) || 0;
+  return {
+    weekFrom: weekEnd ? weekEnd - WEEK_MS : monday, weekTo: weekEnd || monday + WEEK_MS, weekKnown: !!weekEnd,
+    sessionFrom: sessionEnd > t ? sessionEnd - SESSION_MS : t - SESSION_MS, sessionTo: sessionEnd > t ? sessionEnd : null
+  };
+}
+let fame = { employee: null, sessionTop: null, period: null };
+function computeFame(per) {
+  const byWeek = new Map(), bySession = new Map();
+  for (const s of officeSessions.values()) {
+    if (!s.robot) continue;
+    for (const f of sessionFiles(s.transcript)) {
+      const msgs = fileUsage(f);
+      if (!msgs) continue;
+      for (const { at, u } of msgs.values()) {
+        const ms = Date.parse(at);
+        if (ms < per.weekFrom) continue;
+        const t = spendTok(u);
+        byWeek.set(s.robot, (byWeek.get(s.robot) || 0) + t);
+        if (ms >= per.sessionFrom) bySession.set(s.robot, (bySession.get(s.robot) || 0) + t);
+      }
+    }
+  }
+  const top = m => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] || null;
+  const em = top(byWeek), st = top(bySession);
+  let employee = null;
+  if (em && em[1] > 0) { // su cara: la del robot si está; si no, la que tenía al irse (archivo); si no, la de su nombre
+    const live = robots.get(em[0]), gone = live ? null : [...archive].reverse().find(a => a.name === em[0]);
+    const src = live || gone;
+    employee = { name: em[0], tokens: em[1], color: src?.color ?? 0, look: src?.look || lookFromName(em[0]), present: !!live, title: live?.title || gone?.title || '' };
+  }
+  return { employee, sessionTop: st && st[1] > 0 ? { name: st[0], tokens: st[1] } : null,
+    period: { from: new Date(per.weekFrom).toISOString(), to: new Date(per.weekTo).toISOString(), known: per.weekKnown } };
+}
+const crownOf = name => fame.employee?.name === name ? (fame.sessionTop?.name === name ? 2 : 1) : 0;
+
+function updateSpend() {
+  const wk = weekOf(Date.now()), hourAgo = Date.now() - 3600e3;
+  const prevFame = fame;
+  fame = computeFame(quotaPeriods());
+  if (JSON.stringify(prevFame) !== JSON.stringify(fame)) {
+    for (const n of new Set([prevFame.employee?.name, fame.employee?.name])) { const r = n && robots.get(n); if (r) emit(r); } // su corona cambió
+    broadcast({ type: 'fame', fame }); // después de los robots: el cuadro se dibuja con la corona ya puesta
+    if (fame.employee && prevFame.employee && fame.employee.name !== prevFame.employee.name)
+      broadcast({ type: 'notice', text: fame.period.from !== prevFame.period?.from
+        ? `👑 Se renovó la cuota semanal: arranca una semana nueva y ${fame.employee.name} es el primer empleado de la semana.`
+        : `👑 Nuevo empleado de la semana: ${fame.employee.name} (${fmtM(fame.employee.tokens)} tokens).` });
+  }
+  const cur = officeUsage().find(w => w.week === wk);
+  const officeWeek = cur ? cur.in + cur.out + cur.cacheWrite : 0;
+  for (const r of robots.values()) {
+    const { week, hour } = robotSpend(r, wk, hourAgo);
+    const pct = officeWeek ? Math.min(100, Math.round(week * 100 / officeWeek)) : 0;
+    const hot = hour >= SPEND_HOUR_HOT ? 'hour' : (pct >= SPEND_SHARE_HOT && officeWeek >= SPEND_SHARE_MIN_WEEK) ? 'share' : null;
+    const next = { week, hour, pct, officeWeek, hot };
+    const prev = r.spend;
+    r.spend = next;
+    if (hot && !prev?.hot) {
+      const why = hot === 'hour' ? `gastó ${fmtM(hour)} tokens en la última hora` : `lleva el ${pct} % del gasto de la oficina esta semana (${fmtM(week)} de ${fmtM(officeWeek)})`;
+      log(r, 'sys', `🔥 Se disparó: ${why}`);
+      broadcast({ type: 'notice', text: `🔥 ${r.name} se disparó: ${why}. Míralo por si está en un bucle.` });
+    }
+    if (!prev || prev.week !== week || prev.hour !== hour || prev.pct !== pct || prev.hot !== hot) emit(r);
+  }
+}
+const spendTick = () => { try { updateSpend(); } catch (e) { console_('oficina', 'gasto', e.message); } };
+setInterval(spendTick, SPEND_TICK_MS);
+setTimeout(spendTick, Math.min(1500, SPEND_TICK_MS)); // al arrancar: cuadro del mes y coronas sin esperar el primer minuto
+
+/* ---------- estado de la suscripción (/usage) ---------- */
+// Una consola tmux aparte (_status, sin hooks de la oficina) donde se abre /usage y se lee la pantalla.
+// Mirar /usage no envía mensajes al modelo, así que no gasta cuota.
+const STATUS_WIN = `${SESSION}:_status`;
+const wait = ms => new Promise(r => setTimeout(r, ms));
+let statusCache = null, statusPending = null;
+
+async function capturePane(target) { return (await run('tmux', ['capture-pane', '-p', '-t', target])).stdout; }
+
+async function readClaudeStatus() {
+  await ensureSession();
+  let windows = [];
+  try { windows = (await run('tmux', ['list-windows', '-t', SESSION, '-F', '#{window_name}'])).stdout.split('\n'); } catch { /* sin sesion */ }
+  const fresh = !windows.includes('_status');
+  if (fresh) {
+    await run('tmux', ['new-window', '-d', '-t', `${SESSION}:`, '-n', '_status', '-c', WORKSPACE, 'env', '-u', 'ANTHROPIC_API_KEY', CLAUDE_BIN]);
+    await run('tmux', ['resize-window', '-t', STATUS_WIN, '-x', '120', '-y', '80']).catch(() => {});
+    await wait(6000);
+  }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await run('tmux', ['send-keys', '-t', STATUS_WIN, 'Escape']);
+    await wait(300);
+    await run('tmux', ['send-keys', '-t', STATUS_WIN, '-l', '/usage']);
+    await wait(700);
+    await run('tmux', ['send-keys', '-t', STATUS_WIN, 'Enter']);
+    for (let i = 0; i < 20; i++) {
+      await wait(500);
+      const text = await capturePane(STATUS_WIN);
+      if (/\d+% used/.test(text) && /Resets/.test(text)) {
+        await wait(800); // deja terminar de pintar la lista
+        const full = await capturePane(STATUS_WIN);
+        await run('tmux', ['send-keys', '-t', STATUS_WIN, 'Escape']).catch(() => {});
+        return parseClaudeStatus(full);
+      }
+    }
+    await wait(3000); // la consola pudo no estar lista todavia
+  }
+  throw new Error(`No se pudo leer /usage. Abre la consola con: tmux attach -t ${STATUS_WIN}`);
+}
+
+// /usage sale en inglés: se traducen las frases conocidas; lo que no se reconoce se deja tal cual.
+const MONTHS = { Jan: 'ene', Feb: 'feb', Mar: 'mar', Apr: 'abr', May: 'may', Jun: 'jun', Jul: 'jul', Aug: 'ago', Sep: 'sep', Oct: 'oct', Nov: 'nov', Dec: 'dic' };
+const USAGE_ES = [
+  [/^Current session$/, 'Sesión actual'],
+  [/^Current week \(all models\)$/, 'Semana actual (todos los modelos)'],
+  [/^Current week \((.+)\)$/, 'Semana actual ($1)'],
+  [/^Resets (\w{3}) (\d+) at (.+)$/, (m, mon, d, rest) => `Se reinicia el ${d} ${MONTHS[mon] || mon} a las ${rest}`],
+  [/^Resets (.+)$/, 'Se reinicia a las $1'],
+  [/What's contributing to your usage\?/, '¿Qué está consumiendo tu uso?'],
+  [/Approximate · sessions on this machine only/, 'Aproximado · solo sesiones de este equipo'],
+  [/Last 24h · shares overlap/, 'Últimas 24 h · los porcentajes se solapan'],
+  [/Give "(.+)" subagents a cheaper model/, 'Usar un modelo más barato para los subagentes de "$1"'],
+  [/Start fresh when you switch tasks · run \/clear/, 'Empezar de cero al cambiar de tarea · usar /clear'],
+  [/Run fewer sessions at once · up to (\d+) at once/, 'Correr menos sesiones a la vez · hasta $1 simultáneas'],
+  [/Trim (.+) · (\S+) tokens per request/, 'Recortar $1 · $2 tokens por pedido'],
+  [/^(\s*)Skills(\s+)% of usage/, '$1Skills$2% del uso'],
+  [/^(\s*)Subagents(\s+)% of usage/, '$1Subagentes$2% del uso'],
+  [/^(\s*)Loops(\s+)every(\s+)runs(\s+)tokens(\s+)per run last run/, '$1Bucles$2cada$3veces$4tokens$5por vez última'],
+  [/\bdynamic\b/, 'dinámico'],
+  [/\b(\d+)([mhd]) ago\b/, 'hace $1$2']
+];
+const toSpanish = line => USAGE_ES.reduce((l, [re, to]) => l.replace(re, to), line);
+
+// «Resets Nov 18 at 6pm (America/Bogota)» o «Resets 2:20am (America/Bogota)» → instante (ms). Se toma en la hora
+// local del equipo (la que muestra /usage es la tuya). Sin fecha: hoy o, si ya pasó la hora, mañana.
+const MON_N = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+function resetAt(line, from = Date.now()) {
+  const m = String(line || '').match(/^Resets (?:(\w{3}) (\d{1,2}) at )?(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  if (!m) return null;
+  const h = (Number(m[3]) % 12) + (m[5].toLowerCase() === 'pm' ? 12 : 0), d = new Date(from);
+  if (m[1] && MON_N[m[1]] !== undefined) {
+    const t = new Date(d.getFullYear(), MON_N[m[1]], Number(m[2]), h, Number(m[4] || 0));
+    if (t.getTime() < from - 86400e3) t.setFullYear(t.getFullYear() + 1); // «Jan 2» visto en diciembre
+    return t.getTime();
+  }
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, Number(m[4] || 0));
+  if (t.getTime() <= from) t.setDate(t.getDate() + 1);
+  return t.getTime();
+}
+function parseClaudeStatus(text) {
+  const lines = text.split('\n').map(l => l.trimEnd());
+  const clean = lines.map(l => l.trim());
+  const limits = [];
+  const ends = {};
+  clean.forEach((l, i) => {
+    const m = l.match(/(\d+)% used/);
+    if (!m) return;
+    const raw = clean[i + 1] || '';
+    limits.push({ title: toSpanish(clean[i - 1] || ''), pct: Number(m[1]), resets: /^Resets/.test(raw) ? toSpanish(raw) : '' });
+    const at = /^Resets/.test(raw) ? resetAt(raw) : null;
+    if (at && /^Current session$/.test(clean[i - 1] || '')) ends.sessionEnd = at;
+    if (at && /^Current week \(all models\)$/.test(clean[i - 1] || '')) ends.weekEnd = at;
+  });
+  if (ends.sessionEnd || ends.weekEnd) saveConfig({ quota: { ...(readConfig().quota || {}), ...ends } });
+  const start = clean.findIndex(l => /^What's contributing/.test(l));
+  const detail = start < 0 ? '' : lines.slice(start).filter(l => l.trim() && !/^\s*(Esc to|f to fix)/.test(l)).map(toSpanish).join('\n');
+  return { limits, detail, at: now() };
+}
+
+async function claudeStatus(refresh) {
+  if (statusCache && !refresh && Date.now() - Date.parse(statusCache.at) < 60_000) return statusCache;
+  statusPending ||= readClaudeStatus().then(s => (statusCache = s)).finally(() => { statusPending = null; });
+  return statusPending;
+}
+
+export { claudeStatus, crownOf, fame, loadSessions, officeUsage, quotaPeriods, registerSession };
