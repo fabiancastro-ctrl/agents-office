@@ -1,6 +1,9 @@
 // Dibujo de los robots, compartido por la oficina (web/app.js) y el edificio (edificio/index.html).
 // Script clásico: estas constantes quedan en el ámbito global y app.js las usa desde su IIFE.
-const ROBOT_COLORS = ['#5fcbb9','#f3b74f','#ef8f7a','#7cb6f0','#b9d06a','#d99ad6','#9fd3f0','#f0c38f'];
+// Los 8 primeros son los de siempre (la oficina reparte esos a los robots nuevos); los demás se eligen en «🎨 Apariencia».
+const ROBOT_COLORS = ['#5fcbb9','#f3b74f','#ef8f7a','#7cb6f0','#b9d06a','#d99ad6','#9fd3f0','#f0c38f',
+  '#a99cf2','#ef7f8a','#6fd08c','#5b8def','#e0b43c','#e9e4d8','#8a96aa','#ff9f4a'];
+const COLOR_NAMES = ['Menta', 'Ámbar', 'Coral', 'Celeste', 'Lima', 'Orquídea', 'Cielo', 'Durazno', 'Lavanda', 'Rubí', 'Hoja', 'Cobalto', 'Oro', 'Perla', 'Acero', 'Naranja'];
 // Aspecto por nombre: antena, visor y accesorio salen de un hash del nombre (cada robot siempre se ve igual),
 // salvo que le elijas otro (d.look). Los de una rutina o sala llevan pañoleta del color de su sala; el uniforme
 // depende de su trabajo (outfitOf) y el gorro de la temporada sale solo según la fecha (seasonNow).
@@ -8,7 +11,9 @@ function lookOf(name, place, d) {
   let h = 7;
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   const o = d?.look || {}, pick = (v, n, def) => Number.isInteger(v) ? ((v % n) + n) % n : def;
-  return {ant: pick(o.ant, 4, h % 4), visor: pick(o.visor, 3, (h >>> 3) % 3), acc: pick(o.acc, 4, (h >>> 6) % 4),
+  // Por nombre salen de las opciones originales (4 antenas, 3 visores, 4 accesorios): así nadie cambia de cara al
+  // sumar opciones. Las nuevas solo aparecen si se las eliges.
+  return {ant: pick(o.ant, ANTENNAS.length, h % 4), visor: pick(o.visor, VISORS.length, (h >>> 3) % 3), acc: pick(o.acc, HEAD_ACC.length, (h >>> 6) % 4),
     uniform: place?.type === 'room' ? (place.sala ? '#ef8f7a' : '#a99cf2') : '', outfit: outfitOf(d, place), season: seasonNow(), crown: Number(d?.crown) || 0};
 }
 // Uniforme según el trabajo: inspector (reviews y auditorías), escritor (documentación) o casco (rutinas).
@@ -38,15 +43,42 @@ const ANTENNAS = [
 const VISORS = [
   `<rect x="11" y="12" width="18" height="8" rx="3" fill="#0f141c"/><circle class="eye" cx="16" cy="16" r="1.9" fill="#bdf7ee"/><circle class="eye" cx="24" cy="16" r="1.9" fill="#bdf7ee"/>`,
   `<rect x="9.5" y="13" width="21" height="6" rx="3" fill="#0f141c"/><rect class="eye" x="13" y="15" width="5" height="2" rx="1" fill="#bdf7ee"/><rect class="eye" x="22" y="15" width="5" height="2" rx="1" fill="#bdf7ee"/>`,
-  `<circle cx="15.5" cy="16" r="3.6" fill="#0f141c"/><circle cx="24.5" cy="16" r="3.6" fill="#0f141c"/><circle class="eye" cx="15.5" cy="16" r="1.8" fill="#bdf7ee"/><circle class="eye" cx="24.5" cy="16" r="1.8" fill="#bdf7ee"/>`
+  `<circle cx="15.5" cy="16" r="3.6" fill="#0f141c"/><circle cx="24.5" cy="16" r="3.6" fill="#0f141c"/><circle class="eye" cx="15.5" cy="16" r="1.8" fill="#bdf7ee"/><circle class="eye" cx="24.5" cy="16" r="1.8" fill="#bdf7ee"/>`,
+  // Cíclope: una banda con un solo ojo grande
+  `<rect x="10" y="12.5" width="20" height="7" rx="3.5" fill="#0f141c"/><circle class="eye" cx="20" cy="16" r="2.6" fill="#bdf7ee"/><circle cx="20" cy="16" r="1" fill="#0f141c" opacity=".55"/>`,
+  // Gafas: dos cristales cuadrados con marco y puente
+  `<rect x="10" y="12" width="8.5" height="8" rx="2.4" fill="#0f141c" stroke="#3a4558" stroke-width="1"/><rect x="21.5" y="12" width="8.5" height="8" rx="2.4" fill="#0f141c" stroke="#3a4558" stroke-width="1"/><rect x="18.5" y="15" width="3" height="1.4" fill="#3a4558"/><circle class="eye" cx="14.25" cy="16" r="1.7" fill="#bdf7ee"/><circle class="eye" cx="25.75" cy="16" r="1.7" fill="#bdf7ee"/>`,
+  // Pantalla LED: los ojos son dos «^» encendidos
+  `<rect x="9.5" y="11.5" width="21" height="9" rx="2" fill="#0f141c"/><path d="M11 13h18M11 19h18" stroke="#bdf7ee" stroke-opacity=".08" stroke-width=".6"/><path class="eye" d="M13.5 17.6l2.5-2.6 2.5 2.6M21.5 17.6l2.5-2.6 2.5 2.6" stroke="#bdf7ee" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
 ];
+const VISOR_NAMES = ['Clásico', 'Banda', 'Ojos redondos', 'Cíclope', 'Gafas', 'Pantalla LED'];
+// Accesorios: los de cabeza van aquí; los del cuerpo (corbatín, bufanda, corbata, insignia) en BODY_ACC.
 const HEAD_ACC = [
   '',
   `<path d="M8.5 15q0-11 11.5-11t11.5 11" stroke="#2a3342" stroke-width="2" fill="none"/><rect x="5.6" y="12.5" width="4" height="7.5" rx="2" fill="#2a3342"/><rect x="30.4" y="12.5" width="4" height="7.5" rx="2" fill="#2a3342"/>`,
   `<path d="M8 10.5q0-6 12-6t12 6z" fill="#2a3342"/><rect x="19" y="8.6" width="16" height="2.4" rx="1.2" fill="#2a3342"/>`,
+  '',
+  // Flor en la cabeza
+  `<g transform="translate(29.5 8.2)"><circle cx="0" cy="-2.1" r="1.7" fill="#ef8fb0"/><circle cx="2" cy="-.6" r="1.7" fill="#ef8fb0"/><circle cx="1.2" cy="1.7" r="1.7" fill="#ef8fb0"/><circle cx="-1.2" cy="1.7" r="1.7" fill="#ef8fb0"/><circle cx="-2" cy="-.6" r="1.7" fill="#ef8fb0"/><circle r="1.3" fill="#ffd36b"/></g>`,
+  // Lazo
+  `<g transform="translate(11 8.4)"><path d="M0 0l-4-2.6v5.2zM0 0l4-2.6v5.2z" fill="#ef7f8a" stroke="#c24b58" stroke-width=".5"/><circle r="1.2" fill="#c24b58"/></g>`,
+  '',
+  // Gorro de lana con pompón
+  `<path d="M8 12.5q0-8.5 12-8.5t12 8.5z" fill="#5b8def"/><rect x="7.6" y="10.6" width="24.8" height="3" rx="1.4" fill="#3f6fc9"/><path d="M11 11.4v1.4M14 11.4v1.4M17 11.4v1.4M20 11.4v1.4M23 11.4v1.4M26 11.4v1.4M29 11.4v1.4" stroke="#2c56a8" stroke-width=".7"/><circle cx="20" cy="3.6" r="2.3" fill="#e9e4d8"/>`,
+  '',
   ''
 ];
+const ACC_NAMES = ['Nada', 'Audífonos', 'Gorra', 'Corbatín', 'Flor', 'Lazo', 'Bufanda', 'Gorro de lana', 'Corbata', 'Insignia'];
 const BOWTIE = `<path d="M15 24.6l5 2-5 2zM25 24.6l-5 2 5 2z" fill="#ef7f8a"/><circle cx="20" cy="26.6" r="1.1" fill="#c24b58"/>`;
+const BODY_ACC = {
+  3: BOWTIE,
+  // Bufanda con una punta colgando
+  6: `<path d="M13 24.4h14a2 2 0 0 1 0 3.4H13a2 2 0 0 1 0-3.4z" fill="#ef7f8a"/><path d="M23.5 27.4h3.4l-.6 7h-2.6z" fill="#ef7f8a"/><path d="M23.6 33.2h2.6M23.8 31.4h2.4" stroke="#c24b58" stroke-width=".6"/><path d="M14 26.1h12" stroke="#c24b58" stroke-width=".5" opacity=".6"/>`,
+  // Corbata
+  8: `<path d="M18.6 25.6h2.8l-.5 1.8h-1.8z" fill="#2c56a8"/><path d="M19.1 27.4h1.8l1.3 7.4-2.2 2-2.2-2z" fill="#3f6fc9"/><path d="M19.5 29.6l1.4 1.4M19.3 32l1.6 1.6" stroke="#2c56a8" stroke-width=".55"/>`,
+  // Insignia (estrella dorada en el pecho)
+  9: `<path d="M26 28.2l.75 1.55 1.7.25-1.23 1.2.29 1.7-1.51-.8-1.51.8.29-1.7-1.23-1.2 1.7-.25z" fill="#e0b43c" stroke="#9a7a1f" stroke-width=".45"/>`
+};
 // Utilería que la hoja de estilos muestra según lo que hace el robot (clases t-* y st-* del robot).
 const PROPS_BODY = `<g class="p p-paper"><rect x="12" y="29" width="16" height="11" rx="1" fill="#f4efe2"/><path d="M14.5 32h11M14.5 34.5h11M14.5 37h7" stroke="#9aa3b0" stroke-width=".8"/></g>
   <g class="p p-chars" font-family="monospace" font-size="5" fill="#5fcbb9"><text x="11" y="31">1</text><text x="19" y="29">0</text><text x="26" y="31">{</text></g>
@@ -87,24 +119,30 @@ const arm = (cls, x, color, extra = '') => `<g class="${cls}"><rect x="${x}" y="
 // y juntas. Siempre se dibujan pero la hoja de estilos solo las muestra con html.hd-on, así cambiar de modo no
 // redibuja nada. Los degradados son grises sobre el color del robot: sirven para cualquier color y viven una sola vez
 // en el documento (HD_DEFS).
+// Forma del cristal de cada visor (para el modo HD: brillo y reflejo recortados a esa forma).
+const VISOR_SHAPES = [
+  '<rect x="11" y="12" width="18" height="8" rx="3"/>',
+  '<rect x="9.5" y="13" width="21" height="6" rx="3"/>',
+  '<circle cx="15.5" cy="16" r="3.6"/><circle cx="24.5" cy="16" r="3.6"/>',
+  '<rect x="10" y="12.5" width="20" height="7" rx="3.5"/>',
+  '<rect x="10" y="12" width="8.5" height="8" rx="2.4"/><rect x="21.5" y="12" width="8.5" height="8" rx="2.4"/>',
+  '<rect x="9.5" y="11.5" width="21" height="9" rx="2"/>'
+];
 const HD_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <linearGradient id="hd-vol" x1="0" y1="0" x2=".25" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".38" stop-color="#fff" stop-opacity="0"/><stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".42"/></linearGradient>
   <linearGradient id="hd-cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".3"/><stop offset=".32" stop-color="#fff" stop-opacity=".3"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".4"/></linearGradient>
   <linearGradient id="hd-glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".26"/><stop offset=".42" stop-color="#fff" stop-opacity=".04"/><stop offset=".43" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#5fcbb9" stop-opacity=".12"/></linearGradient>
   <radialGradient id="hd-glow"><stop offset="0" stop-color="#bdf7ee" stop-opacity=".75"/><stop offset="1" stop-color="#bdf7ee" stop-opacity="0"/></radialGradient>
-  <clipPath id="hd-v0"><rect x="11" y="12" width="18" height="8" rx="3"/></clipPath>
-  <clipPath id="hd-v1"><rect x="9.5" y="13" width="21" height="6" rx="3"/></clipPath>
-  <clipPath id="hd-v2"><circle cx="15.5" cy="16" r="3.6"/><circle cx="24.5" cy="16" r="3.6"/></clipPath>
+  ${VISOR_SHAPES.map((sh, i) => `<clipPath id="hd-v${i}">${sh}</clipPath>`).join('\n  ')}
 </defs></svg>`;
 if (typeof document !== 'undefined') {
   const addDefs = () => { if (!document.getElementById('hd-vol')) document.body.insertAdjacentHTML('afterbegin', HD_DEFS); };
   if (document.body) addDefs(); else document.addEventListener('DOMContentLoaded', addDefs);
 }
-const VISOR_BOX = [[11, 12, 18, 8, 3], [9.5, 13, 21, 6, 3], null];
-const EYES = [[16, 16, 24, 16], [15.5, 16, 24.5, 16], [15.5, 16, 24.5, 16]];
+const EYES = [[16, 16, 24, 16], [15.5, 16, 24.5, 16], [15.5, 16, 24.5, 16], [20, 16, 20, 16], [14.25, 16, 25.75, 16], [16, 16, 24, 16]];
 function hdHead(v) {
-  const b = VISOR_BOX[v], e = EYES[v];
-  const glass = b ? `<rect x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" rx="${b[4]}" fill="url(#hd-glass)"/>` : '<circle cx="15.5" cy="16" r="3.6" fill="url(#hd-glass)"/><circle cx="24.5" cy="16" r="3.6" fill="url(#hd-glass)"/>';
+  const e = EYES[v] || EYES[0];
+  const glass = (VISOR_SHAPES[v] || VISOR_SHAPES[0]).replace(/\/>/g, ' fill="url(#hd-glass)"/>');
   return `<g class="hd"><rect x="8" y="8" width="24" height="16" rx="5" fill="url(#hd-vol)"/>
     <path d="M31.2 11.4v8.6" stroke="#fff" stroke-opacity=".38" stroke-width=".7" stroke-linecap="round"/><path d="M8.8 21.4h22.4" stroke="#0b1018" stroke-opacity=".22" stroke-width=".45"/>
     <circle cx="10.3" cy="10.1" r=".5" fill="#0b1018" opacity=".4"/><circle cx="29.7" cy="22.1" r=".5" fill="#0b1018" opacity=".4"/>
@@ -132,7 +170,7 @@ function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
     <rect x="16.5" y="22.6" width="7" height="4.4" rx="1.2" fill="#3a4558"/>${HD_NECK}
     <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}" ${OUT}/>${SHADE_BODY}${HD_BODY}${CHEST}
     ${u ? `<path d="M10.5 26.4h19v3h-19z" fill="${u}"/><path d="M23.5 29l3.4 6-4.4-1.2z" fill="${u}"/>` : ''}
-    ${look.acc === 3 ? BOWTIE : ''}
+    ${BODY_ACC[look.acc] || ''}
     ${PROPS_BODY}
     ${arm('arm-r', 31, color, PROPS_HAND)}
     <g class="head">${hat ? '' : `<g class="antg">${ANTENNAS[look.ant]}</g>`}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${hdHead(look.visor)}${FACES}${hat || HEAD_ACC[look.acc]}</g>

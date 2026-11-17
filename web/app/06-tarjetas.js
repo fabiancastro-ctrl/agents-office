@@ -25,7 +25,7 @@ function renderMini() {
   const at = new Map(), rooms = [];
   for (const a of st.robots.values()) { const p = a.data.place; if (p?.type === 'desk') at.set(p.idx, a.data); else if (p?.type === 'room') rooms.push(a.data); }
   const cell = (d, i) => d
-    ? `<button type="button" class="mm-c mm-${d.state}${urgency(d) ? ` urg-${urgency(d)}` : ''}${st.selected === d.name ? ' sel' : ''}" data-mini="${esc(d.name)}" style="--c:${COLORS[d.color % 8]}" title="${esc(`${d.name} · ${stateLabel(d)}${titleOf(d) ? ' · ' + titleOf(d) : ''}`)}">${robotHead(COLORS[d.color % 8], lookOf(d.name, d.place, d))}<span>${esc(d.name)}</span></button>`
+    ? `<button type="button" class="mm-c mm-${d.state}${urgency(d) ? ` urg-${urgency(d)}` : ''}${st.selected === d.name ? ' sel' : ''}" data-mini="${esc(d.name)}" style="--c:${COLORS[d.color % COLORS.length]}" title="${esc(`${d.name} · ${stateLabel(d)}${titleOf(d) ? ' · ' + titleOf(d) : ''}`)}">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}<span>${esc(d.name)}</span></button>`
     : `<span class="mm-c mm-free" title="Escritorio ${String(i + 1).padStart(2, '0')} libre"><i>${String(i + 1).padStart(2, '0')}</i></span>`;
   const n = Math.max(deskEls.length, ...[...at.keys()].map(i => i + 1), 1);
   const html = `<span class="mm-h">Escritorios</span><div class="mm-row">${Array.from({length: n}, (_, i) => cell(at.get(i), i)).join('')}</div>${rooms.length ? `<span class="mm-h">Rutinas y salas</span><div class="mm-row">${rooms.map(d => cell(d)).join('')}</div>` : ''}`;
@@ -186,8 +186,8 @@ function cardHtml(a) {
   else if (d.state === 'done') actions = `${isSleepy(d) ? `<span class="rc-sleep" title="Sin actividad hace ${fmtDur(sleepMs(d))}. Despídelo con su resumen y retoma la tarea cuando vuelva lo que espera.">💤 ${fmtDur(sleepMs(d))}</span>${canSummary(d) ? '<button class="btn sm" data-card-act="sumkill">📝 Resumen y despedir</button>' : ''}` : ''}${canCompact(d) ? `<button class="btn sm" data-card-act="compact" title="Contexto al ${d.ctx.pct} %">🧹 Compactar</button>` : ''}<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
   const stuck = isStuck(d), urg = urgency(d);
   const cls = ['rc', `g-${g}`, `s-${d.state}`, urg ? `urg-${urg}` : '', stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
-  return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % 8]}">
-    <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}</span>
+  return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % COLORS.length]}">
+    <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}</span>
       <div class="rc-t"><b>${esc(d.name)}</b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">📌 ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small>${d.note ? `<span class="rc-note" title="${esc(d.note)}">🗒 ${esc(d.note)}</span>` : ''}</div>${pill}</div>
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
     <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>

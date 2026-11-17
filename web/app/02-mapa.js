@@ -108,7 +108,7 @@ function drawRooms() {
       if (r.sala && st.view) { // dentro de la sala: cabecera con la salida, tablero, mesa común y su puerta
         const s = st.salas.find(x => x.id === r.sala);
         el.className = 'room r-rt r-sala sv in-sala';
-        if (Number.isInteger(s?.color)) el.style.setProperty('--sala-c', COLORS[s.color % 8]); // el piso, del color de quien la armó
+        if (Number.isInteger(s?.color)) el.style.setProperty('--sala-c', COLORS[s.color % COLORS.length]); // el piso, del color de quien la armó
         el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span>Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
         MAP.appendChild(el);
         const prop = (cls, html, x, y0, w, h) => { const p = document.createElement('div'); p.className = `sv ${cls}`; p.innerHTML = html; MAP.appendChild(p); setRect(p, x, y0, w, h); return p; };

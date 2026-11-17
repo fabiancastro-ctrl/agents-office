@@ -354,14 +354,15 @@ const server = http.createServer(async (req, res) => {
         const { id, answers, console: toConsole } = await readBody(req);
         return answerAsk(r, id, answers, !!toConsole) ? send(res, 200, { ok: true }) : send(res, 404, { error: 'Esas preguntas ya no están pendientes.' });
       }
-      // Aspecto que le eliges al robot: color (0-7), antena (0-3), visor (0-2) y accesorio (0-3). reset vuelve al de su nombre.
+      // Aspecto que le eliges al robot: color, antena, visor y accesorio (los topes son los largos de ROBOT_COLORS,
+      // ANTENNAS, VISORS y HEAD_ACC en web/robot-art.js: si sumas opciones allá, súbelos aquí). reset vuelve al de su nombre.
       if (req.method === 'POST' && action === 'look') {
         const b = await readBody(req);
         if (b.reset) { r.look = null; if (Number.isInteger(r.baseColor)) r.color = r.baseColor; }
         else {
-          const lim = { ant: 4, visor: 3, acc: 4 }, look = { ...(r.look || {}) };
+          const lim = { ant: 4, visor: 6, acc: 10 }, look = { ...(r.look || {}) };
           for (const [k, n] of Object.entries(lim)) if (b[k] !== undefined) { const v = Number(b[k]); if (!Number.isInteger(v) || v < 0 || v >= n) return send(res, 400, { error: `Valor inválido para ${k}.` }); look[k] = v; }
-          if (b.color !== undefined) { const c = Number(b.color); if (!Number.isInteger(c) || c < 0 || c > 7) return send(res, 400, { error: 'Color inválido.' }); if (!Number.isInteger(r.baseColor)) r.baseColor = r.color; r.color = c; }
+          if (b.color !== undefined) { const c = Number(b.color); if (!Number.isInteger(c) || c < 0 || c > 15) return send(res, 400, { error: 'Color inválido.' }); if (!Number.isInteger(r.baseColor)) r.baseColor = r.color; r.color = c; }
           r.look = Object.keys(look).length ? look : null;
         }
         emit(r);

@@ -68,7 +68,7 @@ function renderFame() {
   const live = st.robots.get(em.name)?.data;
   const crown = live?.crown || 0;
   const look = lookOf(em.name, live?.place || null, live || {look: em.look, crown: 0});
-  const html = `<small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % 8], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
+  const html = `<small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % COLORS.length], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
   if (box._html !== html) { box._html = html; box.innerHTML = html; }
   const p = st.fame.period, d = t => new Date(t).toLocaleString('es', {weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'});
   box.title = `👑 Empleado de la semana: ${em.name}${em.title ? ` («${em.title}»)` : ''} · ${em.tokens.toLocaleString('es')} tokens desde ${d(p.from)}.\n`

@@ -7,7 +7,7 @@ function createRobot(d, fromSnapshot) {
   el.style.setProperty('--d', `-${(Math.random() * 3).toFixed(2)}s`);
   el.style.setProperty('--d2', `-${(Math.random() * 5).toFixed(2)}s`);
   el.style.setProperty('--sp', (0.85 + Math.random() * 0.3).toFixed(2));
-  el.innerHTML = `<i class="shadow"></i><i class="jet" aria-hidden="true"></i><i class="lap" aria-hidden="true"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
+  el.innerHTML = `<i class="shadow"></i><i class="jet" aria-hidden="true"></i><i class="lap" aria-hidden="true"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
   MAP.appendChild(el);
   const a = {data: d, el, bubble: el.querySelector('.bubble'), sign: el.querySelector('.sign'), carry: el.querySelector('.carry'),
     pos: door(), queueSlot: null, q: Promise.resolve(), subEls: new Map(), log: d.log || [], lastBubble: ''};
@@ -35,7 +35,7 @@ function upsert(d, fromSnapshot = false) {
   a.data = {...d, log: undefined};
   layout(); // ya con su lugar nuevo: corrige «N robots» de su sala (si nada cambió de tamaño, no recoloca nada)
   const sig = artSig(d);
-  if (a.artSig !== undefined && a.artSig !== sig) a.el.querySelector(':scope > svg')?.replaceWith(Object.assign(document.createElement('template'), {innerHTML: robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}).content.firstElementChild);
+  if (a.artSig !== undefined && a.artSig !== sig) a.el.querySelector(':scope > svg')?.replaceWith(Object.assign(document.createElement('template'), {innerHTML: robotSVG(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}).content.firstElementChild);
   a.artSig = sig;
   paint(a);
   tickWaiting();

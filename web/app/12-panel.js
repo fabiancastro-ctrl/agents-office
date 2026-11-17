@@ -17,12 +17,18 @@ function select(sel) {
 // Parcha el DOM existente en vez de reemplazarlo: así la ventana no parpadea con cada evento de los robots
 // (se conservan scroll, foco, imágenes y lo escrito). #log y #pane se actualizan aparte, de forma incremental.
 const MORPH_SKIP = new Set(['log', 'pane']);
+// Un control (botón, enlace o algo clicable con data-pick/data-docpath/…) solo se reutiliza si conserva su acción:
+// si no, el elemento que acabas de pulsar podía volverse otro botón mientras el clic seguía su camino (p. ej.
+// «🎨 Apariencia» se convertía en «⏰ Despiértame cuando…» y abría Rutinas). Si la acción cambia, se reemplaza.
+const CLICKY = new Set(['BUTTON', 'A']);
+const actionSig = el => el.nodeType === 1 && (CLICKY.has(el.nodeName) || el.hasAttribute('data-pick') || el.hasAttribute('data-docpath') || el.getAttribute('role') === 'button')
+  ? [...el.attributes].filter(a => a.name.startsWith('data-')).map(a => `${a.name}=${a.value}`).sort().join('&') : '';
 function morph(from, to) {
   let cur = from.firstChild;
   for (const nb of [...to.childNodes]) {
     // Los nodos con id se reutilizan aunque algo se haya insertado antes (p. ej. aparece el bloque de subagentes).
     const byId = nb.nodeType === 1 && nb.id ? [...from.children].find(c => c.id === nb.id) : null;
-    const same = !byId && cur && cur.nodeType === nb.nodeType && cur.nodeName === nb.nodeName && !cur.id && !(nb.nodeType === 1 && nb.id);
+    const same = !byId && cur && cur.nodeType === nb.nodeType && cur.nodeName === nb.nodeName && !cur.id && !(nb.nodeType === 1 && nb.id) && actionSig(cur) === actionSig(nb);
     const na = byId || (same ? cur : null);
     if (!na) { from.insertBefore(nb, cur); continue; }
     if (na !== cur) from.insertBefore(na, cur);
@@ -165,7 +171,7 @@ document.addEventListener('click', async e => {
 });
 
 // Avatar del robot en sus globos: su cabeza con su color y accesorio (en salas, el de cada robot que habla).
-const avColor = name => { const d = st.robots.get(name)?.data; return d ? COLORS[d.color % 8] : COLORS[[...String(name)].reduce((h, c) => h + c.charCodeAt(0), 0) % 8]; };
+const avColor = name => { const d = st.robots.get(name)?.data; return d ? COLORS[d.color % COLORS.length] : COLORS[[...String(name)].reduce((h, c) => h + c.charCodeAt(0), 0) % COLORS.length]; };
 const avatarOf = name => name ? robotHead(avColor(name), lookOf(name, st.robots.get(name)?.data.place, st.robots.get(name)?.data)) : '';
 function logRow(l, robot, i, interim) {
   if (l.kind === 'tool') return toolRow(l);
@@ -251,15 +257,15 @@ const lookUi = {open: null};
 function lookEditor(d) {
   if (lookUi.open !== d.name) return `<button type="button" class="btn sm ghost lk-open" data-look="open" title="Cambiar color, antena, visor y accesorio">🎨 Apariencia</button>`;
   const L = lookOf(d.name, d.place, d);
-  const cyc = (k, n, label) => `<span class="lk-c"><small>${label}</small><button type="button" data-look="${k}" data-dir="-1" aria-label="${label} anterior">◀</button><b>${L[k] + 1}/${n}</b><button type="button" data-look="${k}" data-dir="1" aria-label="${label} siguiente">▶</button></span>`;
-  return `<div class="lk" id="look-ed"><span class="lk-sw">${COLORS.map((c, i) => `<button type="button" class="${d.color % 8 === i ? 'on' : ''}" style="background:${c}" data-look="color" data-v="${i}" aria-label="Color ${i + 1}"></button>`).join('')}</span>${cyc('ant', 4, 'Antena')}${cyc('visor', 3, 'Visor')}${cyc('acc', 4, 'Accesorio')}<button type="button" class="btn sm ghost" data-look="reset">Restablecer</button><button type="button" class="btn sm ghost" data-look="close">Listo</button></div>`;
+  const cyc = (k, n, label, names) => `<span class="lk-c"><small>${label}</small><button type="button" data-look="${k}" data-dir="-1" aria-label="${label} anterior">◀</button><b title="${L[k] + 1} de ${n}">${names ? esc(names[L[k]]) : `${L[k] + 1}/${n}`}</b><button type="button" data-look="${k}" data-dir="1" aria-label="${label} siguiente">▶</button></span>`;
+  return `<div class="lk" id="look-ed"><span class="lk-sw">${COLORS.map((c, i) => `<button type="button" class="${d.color % COLORS.length === i ? 'on' : ''}" style="background:${c}" data-look="color" data-v="${i}" aria-label="Color ${COLOR_NAMES[i] || i + 1}" title="${COLOR_NAMES[i] || ""}"></button>`).join('')}</span>${cyc('ant', ANTENNAS.length, 'Antena')}${cyc('visor', VISORS.length, 'Visor', VISOR_NAMES)}${cyc('acc', HEAD_ACC.length, 'Accesorio', ACC_NAMES)}<button type="button" class="btn sm ghost" data-look="reset">Restablecer</button><button type="button" class="btn sm ghost" data-look="close">Listo</button></div>`;
 }
 PANEL.addEventListener('click', async e => {
   const b = e.target.closest('[data-look]'); if (!b) return;
   const d = st.robots.get(st.selected)?.data; if (!d) return;
   const k = b.dataset.look;
   if (k === 'open' || k === 'close') { lookUi.open = k === 'open' ? d.name : null; return renderPanel(); }
-  const L = lookOf(d.name, d.place, d), N = {ant: 4, visor: 3, acc: 4};
+  const L = lookOf(d.name, d.place, d), N = {ant: ANTENNAS.length, visor: VISORS.length, acc: HEAD_ACC.length};
   const body = k === 'reset' ? {reset: true} : k === 'color' ? {color: +b.dataset.v} : {[k]: (L[k] + +b.dataset.dir + N[k]) % N[k]};
   try { await api('POST', `/api/robots/${d.name}/look`, body); } catch { /* toast ya mostrado */ }
 });
