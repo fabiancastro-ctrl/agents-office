@@ -28,7 +28,9 @@ const samePlace = (p, q) => p.type === q.type && p.idx === q.idx && p.room === q
 // Calcula filas de escritorios y salas de rutina (incoming = lugar que se va a ocupar) y, si cambian,
 // recoloca salas, escritorios y robots con la nueva altura del mapa.
 function layout(incoming) {
-  const places = [...st.robots.values()].map(a => a.data.place);
+  // incoming reserva lugar (filas, asientos) pero no se cuenta como robot: si no, el que llega sale dos veces en «N robots».
+  const counted = new Set([...st.robots.values()].map(a => a.data.place));
+  const places = [...counted];
   if (incoming) places.push(incoming);
   const used = places.filter(p => p.type !== 'room').map(p => p.idx);
   const rows = Math.max(BASE_ROWS, Math.ceil((Math.max(-1, ...used) + 1) / COLS));
@@ -37,7 +39,7 @@ function layout(incoming) {
     if (p.type !== 'room') continue;
     if (v ? p.sala !== v : p.sala) continue; // en la oficina no se dibujan las salas; dentro de una, solo esa
     const r = byRoom.get(p.room) || {id: p.room, name: p.name, sala: p.sala, maxSlot: -1, n: 0};
-    r.maxSlot = Math.max(r.maxSlot, p.slot); r.n++;
+    r.maxSlot = Math.max(r.maxSlot, p.slot); if (counted.has(p)) r.n++;
     byRoom.set(p.room, r);
   }
   if (v && !byRoom.has(`sala-${v}`)) byRoom.set(`sala-${v}`, {id: `sala-${v}`, name: st.salas.find(s => s.id === v)?.name || '', sala: v, maxSlot: -1, n: 0});

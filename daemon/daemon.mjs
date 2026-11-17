@@ -752,6 +752,15 @@ function requestSpawn(r, body) {
   const context = Array.isArray(body) ? '' : String(body?.contexto ?? body?.context ?? '').trim().slice(0, 30000);
   // La sala se reserva desde ya: así la respuesta del curl le da al padre la ruta del CONTEXT.md sin abrirle un turno.
   const salaId = r.place.sala && salas.some(x => x.id === r.place.sala) ? r.place.sala : crypto.randomBytes(4).toString('hex');
+  // Nombres fijados desde ya (sin repetir con robots, cola ni otras peticiones): la respuesta se los dice al padre.
+  const used = new Set([...robots.keys(), ...launching, ...spawnQueue.map(q => q.name).filter(Boolean), ...[...robots.values()].flatMap(x => x.spawnReq?.items?.map(i => i.name) || [])]);
+  for (const it of items) {
+    const base = (it.name || 'robot').slice(0, 17).replace(/-+$/, '');
+    let n = it.name || base;
+    for (let i = 2; used.has(n); i++) n = `${base}-${i}`;
+    it.name = n; used.add(n);
+  }
+  r.toldNames = items.map(i => i.name); // si al aprobar cambian, se le aclara con sus primeros resultados
   r.spawnReq = { id: crypto.randomBytes(3).toString('hex'), at: now(), items, salaId, ...(context ? { context } : {}) };
   log(r, 'sys', `Pidió ${items.length} robot${items.length === 1 ? '' : 's'} nuevo${items.length === 1 ? '' : 's'}: espera tu aprobación`);
   console_(r.name, 'pide robots', items.map(i => i.title || trunc(i.text, 40)).join(' · '));
@@ -778,7 +787,10 @@ async function decideSpawn(r, id, approve, edited) {
   }
   // El padre y sus hijos quedan juntos en una sala: se ve que trabajan en lo mismo y comparten CONTEXT.md y el hilo.
   const { sala, created } = teamSala(r, items, context, salaId);
-  for (const it of items) spawnQueue.push({ id: crypto.randomBytes(3).toString('hex'), parent: r.name, title: it.title, text: it.text, name: it.name || '', sala: sala.id, at: now() });
+  const qs = items.map(it => ({ id: crypto.randomBytes(3).toString('hex'), parent: r.name, title: it.title, text: it.text, name: it.name || '', sala: sala.id, at: now() }));
+  spawnQueue.push(...qs);
+  sala.roster = [...(sala.roster || []), ...qs.map(q => ({ qid: q.id, name: q.name, title: q.title, parent: r.name }))];
+  saveSalas(); writeRoster(sala);
   log(r, 'sys', `Aprobaste ${items.length} robot${items.length === 1 ? '' : 's'} · ${created ? 'pasa a la sala' : 'entran a su sala'} «${sala.name}»`);
   const launched = await drainSpawnQueue();
   emit(r);
@@ -814,6 +826,8 @@ async function drainSpawnQueue() {
           color: par?.color, look: par ? { ...lookFromName(par.name), ...(par.look || {}) } : null,
           origin: `Lanzado por el robot ${q.parent} (lo aprobaste en la oficina)` });
         launched.push(kid.name);
+        const rs = sala && salas.find(x => x.id === sala), e = rs?.roster?.find(x => x.qid === q.id);
+        if (e) { e.name = kid.name; saveSalas(); writeRoster(rs); }
         const p = robots.get(q.parent); if (p) emit(p);
       } catch (e) {
         if (FULL_RE.test(e.message)) { spawnQueue.unshift(q); break; }
@@ -843,6 +857,7 @@ function reportToParent(r, lastMessage) {
   pendingResults.set(p.name, b);
   saveState();
   checkTeamDone(r);
+  for (const s of rosterOf(r.name)) writeRoster(s);
   if (parentBusy(p)) log(p, 'sys', `${r.name} terminó; su resultado te llega apenas termines lo que haces`);
   else scheduleFlush(p.name);
   emit(p);
@@ -863,8 +878,14 @@ function flushResults(parent) {
   if (!b?.items.length || !p) return;
   pendingResults.delete(parent);
   const left = kidsWorking(parent), n = b.items.length;
-  const note = p.salaNote ? `${p.salaNote}\n\n` : '';
+  let note = p.salaNote ? `${p.salaNote}\n\n` : '';
   p.salaNote = '';
+  if (p.toldNames) { // si al aprobar cambiaron los nombres que le dije, se lo aclaro aquí (no en un mensaje aparte)
+    const team = [...robots.values()].filter(x => x.parent === p.name).map(x => x.name);
+    const changed = p.toldNames.filter(n => !team.includes(n) && !b.items.some(i => i.name === n));
+    if (changed.length) note += `[Oficina] Nombres finales de tu equipo: ${[...robots.values()].filter(x => x.parent === p.name).map(x => `${x.name} (${x.title || 'sin título'})`).join(', ')}.\n\n`;
+    p.toldNames = null;
+  }
   const head = n === 1 ? `[Oficina] Resultado de ${b.items[0].name}${b.items[0].title ? ` («${b.items[0].title}»)` : ''}` : `[Oficina] Resultados de ${n} robots (terminaron mientras trabajabas)`;
   const body = n === 1 ? b.items[0].text : b.items.map(i => `## ${i.name}${i.title ? ` («${i.title}»)` : ''}\n\n${i.text}`).join('\n\n');
   say(p, `${note}${head}${left ? ` · ${left} sigue${left === 1 ? '' : 'n'} trabajando` : ' · ya terminaron todos'}:\n\n${body}`).catch(() => {});
@@ -1131,28 +1152,21 @@ function migrateSummaries() {
   } catch (e) { console.error(`No se pudieron mudar los resúmenes a ${sumDir()}: ${e.message}`); }
   if (moved) { fs.writeFileSync(ARCH_FILE, JSON.stringify(archive)); console.log(`Resúmenes mudados a ${sumDir()}: ${moved}`); }
 }
-function autoSummary(r) {
-  const last = [...r.log].reverse().find(l => l.kind === 'agent')?.text || '';
-  const oneLine = t => String(t ?? '').replace(/\s+/g, ' ').trim();
-  return [`- **Encargo:** ${trunc(oneLine(r.label), 300)}`,
-    r.note ? `- **Nota:** ${oneLine(r.note)}` : '',
-    `- **Estado al irse:** ${r.state === 'done' ? 'había terminado su turno' : r.state === 'input' ? 'esperaba tu respuesta' : 'estaba trabajando'}`,
-    last ? `\n## Su último mensaje\n\n${last.slice(0, 2500)}` : '',
-    r.docs.length ? `\n## Documentos\n\n${r.docs.map(d => `- ${d.path}`).join('\n')}` : ''].filter(Boolean).join('\n');
-}
 function writeSummary(r, summary, by) {
   const day = now().slice(0, 10);
   const file = path.join(sumDir(), `${day}-${r.name}-${crypto.randomBytes(2).toString('hex')}.md`);
   const head = `# ${r.name}${r.title ? ` · ${r.title}` : ''}\n\n_${by === 'robot' ? 'Resumen escrito por el robot al despedirlo' : 'Resumen armado por la oficina al despedirlo'} · entró ${r.startedAt?.slice(0, 16).replace('T', ' ')} · se fue ${now().slice(0, 16).replace('T', ' ')}_\n\n`;
   try { fs.mkdirSync(sumDir(), { recursive: true }); fs.writeFileSync(file, head + summary.trim() + '\n'); return file; } catch { return null; }
 }
+// Solo se archiva (con su documento en docs/resumenes-robots/) quien se fue con «📝 Despedir con su resumen».
+// «Dar de baja» es solo eso: se va sin resumen ni archivo.
 function archiveRobot(r, reason, robotSummary) {
-  const summary = String(robotSummary || '').trim() || autoSummary(r);
-  const by = robotSummary ? 'robot' : 'oficina';
+  const summary = String(robotSummary || '').trim();
+  if (!summary) return;
+  const by = 'robot';
   const summaryPath = writeSummary(r, summary, by);
   const log = r.log.filter(l => ['user', 'agent', 'bg', 'doc'].includes(l.kind)).slice(-80)
     .map(l => ({ kind: l.kind, at: l.at, text: String(l.text ?? '').slice(0, 6000), ...(l.who ? { who: l.who } : {}) }));
-  if (!log.length && !r.docs.length && !robotSummary) return; // no hizo nada que valga la pena buscar
   archive.push({ id: crypto.randomBytes(4).toString('hex'), name: r.name, title: r.title || '', label: r.label, kind: r.kind, skill: r.skill,
     origin: r.origin, color: r.color, look: { ...lookFromName(r.name), ...(r.look || {}) }, parent: r.parent || null, note: r.note || '',
     summary, summaryBy: by, summaryPath, permissionMode: r.permissionMode || '', request: r.request || null, transcript: r.transcript || null, sessionId: r.sessionId || null,
@@ -1250,6 +1264,7 @@ async function removeRobot(r, reason, robotSummary) {
   let touched = false;
   for (const rt of routines) for (const h of rt.history || []) for (const x of h.robots || []) if (x.name === r.name && x.tokens == null) { x.tokens = u.out + u.in + u.cacheWrite; x.state = 'se fue'; touched = true; }
   if (touched) { saveRoutines(); emitRoutines(); }
+  for (const s of rosterOf(r.name)) writeRoster(s);
   if (pendingResults.has(r.name)) { clearTimeout(resultTimers.get(r.name)); resultTimers.delete(r.name); pendingResults.delete(r.name); } // se fue el padre
   flushIfIdle(r.parent);
   ownerBackIfAlone();
@@ -2277,7 +2292,7 @@ function teamSala(r, items, context, salaId) {
   const stamp = now().slice(0, 16).replace('T', ' ');
   const cur = r.place.sala && salas.find(s => s.id === r.place.sala);
   if (cur) {
-    fs.appendFileSync(contextPath(cur), `\n## ${r.name} lanzó más robots (${stamp})\n\n${team}\n${context ? `\n${context}\n` : ''}`);
+    if (context) fs.appendFileSync(contextPath(cur), `\n## Contexto que mandó ${r.name} al lanzar más robots (${stamp})\n\n${context}\n`);
     if (cur.done) { cur.done = false; saveSalas(); emitSalas(); } // entra más trabajo: el equipo vuelve a estar en curso
     return { sala: cur, created: false };
   }
@@ -2295,8 +2310,29 @@ function teamSala(r, items, context, salaId) {
   emit(r);
   saveState();
   emitSalas();
+  s.roster = [{ name: r.name, title: r.title || '', owner: true }];
   return { sala: s, created: true };
 }
+// «Reparto» del CONTEXT.md: quién es quién (nombre · tarea · estado), para el padre, los hijos y tú. Lo reescribe
+// la oficina al entrar, entregar o irse cada uno; el resto del archivo es de los robots y no se toca.
+function rosterState(e) {
+  if (e.owner) return robots.has(e.name) ? 'coordina' : 'se fue';
+  const live = robots.get(e.name);
+  if (live) return live.reported ? 'entregó' : 'trabajando';
+  if (spawnQueue.some(q => q.id === e.qid)) return 'esperando cupo';
+  return e.dropped ? 'no se lanzó' : 'se fue';
+}
+function writeRoster(s) {
+  if (!s?.roster?.length) return;
+  const lines = s.roster.map(e => `- \`${e.name}\` · ${e.title || 'sin título'} · ${rosterState(e)}`).join('\n');
+  const block = `## Reparto\n\n${lines}\n`;
+  try {
+    const f = contextPath(s), txt = fs.readFileSync(f, 'utf8');
+    const re = /## Reparto\n[\s\S]*?(?=\n## |$)/;
+    fs.writeFileSync(f, re.test(txt) ? txt.replace(re, block) : `${txt.trimEnd()}\n\n${block}`);
+  } catch { /* sin archivo */ }
+}
+const rosterOf = name => salas.filter(s => s.roster?.some(e => e.name === name));
 function closeEmptyTeamSalas() {
   const keep = s => !s.auto || [...robots.values()].some(r => r.place.sala === s.id) || spawnQueue.some(q => q.sala === s.id);
   if (salas.every(keep)) return;
@@ -2650,7 +2686,7 @@ const server = http.createServer(async (req, res) => {
       }
       // Un robot pide robots nuevos (curl desde su consola) y tú decides desde la oficina.
       if (req.method === 'POST' && action === 'encargos' && !parts[4]) {
-        try { const q = requestSpawn(r, await readBody(req)); const ctx = path.join(SALAS_DIR, q.salaId, 'CONTEXT.md'); return send(res, 202, { ok: true, id: q.id, contexto: ctx, mensaje: `Petición enviada. El usuario la aprueba en la oficina; sigue con tu trabajo. Si la aprueba, tú y ellos quedan en una sala con el contexto compartido en ${ctx}: agrega ahí lo durable que averigües y ellos necesiten. Sus resultados te llegan como mensajes «[Oficina] Resultado…» (juntos los que terminen mientras trabajas).` }); }
+        try { const q = requestSpawn(r, await readBody(req)); const ctx = path.join(SALAS_DIR, q.salaId, 'CONTEXT.md'); const team = q.items.map(i => `${i.name} (${i.title || trunc(i.text.replace(/\s+/g, ' '), 40)})`).join(', '); return send(res, 202, { ok: true, id: q.id, contexto: ctx, equipo: q.items.map(i => ({ nombre: i.name, titulo: i.title })), mensaje: `Petición enviada. Si la aprueba, tus robots se llamarán: ${team}. El usuario la aprueba en la oficina; sigue con tu trabajo. Si la aprueba, tú y ellos quedan en una sala con el contexto compartido en ${ctx}: agrega ahí lo durable que averigües y ellos necesiten. Sus resultados te llegan como mensajes «[Oficina] Resultado…» (juntos los que terminen mientras trabajas).` }); }
         catch (e) { return send(res, 400, { error: e.message }); }
       }
       if (req.method === 'POST' && action === 'encargos' && parts[4]) {
@@ -2663,6 +2699,7 @@ const server = http.createServer(async (req, res) => {
         if (i < 0) return send(res, 404, { error: 'Ese robot ya entró o no estaba en la cola.' });
         const [q] = spawnQueue.splice(i, 1);
         log(r, 'sys', `Quitaste de la cola «${q.title || trunc(q.text, 40)}»`);
+        for (const s of salas) { const e = s.roster?.find(x => x.qid === q.id); if (e) { e.dropped = true; saveSalas(); writeRoster(s); } }
         flushIfIdle(r.name);
         emit(r);
         return send(res, 200, { ok: true });

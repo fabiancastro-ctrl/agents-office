@@ -32,6 +32,7 @@ function upsert(d, fromSnapshot = false) {
   }
   if (d.log) a.log = d.log;
   a.data = {...d, log: undefined};
+  layout(); // ya con su lugar nuevo: corrige «N robots» de su sala (si nada cambió de tamaño, no recoloca nada)
   const sig = artSig(d);
   if (a.artSig !== undefined && a.artSig !== sig) a.el.querySelector(':scope > svg')?.replaceWith(Object.assign(document.createElement('template'), {innerHTML: robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}).content.firstElementChild);
   a.artSig = sig;

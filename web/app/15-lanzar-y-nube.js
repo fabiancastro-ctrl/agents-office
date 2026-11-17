@@ -53,7 +53,7 @@ function syncKind() {
 
 /* ---------- nube al pasar el mouse ---------- */
 const hover = {el: document.createElement('div'), name: null, timer: null, line: ''};
-hover.el.className = 'hovercard'; hover.el.hidden = true;
+hover.el.className = 'hovercard sv'; hover.el.hidden = true; // sv: también se ve dentro de una sala
 MAP.appendChild(hover.el);
 
 // Ultima linea "util" de la consola: se saltan bordes, el prompt y la barra de modo de Claude Code.

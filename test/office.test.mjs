@@ -131,12 +131,16 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     // Los hijos se llaman por lo que hacen (sin tildes ni palabras vacías), no con nombres genéricos.
     assert.deepEqual(ok.body.launched.sort(), ['dos', 'uno']);
     const r3 = await o.api('POST', '/api/robots/jefe/encargos', { encargos: [{ titulo: 'Revisión de los puertos', encargo: 'x' }, { titulo: 'Uno', encargo: 'otra vez' }, { nombre: 'mi-nombre', titulo: 'Cualquiera', encargo: 'y' }] });
-    assert.deepEqual((await o.robot('jefe')).spawnReq.items.map(i => i.name), ['revision-puertos', 'uno', 'mi-nombre']);
+    // Los nombres quedan fijos desde la petición (sin chocar con los que ya están) y la respuesta se los dice al padre.
+    assert.deepEqual((await o.robot('jefe')).spawnReq.items.map(i => i.name), ['revision-puertos', 'uno-2', 'mi-nombre']);
+    assert.deepEqual(r3.body.equipo.map(e => e.nombre), ['revision-puertos', 'uno-2', 'mi-nombre']);
+    assert.match(r3.body.mensaje, /revision-puertos \(Revisión de los puertos\), uno-2 \(Uno\), mi-nombre \(Cualquiera\)/);
     await o.api('POST', `/api/robots/jefe/encargos/${r3.body.id}`, { decision: 'reject' });
     for (const n of ['jefe', ...ok.body.launched]) assert.equal(snap.robots.find(r => r.name === n).place.sala, sala.id, `${n} está en la sala`);
     const ctx = fs.readFileSync(sala.context, 'utf8');
     assert.match(ctx, /wallet_balances/);
-    assert.match(ctx, /- Uno\n- Dos/);
+    // Reparto con nombre · tarea · estado: lo ven el padre, los hijos y tú.
+    assert.match(ctx, /## Reparto\n\n- `jefe` · Migrar wallet · coordina\n- `uno` · Uno · trabajando\n- `dos` · Dos · trabajando/);
     // Los hijos arrancan sabiendo de la sala; al padre se le avisa por su consola.
     await waitFor(() => o.claudeCalls().filter(c => c.includes(sala.context)).length >= 2, { what: 'que los hijos reciban la ruta del CONTEXT.md' });
     // Un hijo que pide robots: los suyos entran a la misma sala, sin crear otra.
@@ -146,7 +150,8 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     assert.equal(ok2.body.sala, sala.id);
     snap = await o.snapshot();
     assert.equal(snap.salas.filter(s => s.auto).length, 1);
-    assert.match(fs.readFileSync(sala.context, 'utf8'), /lanzó más robots[\s\S]*- Tres/);
+    assert.match(fs.readFileSync(sala.context, 'utf8'), /- `tres` · Tres · trabajando/);
+    assert.equal((fs.readFileSync(sala.context, 'utf8').match(/## Reparto/g) || []).length, 1, 'un solo reparto, actualizado');
     // Equipo terminado: cuando todos los hijos entregaron, la sala queda marcada (una sola vez).
     const kids = snap.robots.filter(r => r.place.sala === sala.id && r.parent).map(r => r.name);
     assert.equal(kids.length, 3);
@@ -154,6 +159,7 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     assert.ok(!(await o.snapshot()).salas.find(s => s.id === sala.id).done, 'falta uno por entregar');
     await turn(o, kids.at(-1), 'encargo', 'Hecho');
     await waitFor(async () => (await o.snapshot()).salas.find(s => s.id === sala.id).done, { what: 'que el equipo quede terminado' });
+    assert.match(fs.readFileSync(sala.context, 'utf8'), /- `uno` · Uno · entregó/);
     // Mientras quede algún hijo la sala sigue; si el padre queda solo, vuelve a un escritorio y la sala pasa al archivo.
     for (const n of kids.slice(0, -1)) await o.api('DELETE', `/api/robots/${n}`);
     assert.ok((await o.snapshot()).salas.some(s => s.id === sala.id));
@@ -166,6 +172,7 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     assert.match(cerradas[0].purpose, /jefe armó este equipo/);
     assert.equal((await o.api('GET', `/api/doc?path=${encodeURIComponent(cerradas[0].context)}`)).status, 200, 'su contexto se puede abrir desde el archivo');
     assert.ok(fs.existsSync(sala.context), 'sus archivos quedan');
+    assert.match(fs.readFileSync(sala.context, 'utf8'), /- `uno` · Uno · se fue/);
   } finally { await o.stop(); }
 });
 
@@ -200,7 +207,8 @@ test('resultados de los hijos: sin esperar a los hermanos si el padre está libr
     assert.equal((await o.snapshot()).salas.find(x => x.id === ok.body.sala).context, req.body.contexto, 'es la misma ruta');
     await sleep(600);
     assert.deepEqual(await sentLog(), [], 'aprobar no le escribe al padre (no le abre un turno)');
-    await waitFor(() => o.claudeCalls().filter(c => c.includes('Dato que todos deben saber')).length >= 3, { what: 'que los hijos arranquen con el contexto' });
+    // Se cuentan apariciones, no líneas: los Claude falsos arrancan a la vez y sus líneas del registro pueden mezclarse.
+    await waitFor(() => o.claudeCalls().join('\n').split('Dato que todos deben saber').length - 1 >= 3, { what: 'que los hijos arranquen con el contexto' });
     const [k1, k2, k3] = ok.body.launched;
     // Padre libre: el primero le llega sin esperar a sus hermanos.
     await turn(o, k1, 'encargo', 'Resultado UNO');
@@ -267,6 +275,12 @@ test('despedir deja un resumen en docs/resumenes-robots y con él se retoma la t
     await o.api('POST', '/api/robots', { ...libre('memo', 'Revisa el PR 42'), title: 'PR 42' });
     await turn(o, 'memo', 'sigue', 'Falta el service; esperamos a Ramiro.');
     await o.api('POST', '/api/robots/memo/note', { note: 'esperando a Ramiro' });
+    // «Dar de baja» es solo eso: sin resumen, sin documento y sin archivo.
+    await o.api('POST', '/api/robots', libre('baja'));
+    await turn(o, 'baja', 'hola', 'Hice algo');
+    assert.equal((await o.api('DELETE', '/api/robots/baja')).status, 200);
+    assert.equal((await o.api('GET', '/api/despedidos?all=1')).body.recent.length, 0);
+    assert.ok(!fs.existsSync(path.join(o.ws, 'docs', 'resumenes-robots')), 'no escribe resumen');
     // «Despedir con su resumen»: le pide el resumen y se va al recibirlo.
     assert.equal((await o.api('POST', '/api/robots/memo/despedir-con-resumen')).status, 200);
     await o.hook('memo', { hook_event_name: 'Stop', last_assistant_message: '## Traspaso\n- Falta revisar el service del PR 42.\n- Esperamos a Ramiro.' });
@@ -286,11 +300,11 @@ test('despedir deja un resumen en docs/resumenes-robots y con él se retoma la t
     const r = await o.robot(rt.body.name);
     assert.equal(r.title, 'PR 42');
     assert.equal(r.note, 'esperando a Ramiro');
-    // Despedir normal: la oficina arma el resumen (con un turno hecho; uno que no hizo nada no se archiva).
+    // Dar de baja normal: se va sin resumen y no entra al archivo.
     await turn(o, rt.body.name, '¿Qué esperábamos?', 'Esperábamos a Ramiro para el service.');
     await o.api('DELETE', `/api/robots/${rt.body.name}`);
-    const again = (await o.api('GET', '/api/despedidos?all=1')).body.recent[0];
-    assert.equal(again.summaryBy, 'oficina');
+    const again = (await o.api('GET', '/api/despedidos?all=1')).body.recent;
+    assert.deepEqual(again.map(a => a.name), ['memo']);
   } finally { await o.stop(); }
 });
 
@@ -487,7 +501,9 @@ test('exportar conversación: .md limpio desde el transcript (avances, herramien
     await o.hook('viejo', { hook_event_name: 'SessionStart', source: 'startup', session_id: 'sesion-viejo', transcript_path: trv });
     await turn(o, 'viejo', 'hola', 'Hecho: revisé todo.');
     await waitFor(async () => (await o.robot('viejo')).log.some(l => l.kind === 'agent'), { what: 'su mensaje en la conversación' });
-    await o.api('DELETE', '/api/robots/viejo');
+    await o.api('POST', '/api/robots/viejo/despedir-con-resumen');
+    await o.hook('viejo', { hook_event_name: 'Stop', last_assistant_message: 'Revisé todo; no queda nada.' });
+    await waitFor(async () => !(await o.robot('viejo')), { what: 'que se vaya con su resumen' });
     fs.rmSync(trv); // el transcript ya no está: se usa lo que guardó la oficina
     const id = (await o.api('GET', '/api/despedidos?all=1')).body.recent.find(a => a.name === 'viejo').id;
     const ex2 = await o.api('POST', `/api/despedidos/${id}/exportar`);
@@ -495,7 +511,7 @@ test('exportar conversación: .md limpio desde el transcript (avances, herramien
     assert.equal(ex2.body.fromLog, true);
     const md2 = fs.readFileSync(ex2.body.path, 'utf8');
     assert.match(md2, /Hecho: revisé todo\./);
-    assert.match(md2, /## Su resumen al irse \(lo armó la oficina\)/);
+    assert.match(md2, /## Su resumen al irse \(lo escribió el robot\)/);
     // Un robot sin conversación no deja un archivo vacío.
     await o.api('POST', '/api/robots', libre('mudo'));
     assert.equal((await o.api('POST', '/api/robots/mudo/exportar')).status, 409);
