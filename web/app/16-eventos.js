@@ -183,6 +183,8 @@ PANEL.addEventListener('click', async e => {
     if (b.dataset.act === 'wake-arch' && st.archView) { st.rtDraft = wakeDraft({kind: 'retake', archId: st.archView.id}, st.archView.note); rtUi.edit = null; return select('@cron'); }
     if (b.dataset.act === 'revive' && a) return revive(name, b);
     if (b.dataset.act === 'sumkill' && a) return sumKill(name);
+    if (b.dataset.act === 'export' && a) return exportConv(`/api/robots/${name}/exportar`, b);
+    if (b.dataset.act === 'export-arch' && st.archView) return exportConv(`/api/despedidos/${st.archView.id}/exportar`, b);
     if (b.dataset.act === 'arch-back') { select(st.archFrom || '@archivo'); return; }
     if ((b.dataset.act === 'spawn-ok' || b.dataset.act === 'spawn-no') && a?.data.spawnReq) { b.disabled = true; await decideSpawn(a.data, b.dataset.act === 'spawn-ok'); return; }
     if (b.dataset.act === 'console') await api('POST', `/api/robots/${name}/console`);
@@ -266,6 +268,15 @@ $('#dlg-close').addEventListener('click', () => select(null));
 $('#dialog').addEventListener('mousedown', e => { if (e.target.id === 'dialog') select(null); });
 
 let modalPath = null;
+// Exportar conversación: el daemon escribe el .md en docs/conversaciones-robots/ y aquí se abre para verlo.
+async function exportConv(url, btn) {
+  btn.disabled = true;
+  try {
+    const r = await api('POST', url);
+    toast(`Conversación exportada (${r.messages} mensaje${r.messages === 1 ? '' : 's'}${r.fromLog ? ', desde lo que guardó la oficina' : ''}): ${r.shown}`);
+    showDoc(r.path);
+  } catch { /* toast ya mostrado */ } finally { btn.disabled = false; }
+}
 async function showDoc(p, inboxId) {
   try {
     const doc = await api('GET', `/api/doc?path=${encodeURIComponent(p)}`);

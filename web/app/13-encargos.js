@@ -60,6 +60,7 @@ function robotPanel(a) {
           <button class="btn sm" data-act="console">Abrir consola en Terminal</button>
           <button class="btn sm" data-act="again" title="Abre «Nuevo encargo» con lo mismo que le pediste a este robot">↻ Lanzar otro igual</button>
           <button class="btn sm" data-act="fav" title="Guarda este encargo como acceso rápido en «Nuevo encargo»">★ Frecuente</button>
+          <button class="btn sm" data-act="export" title="Guarda toda su conversación (tus mensajes y los suyos, sin herramientas) en docs/conversaciones-robots/ de tu carpeta de trabajo. Por si un resumen falla o queda corto.">⬇ Exportar conversación</button>
           ${canSummary(d) ? `<button class="btn sm" data-act="sumkill" title="Le pide un super resumen de lo que hacía, lo guarda como documento en la oficina y lo despide. Con ese resumen otro robot puede retomar la tarea.">📝 Despedir con su resumen</button>` : d.summaryPending ? '<span class="note">📝 Escribiendo su resumen para irse…</span>' : ''}
           <button class="btn sm danger" data-act="kill" title="Lo despide ya; la oficina arma un resumen con lo que sabe">Dar de baja</button>
         </div>

@@ -335,6 +335,68 @@ test('empleado de la semana: cuenta desde que se renovó la cuota, corona con un
   } finally { await o.stop(); }
 });
 
+test('exportar conversación: .md limpio desde el transcript (avances, herramientas contadas, sin ruido) y desde el archivo', async () => {
+  const o = await startOffice();
+  try {
+    await o.api('POST', '/api/robots', { ...libre('memo', 'Revisa el PR 42'), title: 'PR 42' });
+    const tr = path.join(o.base, 'memo.jsonl');
+    const t = Date.now(), at = k => new Date(t + k * 1000).toISOString();
+    const L = [
+      { type: 'user', timestamp: at(0), message: { content: 'Revisa el PR 42<system-reminder>ruido interno</system-reminder>' } },
+      { type: 'assistant', timestamp: at(1), message: { id: 'a1', content: [{ type: 'text', text: 'Ahora reviso el diff.' }] } },
+      { type: 'assistant', timestamp: at(1), message: { id: 'a1', content: [{ type: 'text', text: 'Ahora reviso el diff.' }] } }, // repetida al escribirse
+      { type: 'assistant', timestamp: at(2), message: { id: 'a2', content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'gh pr diff 42' } }] } },
+      { type: 'user', timestamp: at(3), message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'diff secreto' }] } },
+      { type: 'assistant', timestamp: at(4), message: { id: 'a3', content: [{ type: 'tool_use', id: 't2', name: 'Read', input: {} }] } },
+      { type: 'assistant', timestamp: at(5), message: { id: 'a4', content: [{ type: 'text', text: 'Falta el **service**.' }] } },
+      { type: 'user', timestamp: at(6), message: { content: '<bash-input>ls</bash-input>' } },
+      { type: 'user', timestamp: at(7), message: { content: '<local-command-stdout>salida</local-command-stdout>' } },
+      { type: 'user', isMeta: true, timestamp: at(8), message: { content: 'meta' } },
+      { type: 'user', timestamp: at(9), message: { content: '[Oficina] Resultado del robot hijo: listo' } },
+      { type: 'assistant', timestamp: at(10), message: { id: 'a5', content: [{ type: 'text', text: 'Integrado.' }] } }
+    ];
+    fs.writeFileSync(tr, L.map(x => JSON.stringify(x)).join('\n') + '\n');
+    await o.hook('memo', { hook_event_name: 'SessionStart', source: 'startup', session_id: 'sesion-memo', transcript_path: tr });
+    const ex = await o.api('POST', '/api/robots/memo/exportar');
+    assert.equal(ex.status, 200);
+    assert.equal(ex.body.fromLog, false);
+    assert.ok(ex.body.path.startsWith(path.join(o.ws, 'docs', 'conversaciones-robots')));
+    const md = fs.readFileSync(ex.body.path, 'utf8');
+    assert.match(md, /^# Conversación de memo · PR 42/);
+    assert.match(md, /claude --resume /);
+    assert.match(md, /### 🧑 Tú · .*\n\nRevisa el PR 42\n/);
+    assert.match(md, /#### 🤖 memo · avance · .*\n\nAhora reviso el diff\./, 'el texto antes de herramientas es avance');
+    assert.match(md, /_… usó 2 herramientas …_/);
+    assert.match(md, /### 🤖 memo · .*\n\nFalta el \*\*service\*\*\./, 'la respuesta antes de que le escribas es final');
+    assert.match(md, /`! ls`/);
+    assert.match(md, /### 🏢 Oficina/);
+    assert.equal((md.match(/Ahora reviso el diff/g) || []).length, 1, 'sin duplicados');
+    for (const ruido of ['ruido interno', 'diff secreto', 'salida', 'meta']) assert.ok(!md.includes(ruido), `sin «${ruido}»`);
+    assert.equal(ex.body.messages, 6);
+    // Se puede abrir como documento de la oficina.
+    assert.equal((await o.api('GET', `/api/doc?path=${encodeURIComponent(ex.body.path)}`)).status, 200);
+    // Del archivo: un robot sin transcript se exporta con lo que guardó la oficina y su resumen al final.
+    await o.api('POST', '/api/robots', libre('viejo'));
+    const trv = path.join(o.base, 'viejo.jsonl');
+    fs.writeFileSync(trv, JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(), message: { id: 'v1', content: [{ type: 'text', text: 'Hecho: revisé todo.' }] } }) + '\n');
+    await o.hook('viejo', { hook_event_name: 'SessionStart', source: 'startup', session_id: 'sesion-viejo', transcript_path: trv });
+    await turn(o, 'viejo', 'hola', 'Hecho: revisé todo.');
+    await waitFor(async () => (await o.robot('viejo')).log.some(l => l.kind === 'agent'), { what: 'su mensaje en la conversación' });
+    await o.api('DELETE', '/api/robots/viejo');
+    fs.rmSync(trv); // el transcript ya no está: se usa lo que guardó la oficina
+    const id = (await o.api('GET', '/api/despedidos?all=1')).body.recent.find(a => a.name === 'viejo').id;
+    const ex2 = await o.api('POST', `/api/despedidos/${id}/exportar`);
+    assert.equal(ex2.status, 200);
+    assert.equal(ex2.body.fromLog, true);
+    const md2 = fs.readFileSync(ex2.body.path, 'utf8');
+    assert.match(md2, /Hecho: revisé todo\./);
+    assert.match(md2, /## Su resumen al irse \(lo armó la oficina\)/);
+    // Un robot sin conversación no deja un archivo vacío.
+    await o.api('POST', '/api/robots', libre('mudo'));
+    assert.equal((await o.api('POST', '/api/robots/mudo/exportar')).status, 409);
+  } finally { await o.stop(); }
+});
+
 test('la página: /app.js une web/app/*.js en orden, dentro de una sola función y con sintaxis válida', async () => {
   const o = await startOffice();
   try {

@@ -181,7 +181,8 @@ function knownDoc(p) {
   if (!p) return null;
   const abs = path.resolve(WORKSPACE, String(p));
   const known = inbox.some(i => i.path === abs) || [...robots.values()].some(r => r.docs.some(d => d.path === abs))
-    || salas.some(s => contextPath(s) === abs || threadPath(s) === abs) || archive.some(a => a.docs.includes(abs) || a.summaryPath === abs);
+    || salas.some(s => contextPath(s) === abs || threadPath(s) === abs) || archive.some(a => a.docs.includes(abs) || a.summaryPath === abs)
+    || (abs.startsWith(convDir() + path.sep) && abs.endsWith('.md')); // conversaciones exportadas
   return known ? abs : null;
 }
 
@@ -938,6 +939,87 @@ const normText = t => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\
 // docs/resumenes-robots/ de la carpeta de trabajo (a mano, aparte del resto de docs y fácil de borrar) y es lo
 // único que recibe el robot que retome la tarea.
 const sumDir = () => path.join(WORKSPACE || RUNS, 'docs', 'resumenes-robots');
+
+/* ---------- exportar una conversación ---------- */
+// Copia limpia de la conversación de un robot (vivo o del archivo) en docs/conversaciones-robots/, por si un resumen
+// falla o queda corto. Sale del transcript completo de Claude: la oficina solo guarda los últimos 400 eventos. Lleva tus
+// mensajes y los suyos en orden, con hora; los avances («Ahora reviso…») se marcan aparte de sus respuestas y las
+// herramientas quedan como una línea con cuántas usó. Si el transcript ya no está, usa lo que guardó la oficina.
+const flat = t => String(t ?? '').replace(/\s+/g, ' ').trim();
+const convDir = () => path.join(WORKSPACE || RUNS, 'docs', 'conversaciones-robots');
+const NOISE_RE = /^\s*<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|bash-stdout|bash-stderr|task-notification)\b|^\s*\[Request interrupted/;
+const cleanText = t => String(t ?? '').replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+  .replace(/<\\?\/?pasted_content(?:\s+id=["']?[\w-]*["']?)?\s*>/gi, '').trim();
+function transcriptTurns(file) {
+  let lines;
+  try { lines = fs.readFileSync(file, 'utf8').split('\n'); } catch { return null; }
+  const items = [], seen = new Set();
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let e; try { e = JSON.parse(line); } catch { continue; }
+    if (e.isMeta || e.isCompactSummary || e.isSidechain) continue;
+    const at = e.timestamp, c = e.message?.content;
+    if (e.type === 'user') {
+      const parts = typeof c === 'string' ? [c] : Array.isArray(c) && !c.some(b => b.type === 'tool_result') ? c.filter(b => b.type === 'text').map(b => b.text) : [];
+      for (const raw of parts) {
+        const bash = String(raw).match(/^\s*<bash-input>([\s\S]*?)<\/bash-input>/);
+        if (bash) { items.push({ who: 'user', text: '`! ' + bash[1].trim() + '`', at }); continue; }
+        if (NOISE_RE.test(raw)) continue;
+        const text = cleanText(raw);
+        if (text) items.push({ who: /^\[Oficina\]/.test(text) ? 'office' : 'user', text, at });
+      }
+    } else if (e.type === 'assistant' && Array.isArray(c)) {
+      for (const b of c) {
+        const key = `${e.message?.id}|${b.type}|${b.type === 'text' ? b.text : b.id}`;
+        if (seen.has(key)) continue; // Claude repite el mismo mensaje en varias líneas mientras lo escribe
+        seen.add(key);
+        if (b.type === 'text' && cleanText(b.text)) items.push({ who: 'agent', text: cleanText(b.text), at });
+        else if (b.type === 'tool_use') items.push({ who: 'tool', at });
+      }
+    }
+  }
+  return items;
+}
+function convMarkdown(src, items) {
+  const when = t => t ? new Date(t).toLocaleString('es', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const hhmm = t => t ? new Date(t).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '';
+  const out = [`# Conversación de ${src.name}${src.title ? ` · ${src.title}` : ''}`, '',
+    `_Exportada por la Oficina de Agentes el ${when(Date.now())} · entró ${when(src.startedAt)}${src.leftAt ? ` · se fue ${when(src.leftAt)}` : ''}${src.fromLog ? ' · desde lo que guardó la oficina (el transcript ya no estaba)' : ''}_`, '',
+    `- **Encargo:** ${flat(src.label)}`];
+  if (src.origin) out.push(`- **Origen:** ${flat(src.origin)}`);
+  if (src.note) out.push(`- **Nota:** ${flat(src.note)}`);
+  if (src.sessionId) out.push(`- **Sesión de Claude:** \`${src.sessionId}\` (para retomarla: \`claude --resume ${src.sessionId}\`)`);
+  out.push('', '---', '');
+  let tools = 0, msgs = 0;
+  const flushTools = () => { if (tools) out.push(`_… usó ${tools} herramienta${tools === 1 ? '' : 's'} …_`, ''); tools = 0; };
+  items.forEach((it, i) => {
+    if (it.who === 'tool') { tools++; return; }
+    flushTools();
+    msgs++;
+    if (it.who === 'agent') {
+      // Avance: después vienen más herramientas o mensajes suyos antes de que le vuelvas a escribir.
+      let interim = false;
+      for (let k = i + 1; k < items.length && items[k].who !== 'user'; k++) if (items[k].who === 'tool' || items[k].who === 'agent') { interim = true; break; }
+      out.push(interim ? `#### 🤖 ${src.name} · avance · ${hhmm(it.at)}` : `### 🤖 ${src.name} · ${hhmm(it.at)}`, '', it.text, '');
+    } else out.push(`### ${it.who === 'office' ? '🏢 Oficina' : '🧑 Tú'} · ${hhmm(it.at)}`, '', it.text, '');
+  });
+  flushTools();
+  if (src.summary) out.push('---', '', `## Su resumen al irse (${src.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'})`, '', String(src.summary).trim(), '');
+  return { md: out.join('\n'), msgs };
+}
+function exportConversation(src) {
+  let items = src.transcript ? transcriptTurns(src.transcript) : null;
+  const fromLog = !items || !items.some(x => x.who !== 'tool');
+  if (fromLog) items = (src.log || []).filter(l => ['user', 'agent', 'bg'].includes(l.kind))
+    .map(l => ({ who: l.kind === 'agent' ? 'agent' : /^\[Oficina\]/.test(l.text) ? 'office' : 'user', text: cleanText(l.text), at: l.at })).filter(x => x.text);
+  if (!items.length) throw new Error(`${src.name} todavía no tiene conversación para exportar.`);
+  const { md, msgs } = convMarkdown({ ...src, fromLog }, items);
+  const file = path.join(convDir(), `${now().slice(0, 10)}-${src.name}-${crypto.randomBytes(2).toString('hex')}.md`);
+  fs.mkdirSync(convDir(), { recursive: true });
+  fs.writeFileSync(file, md + '\n');
+  console_(src.name, 'exportada', path.relative(WORKSPACE || RUNS, file));
+  return { path: file, shown: path.relative(WORKSPACE || RUNS, file), messages: msgs, fromLog };
+}
 // Los resúmenes de antes vivían en la carpeta de datos de la oficina (runs/resumenes): se mudan a la nueva.
 function migrateSummaries() {
   const old = path.join(RUNS, 'resumenes');
@@ -979,7 +1061,7 @@ function archiveRobot(r, reason, robotSummary) {
   if (!log.length && !r.docs.length && !robotSummary) return; // no hizo nada que valga la pena buscar
   archive.push({ id: crypto.randomBytes(4).toString('hex'), name: r.name, title: r.title || '', label: r.label, kind: r.kind, skill: r.skill,
     origin: r.origin, color: r.color, look: { ...lookFromName(r.name), ...(r.look || {}) }, parent: r.parent || null, note: r.note || '',
-    summary, summaryBy: by, summaryPath, permissionMode: r.permissionMode || '', request: r.request || null,
+    summary, summaryBy: by, summaryPath, permissionMode: r.permissionMode || '', request: r.request || null, transcript: r.transcript || null, sessionId: r.sessionId || null,
     startedAt: r.startedAt, leftAt: now(), reason, docs: r.docs.map(d => d.path), log });
   if (archive.length > ARCH_MAX) archive = archive.slice(-ARCH_MAX);
   fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
@@ -2324,6 +2406,11 @@ const server = http.createServer(async (req, res) => {
       try { const r = await retake(parts[2], (await readBody(req)).text); return send(res, 201, { ok: true, name: r.name }); }
       catch (e) { return send(res, 409, { error: e.message }); }
     }
+    if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2] && parts[3] === 'exportar') {
+      const a = archive.find(x => x.id === parts[2]);
+      if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
+      try { return send(res, 200, { ok: true, ...exportConversation(a) }); } catch (e) { return send(res, 409, { error: e.message }); }
+    }
     if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) { // lo quita de la lista; el .md del resumen queda
       const n = archive.length;
       archive = archive.filter(x => x.id !== parts[2]);
@@ -2370,6 +2457,9 @@ const server = http.createServer(async (req, res) => {
       const r = robotOr404(res, parts[2]);
       if (!r) return;
       const action = parts[3];
+      if (req.method === 'POST' && action === 'exportar') {
+        try { return send(res, 200, { ok: true, ...exportConversation(r) }); } catch (e) { return send(res, 409, { error: e.message }); }
+      }
       if (req.method === 'POST' && action === 'revivir') {
         try { await revive(r); return send(res, 200, { ok: true }); } catch (e) { return send(res, 409, { error: e.message }); }
       }
