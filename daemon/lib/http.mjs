@@ -207,6 +207,13 @@ const server = http.createServer(async (req, res) => {
       const s = salas.find(x => x.id === parts[2]);
       if (!s) return send(res, 404, { error: 'Esa sala no existe.' });
       const inSala = [...robots.values()].filter(r => r.place.sala === s.id);
+      // «Despedir equipo»: da de baja (sin resumen) a los hijos de la sala que ya entregaron su resultado. Los que siguen
+      // trabajando y el padre se quedan; si el padre queda solo, vuelve a su escritorio y la sala pasa al archivo.
+      if (req.method === 'POST' && parts[3] === 'despedir-equipo') {
+        const done = inSala.filter(r => r.parent && r.reported);
+        for (const r of done) await removeRobot(r, 'equipo despedido');
+        return send(res, 200, { ok: true, despedidos: done.map(r => r.name), quedan: inSala.length - done.length });
+      }
       if (req.method === 'GET' && parts[3] === 'hilo') {
         res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8' });
         return res.end(fs.readFileSync(threadPath(s)));

@@ -12,6 +12,13 @@ async function quickKill(btn, name) {
 
 MAP.addEventListener('click', e => {
   if (e.target.closest('[data-sala-exit]')) return leaveSala();
+  const sdm = e.target.closest('[data-sala-dismiss]');
+  if (sdm) { // dos clics: el primero arma, el segundo (en 3 s) despide
+    if (!sdm.classList.contains('armed')) { sdm.classList.add('armed'); const t = sdm.textContent; sdm.textContent = '¿Seguro? Clic otra vez'; setTimeout(() => { sdm.classList.remove('armed'); sdm.textContent = t; renderBoard(); }, 3000); return; }
+    sdm.disabled = true;
+    api('POST', `/api/salas/${sdm.dataset.salaDismiss}/despedir-equipo`).then(r => toast(r.despedidos.length ? `Despedí a ${r.despedidos.join(', ')}${r.quedan ? ` · quedan ${r.quedan} en la sala` : ''}` : 'No había nadie que ya entregara.')).catch(() => {}).finally(() => { sdm.disabled = false; sdm.classList.remove('armed'); });
+    return;
+  }
   if (e.target.closest('[data-sala-ctx]')) { const s = st.salas.find(x => x.id === st.view); if (s) showDoc(s.context); return; }
   const so = e.target.closest('[data-sala-open]'); if (so) return select('@sala:' + so.dataset.salaOpen);
   const kx = e.target.closest('.kill-x'); if (kx) { e.stopPropagation(); return quickKill(kx, kx.closest('.robot').dataset.name); }

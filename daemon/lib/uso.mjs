@@ -1,6 +1,7 @@
 // Oficina de Agentes · uso de tokens, gasto por robot, empleado de la semana y estado de la suscripción.
 // Parte de daemon/daemon.mjs, que carga los módulos de daemon/lib/ en orden y arranca la oficina.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { CLAUDE_BIN, console_, now, robots, run, RUNS, SESSION, WORKSPACE } from './base.mjs';
 import { broadcast, emit, fmtK } from './estado.mjs';
@@ -9,6 +10,7 @@ import { log } from './persistencia.mjs';
 import { lookFromName } from './equipo.mjs';
 import { archive } from './turno.mjs';
 import { ensureSession } from './tmux.mjs';
+import { emitSalas, salas, saveSalas } from './salas.mjs';
 
 /* ---------- uso de tokens de toda la oficina, por semana ---------- */
 // Se calcula desde los transcripts de las sesiones que lanzó la oficina (el hook SessionStart queda en
@@ -158,6 +160,31 @@ function computeFame(per) {
 }
 const crownOf = name => fame.employee?.name === name ? (fame.sessionTop?.name === name ? 2 : 1) : 0;
 
+// Gasto de cada equipo: lo de todos los que pasaron por su sala (padre e hijos, también los que ya se fueron, con sus
+// subagentes) desde que se armó. Sale de los transcripts como el gasto por robot: no gasta cuota. No se guarda: se
+// recalcula cada minuto.
+function updateTeamSpend() {
+  let changed = false, learned = false;
+  for (const s of salas) {
+    if (!s.roster?.length) continue;
+    const from = Date.parse(s.createdAt) || 0;
+    let total = 0;
+    for (const e of s.roster) {
+      // Se anota el transcript mientras el robot está, así su gasto sigue contando cuando se va.
+      const live = robots.get(e.name);
+      if (live?.transcript && e.transcript !== live.transcript) { e.transcript = live.transcript; learned = true; }
+      const sid = e.sessionId || live?.sessionId;
+      const tr = e.transcript || (sid && WORKSPACE ? path.join(os.homedir(), '.claude/projects', WORKSPACE.replace(/\//g, '-'), `${sid}.jsonl`) : null);
+      for (const f of sessionFiles(tr)) {
+        const msgs = fileUsage(f);
+        if (msgs) for (const { at, u } of msgs.values()) if (Date.parse(at) >= from) total += spendTok(u);
+      }
+    }
+    if (s.spend !== total) { s.spend = total; changed = true; }
+  }
+  if (learned) saveSalas();
+  if (changed) emitSalas();
+}
 function updateSpend() {
   const wk = weekOf(Date.now()), hourAgo = Date.now() - 3600e3;
   const prevFame = fame;
@@ -186,6 +213,7 @@ function updateSpend() {
     }
     if (!prev || prev.week !== week || prev.hour !== hour || prev.pct !== pct || prev.hot !== hot) emit(r);
   }
+  updateTeamSpend();
 }
 const spendTick = () => { try { updateSpend(); } catch (e) { console_('oficina', 'gasto', e.message); } };
 setInterval(spendTick, SPEND_TICK_MS);
@@ -296,4 +324,4 @@ async function claudeStatus(refresh) {
   return statusPending;
 }
 
-export { claudeStatus, crownOf, fame, loadSessions, officeUsage, quotaPeriods, registerSession };
+export { claudeStatus, crownOf, fame, loadSessions, officeUsage, quotaPeriods, registerSession, updateTeamSpend };

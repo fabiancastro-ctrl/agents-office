@@ -233,6 +233,32 @@ test('resultados de los hijos: sin esperar a los hermanos si el padre está libr
   } finally { await o.stop(); }
 });
 
+test('equipo: el gasto de la sala suma a todos (también a los que se fueron) y «Despedir equipo» saca solo a los que entregaron', async () => {
+  const o = await startOffice({ maxRobots: 5, env: { OFFICE_SPEND_TICK_MS: '300', OFFICE_RESULT_DEBOUNCE_MS: '300' } });
+  try {
+    await o.api('POST', '/api/robots', libre('jefe'));
+    await turn(o, 'jefe', 'arranca', 'Pido robots');
+    const req = await o.api('POST', '/api/robots/jefe/encargos', { encargos: [{ titulo: 'Uno', encargo: 'a' }, { titulo: 'Dos', encargo: 'b' }] });
+    const ok = await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' });
+    const [k1, k2] = ok.body.launched;
+    // Transcript de uno de los hijos con un mensaje que gastó 100 + 50 + 10 (caché escrita).
+    const tr = path.join(o.base, `${k1}.jsonl`);
+    fs.writeFileSync(tr, JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(), message: { id: 'm1', usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 10, cache_read_input_tokens: 9999 }, content: [] } }) + '\n');
+    await o.hook(k1, { hook_event_name: 'SessionStart', source: 'startup', session_id: 'sesion-k1', transcript_path: tr });
+    await waitFor(async () => (await o.snapshot()).salas.find(x => x.id === ok.body.sala)?.spend === 160, { what: 'el gasto del equipo' });
+    // Uno entrega, el otro sigue: «Despedir equipo» saca solo al que entregó.
+    await turn(o, k1, 'encargo', 'Hecho UNO');
+    await waitFor(async () => (await o.robot(k1)).reported, { what: 'que entregue' });
+    const d = await o.api('POST', `/api/salas/${ok.body.sala}/despedir-equipo`);
+    assert.deepEqual(d.body.despedidos, [k1]);
+    assert.equal(d.body.quedan, 2, 'quedan el padre y el que sigue trabajando');
+    assert.ok(!(await o.robot(k1)) && (await o.robot(k2)) && (await o.robot('jefe')));
+    // Su gasto sigue contando aunque se haya ido.
+    await sleep(900);
+    assert.equal((await o.snapshot()).salas.find(x => x.id === ok.body.sala).spend, 160);
+  } finally { await o.stop(); }
+});
+
 test('oficina llena: tu encargo espera en la puerta, se puede sacar y entra solo al liberarse un escritorio', async () => {
   const o = await startOffice({ maxRobots: 1 });
   try {

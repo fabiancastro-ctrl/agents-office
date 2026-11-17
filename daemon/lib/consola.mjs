@@ -65,7 +65,7 @@ async function removeRobot(r, reason, robotSummary) {
   let touched = false;
   for (const rt of routines) for (const h of rt.history || []) for (const x of h.robots || []) if (x.name === r.name && x.tokens == null) { x.tokens = u.out + u.in + u.cacheWrite; x.state = 'se fue'; touched = true; }
   if (touched) { saveRoutines(); emitRoutines(); }
-  for (const s of rosterOf(r.name)) writeRoster(s);
+  for (const s of rosterOf(r.name)) { const e = s.roster.find(x => x.name === r.name); if (e && r.transcript) e.transcript = r.transcript; writeRoster(s); } // su transcript queda para el gasto del equipo
   if (pendingResults.has(r.name)) { clearTimeout(resultTimers.get(r.name)); resultTimers.delete(r.name); pendingResults.delete(r.name); } // se fue el padre
   flushIfIdle(r.parent);
   ownerBackIfAlone();

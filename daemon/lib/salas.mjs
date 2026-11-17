@@ -26,7 +26,7 @@ function contextPath(s) { return path.join(SALAS_DIR, s.id, 'CONTEXT.md'); }
 function threadPath(s) { return path.join(SALAS_DIR, s.id, 'HILO.md'); }
 
 function salaView(s) {
-  return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt, auto: !!s.auto, owner: s.owner || null, color: Number.isInteger(s.color) ? s.color : null, purpose: s.purpose || '', done: !!s.done };
+  return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt, auto: !!s.auto, owner: s.owner || null, color: Number.isInteger(s.color) ? s.color : null, purpose: s.purpose || '', done: !!s.done, spend: s.spend || 0 };
 }
 function emitSalas() { broadcast({ type: 'salas', salas: salas.map(salaView) }); }
 
@@ -93,7 +93,7 @@ function teamSala(r, items, context, salaId) {
   emit(r);
   saveState();
   emitSalas();
-  s.roster = [{ name: r.name, title: r.title || '', owner: true }];
+  s.roster = [{ name: r.name, title: r.title || '', owner: true, sessionId: r.sessionId }];
   return { sala: s, created: true };
 }
 // «Reparto» del CONTEXT.md: quién es quién (nombre · tarea · estado), para el padre, los hijos y tú. Lo reescribe
@@ -189,4 +189,4 @@ Contexto compartido: ${contextPath(s)}${s.folder ? ` · documentos en ${path.joi
 --- fin de la sala ---`;
 }
 
-export { archiveSala, checkTeamDone, closeEmptyTeamSalas, contextPath, createSala, emitSalas, ownerBackIfAlone, postThread, rosterOf, salaPreamble, salas, SALAS_ARCH_FILE, SALAS_DIR, salasArchive, salaView, saveSalas, teamSala, threadPath, toTrash, writeRoster };
+export { archiveSala, checkTeamDone, closeEmptyTeamSalas, contextPath, createSala, emitSalas, ownerBackIfAlone, postThread, rosterOf, rosterState, salaPreamble, salas, SALAS_ARCH_FILE, SALAS_DIR, salasArchive, salaView, saveSalas, teamSala, threadPath, toTrash, writeRoster };

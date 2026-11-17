@@ -140,7 +140,7 @@ async function drainSpawnQueue() {
           origin: `Lanzado por el robot ${q.parent} (lo aprobaste en la oficina)` });
         launched.push(kid.name);
         const rs = sala && salas.find(x => x.id === sala), e = rs?.roster?.find(x => x.qid === q.id);
-        if (e) { e.name = kid.name; saveSalas(); writeRoster(rs); }
+        if (e) { e.name = kid.name; e.sessionId = kid.sessionId; saveSalas(); writeRoster(rs); }
         const p = robots.get(q.parent); if (p) emit(p);
       } catch (e) {
         if (FULL_RE.test(e.message)) { spawnQueue.unshift(q); break; }
@@ -211,4 +211,4 @@ const flushIfIdle = parent => { if (parent && pendingResults.has(parent)) maybeF
 function resumeResults() { for (const parent of pendingResults.keys()) maybeFlush(parent); }
 setInterval(resumeResults, 15e3);
 
-export { decideSpawn, doorView, drainSpawnQueue, emitDoor, flushIfIdle, kidsOf, launchOrQueue, lookFromName, maybeFlush, pendingResults, reportToParent, requestSpawn, resultTimers, resumeResults, spawnQueue };
+export { decideSpawn, doorView, drainSpawnQueue, emitDoor, flushIfIdle, kidName, kidsOf, launchOrQueue, lookFromName, maybeFlush, pendingResults, reportToParent, requestSpawn, resultTimers, resumeResults, spawnQueue, validName };

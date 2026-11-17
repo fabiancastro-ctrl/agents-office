@@ -7,7 +7,7 @@
 // Sin dependencias: solo modulos de Node. El código vive en daemon/lib/, un módulo por tema; este archivo
 // los carga en orden (el mismo de antes, así lo que corre al cargar ve lo que necesita) y arranca la oficina.
 
-import { APPROVAL, EVENTS_FILE, maxRobots, PORT, RUNS, SESSION, setWorkspace, WORKSPACE } from './lib/base.mjs';
+import { APPROVAL, boot, EVENTS_FILE, maxRobots, PORT, RUNS, SESSION, setWorkspace, WORKSPACE } from './lib/base.mjs';
 import './lib/estado.mjs';
 import { loadSessions } from './lib/uso.mjs';
 import { initialWorkspace } from './lib/carpeta.mjs';
@@ -24,6 +24,7 @@ import './lib/rutinas.mjs';
 import './lib/salas.mjs';
 import { server } from './lib/http.mjs';
 
+boot();
 await guardSession();
 setWorkspace(initialWorkspace());
 if (WORKSPACE) { loadSessions(); await restore(); resumeResults(); migrateSummaries(); }

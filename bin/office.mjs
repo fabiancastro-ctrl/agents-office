@@ -173,12 +173,15 @@ async function start(o) {
   process.exitCode = 1;
 }
 
-async function stop(o, despedir = false) {
+// via: quién la detiene, para su registro (si un día aparece detenida, ahí se ve si fue el edificio, la terminal o
+// un reinicio; si no hay línea «office stop», no fue el edificio).
+async function stop(o, despedir = false, via = 'office stop en la terminal') {
   if (despedir) await dismissAll(o);
   const lock = running(o);
   if (!lock) {
     if (!despedir) console.log(`${o.name}: no está corriendo.`);
   } else {
+    try { fs.appendFileSync(o.log, `\n=== ${new Date().toISOString()} office stop ${o.name} · desde: ${via}${despedir ? ' · despidiendo a sus robots' : ''} ===\n`); } catch { /* sin registro */ }
     process.kill(lock.pid, 'SIGTERM');
     for (let i = 0; i < 40 && alive(lock.pid); i++) await sleep(125);
     if (alive(lock.pid)) return console.log(`${o.name}: no se detuvo (pid ${lock.pid}).`);
@@ -223,7 +226,7 @@ async function rm(o, yes) {
     rl.close();
     if (ans !== o.name) die('No coincide: no se eliminó nada.');
   }
-  if (running(o) || liveRobots(o).length) await stop(o, true);
+  if (running(o) || liveRobots(o).length) await stop(o, true, 'office rm (eliminar la oficina)');
   const trash = fs.existsSync(path.join(os.homedir(), '.Trash')) ? path.join(os.homedir(), '.Trash') : path.join(HOME, 'papelera');
   fs.mkdirSync(trash, { recursive: true });
   const dest = path.join(trash, `agent-office-${o.name}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`);
@@ -306,7 +309,7 @@ function lobbyServe(port) {
         if (!sameOrigin(req)) return send(res, 403, { error: 'Origen no permitido' });
         const o = load(m[1]);
         if (!o) return send(res, 404, { error: 'No existe esa oficina' });
-        const r = self(m[2], o.name, ...(m[2] === 'stop' && url.searchParams.get('despedir') === '1' ? ['--despedir'] : []));
+        const r = self(m[2], o.name, ...(m[2] === 'stop' ? ['--via', 'el edificio (botón Detener)', ...(url.searchParams.get('despedir') === '1' ? ['--despedir'] : [])] : []));
         return send(res, r.status === 0 ? 200 : 500, { output: (r.stdout + r.stderr).trim(), office: summary(o) });
       }
       send(res, 404, { error: 'Ruta desconocida' });
@@ -349,9 +352,9 @@ switch (cmd) {
   case 'ls': case 'status': case undefined: ls(); break;
   case 'create': await create(pos[0], flags); break;
   case 'start': for (const o of targets(pos)) await start(o); break;
-  case 'stop': for (const o of targets(pos)) await stop(o, !!flags.despedir); break;
+  case 'stop': for (const o of targets(pos)) await stop(o, !!flags.despedir, typeof flags.via === 'string' ? flags.via : undefined); break;
   case 'rm': await rm(mustLoad(pos[0]), !!flags.yes); break;
-  case 'restart': for (const o of targets(pos)) { await stop(o); await start(o); } break;
+  case 'restart': for (const o of targets(pos)) { await stop(o, false, 'office restart'); await start(o); } break;
   case 'logs': {
     const o = mustLoad(pos[0]);
     if (args.includes('-f')) spawn('tail', ['-n', '40', '-f', o.log], { stdio: 'inherit' });

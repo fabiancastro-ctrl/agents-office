@@ -18,10 +18,6 @@ const PORT = Number(process.env.OFFICE_PORT || 4777);
 // Sesión de tmux donde viven los robots. Cada oficina del mismo equipo necesita la suya (y su puerto),
 // o se pisarían las ventanas de los robots y la consola de /usage.
 const SESSION = process.env.OFFICE_SESSION || 'office';
-if (!/^[A-Za-z0-9_-]{1,40}$/.test(SESSION)) {
-  console.error(`OFFICE_SESSION inválido: «${SESSION}». Usa solo letras, números, guion o guion bajo (sin puntos ni dos puntos).`);
-  process.exit(1);
-}
 // Carpeta de datos de ESTA oficina (estado, bandeja, rutinas, salas, eventos, adjuntos). El código es uno solo
 // y cada oficina del edificio trae la suya: `office start <nombre>` la pasa en OFFICE_DATA. Sin ella, runs/ junto al código.
 const RUNS = path.resolve(process.env.OFFICE_DATA || path.join(ROOT, 'runs'));
@@ -54,37 +50,53 @@ const ATTACH_DIR = path.join(RUNS, 'adjuntos');
 const ATTACH_MAX_BYTES = 20 * 1024 * 1024;
 const ATTACH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-fs.mkdirSync(RUNS, { recursive: true });
-{
-  const hook = { type: 'command', command: path.join(ROOT, 'hooks', 'office-hook.sh') };
-  const ev = (timeout, matcher) => [{ ...(matcher ? { matcher } : {}), hooks: [{ ...hook, timeout }] }];
-  // PreToolUse: el hook general (10 min, para los permisos retenidos) y uno solo para las preguntas, de 8 h.
-  // Los dos le llegan al daemon con AskUserQuestion; el general se hace a un lado (ver onHook, via).
-  const askHook = { type: 'command', command: `"${hook.command}" ask`, timeout: ASK_HOOK_S };
-  const settings = { hooks: {
-    SessionStart: ev(10), UserPromptSubmit: ev(10), PreToolUse: [...ev(600, '*'), { matcher: 'AskUserQuestion', hooks: [askHook] }], PostToolUse: ev(10, '*'),
-    SubagentStop: ev(10), Notification: ev(10), Stop: ev(10)
-  } };
-  fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + '\n');
-}
-// Una copia de la carpeta = una oficina: dos daemons sobre el mismo runs/ se pisarían el estado y la bandeja.
 const LOCK_FILE = path.join(RUNS, 'daemon.lock');
-try {
-  const lock = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8'));
-  let alive = false;
-  try { process.kill(lock.pid, 0); alive = lock.pid !== process.pid; } catch { /* proceso muerto: candado viejo */ }
-  if (alive) {
-    console.error(`Esta oficina ya está corriendo (pid ${lock.pid}, puerto ${lock.port}, datos en ${RUNS}).`);
-    console.error('Para otra oficina usa el edificio: bin/office create <nombre> --workspace <carpeta> y bin/office start <nombre>.');
+// Lo que el daemon hace al arrancar y que ningún otro módulo debe hacer al cargarse: revisar la sesión, preparar la
+// carpeta de datos y los hooks de los robots, tomar el candado y escuchar señales. Lo llama daemon.mjs antes que nada;
+// así los módulos se pueden importar sueltos (p. ej. en test/unit.test.mjs) sin tomar el candado ni salir del proceso.
+function boot() {
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(SESSION)) {
+    console.error(`OFFICE_SESSION inválido: «${SESSION}». Usa solo letras, números, guion o guion bajo (sin puntos ni dos puntos).`);
     process.exit(1);
   }
-} catch { /* sin candado */ }
-fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, port: PORT, session: SESSION }));
-// Al salir: suelta el candado. Las conversaciones las guarda persistencia.mjs con su propio aviso de salida.
-process.on('exit', () => {
-  try { if (JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8')).pid === process.pid) fs.unlinkSync(LOCK_FILE); } catch { /* ya no está */ }
-});
-for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => process.exit(0));
+  fs.mkdirSync(RUNS, { recursive: true });
+  {
+    const hook = { type: 'command', command: path.join(ROOT, 'hooks', 'office-hook.sh') };
+    const ev = (timeout, matcher) => [{ ...(matcher ? { matcher } : {}), hooks: [{ ...hook, timeout }] }];
+    // PreToolUse: el hook general (10 min, para los permisos retenidos) y uno solo para las preguntas, de 8 h.
+    // Los dos le llegan al daemon con AskUserQuestion; el general se hace a un lado (ver onHook, via).
+    const askHook = { type: 'command', command: `"${hook.command}" ask`, timeout: ASK_HOOK_S };
+    const settings = { hooks: {
+      SessionStart: ev(10), UserPromptSubmit: ev(10), PreToolUse: [...ev(600, '*'), { matcher: 'AskUserQuestion', hooks: [askHook] }], PostToolUse: ev(10, '*'),
+      SubagentStop: ev(10), Notification: ev(10), Stop: ev(10)
+    } };
+    fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + '\n');
+  }
+  // Una copia de la carpeta = una oficina: dos daemons sobre el mismo runs/ se pisarían el estado y la bandeja.
+  try {
+    const lock = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8'));
+    let alive = false;
+    try { process.kill(lock.pid, 0); alive = lock.pid !== process.pid; } catch { /* proceso muerto: candado viejo */ }
+    if (alive) {
+      console.error(`Esta oficina ya está corriendo (pid ${lock.pid}, puerto ${lock.port}, datos en ${RUNS}).`);
+      console.error('Para otra oficina usa el edificio: bin/office create <nombre> --workspace <carpeta> y bin/office start <nombre>.');
+      process.exit(1);
+    }
+  } catch { /* sin candado */ }
+  fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, port: PORT, session: SESSION }));
+  // Al salir: suelta el candado y deja en el registro cómo terminó (señal, error o código). Si una oficina aparece
+  // detenida y su registro no dice nada, la mataron sin aviso (kill -9, el sistema). Las conversaciones las guarda
+  // persistencia.mjs con su propio aviso de salida.
+  const hhmm = () => new Date().toTimeString().slice(0, 8);
+  process.on('exit', code => {
+    try { if (JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8')).pid === process.pid) fs.unlinkSync(LOCK_FILE); } catch { /* ya no está */ }
+    console.log(`${hhmm()} oficina detenida (código de salida ${code})`);
+  });
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { console.log(`${hhmm()} se detiene: recibió ${sig}`); process.exit(0); });
+  // Un error que nadie atrapó la tumba igual que antes, pero con hora y detalle en el registro.
+  process.on('uncaughtException', e => { console.error(`${hhmm()} se cayó por un error: ${e?.stack || e}`); process.exit(1); });
+  process.on('unhandledRejection', e => { console.error(`${hhmm()} se cayó por un error (promesa): ${e?.stack || e}`); process.exit(1); });
+}
 const CONFIG_FILE = path.join(RUNS, 'config.json');
 const EVENTS_FILE = path.join(RUNS, `events-${new Date().toISOString().slice(0, 10)}.jsonl`);
 
@@ -116,4 +128,4 @@ function describeTool(tool, input = {}) {
   return tool;
 }
 
-export { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, ATTACH_DIR, ATTACH_MAX_BYTES, ATTACH_TTL_MS, CLAUDE_BIN, clients, colorSeq, CONFIG_FILE, console_, describeTool, EVENTS_FILE, HOLD_TOOLS, inbox, LEGACY_RUNS, MAX_ROBOTS_LIMIT, maxRobots, NAMES, NEVER_ALLOW, nextColor, now, pending, PERMISSION_MODES, PORT, replaceList, robots, ROOT, ROUTINE_TICK_MS, run, RUNS, SESSION, setColorSeq, setMaxRobots, SETTINGS, setWorkspace, TIMELINE_MAX, trunc, WEB, WORKSPACE };
+export { boot, APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, ATTACH_DIR, ATTACH_MAX_BYTES, ATTACH_TTL_MS, CLAUDE_BIN, clients, colorSeq, CONFIG_FILE, console_, describeTool, EVENTS_FILE, HOLD_TOOLS, inbox, LEGACY_RUNS, MAX_ROBOTS_LIMIT, maxRobots, NAMES, NEVER_ALLOW, nextColor, now, pending, PERMISSION_MODES, PORT, replaceList, robots, ROOT, ROUTINE_TICK_MS, run, RUNS, SESSION, setColorSeq, setMaxRobots, SETTINGS, setWorkspace, TIMELINE_MAX, trunc, WEB, WORKSPACE };

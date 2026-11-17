@@ -109,7 +109,7 @@ function drawRooms() {
         const s = st.salas.find(x => x.id === r.sala);
         el.className = 'room r-rt r-sala sv in-sala';
         if (Number.isInteger(s?.color)) el.style.setProperty('--sala-c', COLORS[s.color % COLORS.length]); // el piso, del color de quien la armó
-        el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span>Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
+        el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span>Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm" data-sala-dismiss="${esc(r.sala)}" hidden title="Da de baja (sin resumen) a los hijos que ya entregaron su resultado. Dos clics.">👋 Despedir a los que entregaron</button><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
         MAP.appendChild(el);
         const prop = (cls, html, x, y0, w, h) => { const p = document.createElement('div'); p.className = `sv ${cls}`; p.innerHTML = html; MAP.appendChild(p); setRect(p, x, y0, w, h); return p; };
         const board = prop('sala-board', '', SV.board.x, SV.board.y, SV.board.w, SV.board.h);
@@ -212,11 +212,16 @@ function renderBoard() {
   if (!el || !s) return;
   if (board.for !== s.id && !board.loading) setTimeout(() => loadBoard(true)); // al recargar ya dentro de la sala
   const why = s.purpose || (s.key ? `Sala de la épica ${s.key}` : 'Sala de épica creada desde la oficina');
+  // Botón «Despedir a los que entregaron» de la cabecera: solo si hay hijos que ya entregaron.
+  const ready = [...st.robots.values()].filter(a => a.data.place.sala === s.id && a.data.parent && a.data.reported).length;
+  const db = MAP.querySelector('[data-sala-dismiss]');
+  if (db && !db.classList.contains('armed')) { db.hidden = !ready; db.textContent = `👋 Despedir a los que entregaron (${ready})`; }
   const ctx = board.for === s.id ? board.ctx.replace(/^# .*\n+/, '').replace(/^_Sala creada por la oficina.*_\n+/m, '') : '';
   const notes = s.thread.slice(-4).reverse();
   const keep = el.querySelector('.sb-ctx')?.scrollTop || 0;
   el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></div>
     <div class="sb-why" title="Por qué se creó esta sala">${esc(why)}</div>
+    ${s.spend ? `<div class="sb-spend" title="Lo que gastaron todos los que pasaron por esta sala (padre e hijos, también los que ya se fueron, con sus subagentes) desde que se armó. Entrada + salida + caché escrita, como los KPI. Se recalcula cada minuto y no gasta cuota.">💸 Gasto del equipo: <b>${fmtTok(s.spend)}</b> tokens desde que se armó</div>` : ''}
     <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
     <div class="sb-notes">${notes.length ? notes.map((m, i) => `<div class="sb-note n${i}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 110))}</div>`).join('') : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
   el.querySelector('.sb-ctx').scrollTop = keep;
