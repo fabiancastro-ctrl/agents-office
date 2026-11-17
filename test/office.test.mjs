@@ -173,6 +173,13 @@ test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su 
     assert.equal((await o.api('GET', `/api/doc?path=${encodeURIComponent(cerradas[0].context)}`)).status, 200, 'su contexto se puede abrir desde el archivo');
     assert.ok(fs.existsSync(sala.context), 'sus archivos quedan');
     assert.match(fs.readFileSync(sala.context, 'utf8'), /- `uno` · Uno · se fue/);
+    // Borrar la sala cerrada: sale del archivo y su carpeta va a la papelera (aquí una temporal de la prueba).
+    const del = await o.api('DELETE', `/api/salas-cerradas/${sala.id}`);
+    assert.equal(del.status, 200);
+    assert.ok(!fs.existsSync(sala.context), 'su contexto ya no está en la oficina');
+    assert.ok(fs.existsSync(path.join(del.body.papelera, 'CONTEXT.md')), 'quedó en la papelera');
+    assert.ok(!(await o.api('GET', '/api/salas-cerradas')).body.salas.some(x => x.id === sala.id));
+    assert.equal((await o.api('DELETE', `/api/salas-cerradas/${sala.id}`)).status, 404);
   } finally { await o.stop(); }
 });
 
@@ -290,6 +297,7 @@ test('despedir deja un resumen en docs/resumenes-robots y con él se retoma la t
     assert.equal(list[0].summaryBy, 'robot');
     assert.ok(list[0].summaryPath.startsWith(path.join(o.ws, 'docs', 'resumenes-robots')));
     assert.match(fs.readFileSync(list[0].summaryPath, 'utf8'), /Falta revisar el service/);
+    const summaryPath = list[0].summaryPath, memoId = list[0].id;
     // Retomar: entra un robot nuevo solo con el resumen.
     const rt = await o.api('POST', `/api/despedidos/${list[0].id}/retomar`, { text: '¿Qué esperábamos?' });
     assert.equal(rt.status, 201);
@@ -305,6 +313,12 @@ test('despedir deja un resumen en docs/resumenes-robots y con él se retoma la t
     await o.api('DELETE', `/api/robots/${rt.body.name}`);
     const again = (await o.api('GET', '/api/despedidos?all=1')).body.recent;
     assert.deepEqual(again.map(a => a.name), ['memo']);
+    // «Quitar»: sale de la lista y su resumen va a la papelera (aquí una temporal de la prueba).
+    const q = await o.api('DELETE', `/api/despedidos/${memoId}`);
+    assert.equal(q.status, 200);
+    assert.ok(!fs.existsSync(summaryPath), 'el resumen ya no está en docs/resumenes-robots');
+    assert.match(fs.readFileSync(q.body.papelera, 'utf8'), /Falta revisar el service/);
+    assert.equal((await o.api('GET', '/api/despedidos?all=1')).body.recent.length, 0);
   } finally { await o.stop(); }
 });
 

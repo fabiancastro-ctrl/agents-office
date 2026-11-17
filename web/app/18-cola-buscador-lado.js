@@ -100,7 +100,7 @@ PANEL.addEventListener('submit', async e => {
 const archUi = {list: null, q: ''};
 function setArchCount(n) { const b = $('#arch-n'); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; }
 function archivoPanel() {
-  return `<div class="dlg-head"><h3>🗄 Archivo de despedidos</h3><p>Aquí quedan los robots que despediste con «📝 Despedir con su resumen», con el <b>super resumen</b> que escribieron al irse («Dar de baja» no deja nada). Con «↻ Retomar» entra un robot nuevo solo con ese resumen y lo que le digas. Cada resumen también queda como documento en <code>docs/resumenes-robots/</code> de tu carpeta de trabajo: puedes borrar esa carpeta cuando quieras (el archivo guarda su propia copia para retomar).</p></div>
+  return `<div class="dlg-head"><h3>🗄 Archivo de despedidos</h3><p>Aquí quedan los robots que despediste con «📝 Despedir con su resumen», con el <b>super resumen</b> que escribieron al irse («Dar de baja» no deja nada). Con «↻ Retomar» entra un robot nuevo solo con ese resumen y lo que le digas. Cada resumen también queda como documento en <code>docs/resumenes-robots/</code> de tu carpeta de trabajo. «Quitar» saca al robot de la lista y manda su resumen a la Papelera, de donde se recupera.</p></div>
     <input class="arch-q" id="arch-q" type="search" placeholder="Filtrar por nombre, título, nota o resumen…" autocomplete="off">
     <div class="arch-list" id="arch-list"><p class="muted">Cargando…</p></div>
     <section class="dlg-sec"><h4>🚪 Salas cerradas</h4><p class="note">Las salas que cerraste o que se cerraron solas al irse su equipo. Su contexto y su hilo siguen en <code>runs/salas/&lt;id&gt;/</code>.</p><div class="arch-list" id="arch-salas"><p class="muted">Cargando…</p></div></section>`;
@@ -119,7 +119,7 @@ function drawArchivo() {
     const whenS = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
     sb.innerHTML = !ss.length ? `<p class="muted">${archUi.salas?.length ? 'Nada coincide con el filtro.' : 'Todavía no se cierra ninguna sala.'}</p>`
       : ss.map(s => `<article class="ac-item" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % 8] : 'var(--war)'}"><div class="ac-h"><b>${esc(s.name)}</b>${s.key ? `<span class="ac-title">${esc(s.key)}</span>` : ''}<small>${esc(s.reason || 'cerrada')} · ${whenS(s.closedAt)}</small></div>
-        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button></div></article>`).join('');
+        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button><button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">🗑 Borrar</button></div></article>`).join('');
   }
   const list = archUi.list.filter(a => !q || norm(`${a.name} ${a.title} ${a.note} ${a.label} ${a.excerpt}`).includes(q));
   const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
@@ -127,13 +127,25 @@ function drawArchivo() {
     : !list.length ? '<p class="muted">Nada coincide con el filtro.</p>'
     : list.map(a => `<article class="ac-item" style="--c:${COLORS[(a.color || 0) % 8]}"><div class="ac-h">${robotHead(COLORS[(a.color || 0) % 8], lookOf(a.name, null, {look: a.look}))}<b>${esc(a.name)}</b>${a.title ? `<span class="ac-title">📌 ${esc(a.title)}</span>` : ''}<span class="ac-by ${a.summaryBy === 'robot' ? 'r' : ''}">📝 ${a.summaryBy === 'robot' ? 'resumen del robot' : 'resumen de la oficina'}</span><small>se fue ${when(a.leftAt)}</small></div>
       ${a.note ? `<div class="ac-note">🗒 ${esc(a.note)}</div>` : ''}<p class="ac-x">${esc(a.excerpt || a.label)}</p>
-      <div class="row"><button type="button" class="btn primary sm" data-arch="${esc(a.id)}" data-retake>↻ Retomar</button><button type="button" class="btn sm" data-arch="${esc(a.id)}">Ver resumen</button><button type="button" class="btn sm ghost" data-arch-del="${esc(a.id)}" title="Lo quita de esta lista (el documento del resumen se queda en docs/resumenes-robots/)">Quitar</button></div></article>`).join('');
+      <div class="row"><button type="button" class="btn primary sm" data-arch="${esc(a.id)}" data-retake>↻ Retomar</button><button type="button" class="btn sm" data-arch="${esc(a.id)}">Ver resumen</button><button type="button" class="btn sm ghost" data-arch-del="${esc(a.id)}" title="Lo quita de esta lista y manda su resumen a la Papelera (de ahí se recupera)">Quitar</button></div></article>`).join('');
 }
 PANEL.addEventListener('input', e => { if (e.target.id === 'arch-q') drawArchivo(); });
 PANEL.addEventListener('click', async e => {
+  const sd = e.target.closest('[data-sala-del]');
+  if (sd) { // dos clics: el primero arma, el segundo (en 3 s) borra
+    if (!sd.classList.contains('armed')) { sd.classList.add('armed'); sd.textContent = '¿Borrar?'; setTimeout(() => { sd.classList.remove('armed'); sd.textContent = '🗑 Borrar'; }, 3000); return; }
+    sd.disabled = true;
+    try {
+      const r = await api('DELETE', `/api/salas-cerradas/${sd.dataset.salaDel}`);
+      archUi.salas = (archUi.salas || []).filter(x => x.id !== sd.dataset.salaDel);
+      drawArchivo();
+      toast(r.papelera ? 'Sala borrada: su contexto y su hilo quedaron en la Papelera.' : 'Sala borrada del archivo.');
+    } catch { sd.disabled = false; }
+    return;
+  }
   const b = e.target.closest('[data-arch-del]'); if (!b) return;
   if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Quitar?'; setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Quitar'; }, 3000); return; }
-  try { await api('DELETE', `/api/despedidos/${b.dataset.archDel}`); } catch { /* toast ya mostrado */ }
+  try { const r = await api('DELETE', `/api/despedidos/${b.dataset.archDel}`); if (r.papelera) toast('Quitado: su resumen quedó en la Papelera.'); } catch { /* toast ya mostrado */ }
 });
 
 // Conversación de un robot que ya se fue (solo lectura): sus mensajes y los tuyos, y sus documentos.

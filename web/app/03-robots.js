@@ -7,7 +7,7 @@ function createRobot(d, fromSnapshot) {
   el.style.setProperty('--d', `-${(Math.random() * 3).toFixed(2)}s`);
   el.style.setProperty('--d2', `-${(Math.random() * 5).toFixed(2)}s`);
   el.style.setProperty('--sp', (0.85 + Math.random() * 0.3).toFixed(2));
-  el.innerHTML = `<i class="shadow"></i><i class="jet" aria-hidden="true"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
+  el.innerHTML = `<i class="shadow"></i><i class="jet" aria-hidden="true"></i><i class="lap" aria-hidden="true"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % 8], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
   MAP.appendChild(el);
   const a = {data: d, el, bubble: el.querySelector('.bubble'), sign: el.querySelector('.sign'), carry: el.querySelector('.carry'),
     pos: door(), queueSlot: null, q: Promise.resolve(), subEls: new Map(), log: d.log || [], lastBubble: ''};
@@ -23,6 +23,7 @@ function upsert(d, fromSnapshot = false) {
   layout(d.place); // agrega una fila de escritorios o la sala de su rutina si este robot la necesita
   let a = st.robots.get(d.name);
   const prevPlace = a?.data.place;
+  if (st.view && d.place?.sala === st.view && a?.data.state !== d.state) refreshBoardSoon();
   if (!a) a = createRobot(d, fromSnapshot);
   else if (prevPlace && !samePlace(prevPlace, d.place)) {
     vacate(prevPlace, a);
@@ -96,7 +97,7 @@ function declutterBubbles() {
   if (bubbleRaf) return;
   bubbleRaf = requestAnimationFrame(() => {
     bubbleRaf = 0;
-    const list = [...MAP.querySelectorAll('.bubble:not([hidden])')];
+    const list = [...MAP.querySelectorAll('.bubble:not([hidden])')].filter(b => !b.closest('.offview')); // los que no se ven no empujan
     list.forEach(b => b.style.removeProperty('--by'));
     if (list.length < 2) return;
     const boxes = list.map(b => ({b, r: b.getBoundingClientRect()})).sort((x, y) => x.r.left - y.r.left);
@@ -113,7 +114,7 @@ function declutterBubbles() {
     }
   });
 }
-setInterval(() => { if (MAP.querySelectorAll('.bubble:not([hidden])').length > 1) declutterBubbles(); }, 700);
+setInterval(() => { if (MAP.querySelectorAll('.robot:not(.offview) .bubble:not([hidden])').length > 1) declutterBubbles(); }, 700);
 
 // Urgencia de un robot que te espera: 1 recién (ámbar), 2 desde 5 min (naranja), 3 desde 15 min (rojo).
 const URG_MS = [5 * 60e3, 15 * 60e3];
@@ -298,6 +299,7 @@ function onLeft(name) {
   a.transit = true; viewClass(a); // si estaba en una sala, sale del cuarto de salas hacia la puerta
   queue(a, async () => { a.el.classList.remove('sel'); a.el.classList.add('leaving'); a.el.insertAdjacentHTML('beforeend', '<div class="lbox" aria-hidden="true"><i class="lb-plant"></i><i class="lb-mug"></i><i class="lb-paper"></i></div>'); await walkTo(a, st.view && a.data.place.sala === st.view ? salaEntry() : door()); a.el.remove(); layout(); });
   paneCache.delete(name);
+  if (st.view && a.data.place?.sala === st.view) refreshBoardSoon();
   if (zoom.follow === name) stopFollow();
   if (st.side === name) { st.side = null; renderSide(); }
   if (st.selected === name) { select(null); toast(`${name} salió de la oficina.`); }

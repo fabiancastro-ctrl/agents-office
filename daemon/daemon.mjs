@@ -2367,6 +2367,20 @@ function ownerBackIfAlone() {
     saveState();
   }
 }
+// Papelera: lo que borras desde la oficina (resúmenes de despedidos, salas cerradas) va a la de macOS, de donde se
+// recupera; sin ella, a runs/papelera. OFFICE_TRASH la cambia (las pruebas usan una temporal). null si no existía.
+function toTrash(src, label) {
+  if (!src || !fs.existsSync(src)) return null;
+  const trash = process.env.OFFICE_TRASH || (fs.existsSync(path.join(os.homedir(), '.Trash')) ? path.join(os.homedir(), '.Trash') : path.join(RUNS, 'papelera'));
+  fs.mkdirSync(trash, { recursive: true });
+  const ext = fs.statSync(src).isDirectory() ? '' : path.extname(src);
+  const dest = path.join(trash, `${label}-${now().slice(0, 19).replace(/[:T]/g, '-')}${ext}`);
+  try { fs.renameSync(src, dest); } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+    fs.cpSync(src, dest, { recursive: true }); fs.rmSync(src, { recursive: true }); // otro disco: copiar y quitar
+  }
+  return dest;
+}
 // Salas cerradas (a mano o solas): se guardan para abrir su contexto y su hilo desde el archivo.
 const SALAS_ARCH_FILE = path.join(RUNS, 'salas-archivo.json');
 let salasArchive = [];
@@ -2560,6 +2574,17 @@ const server = http.createServer(async (req, res) => {
       }
     }
     if (req.method === 'GET' && url.pathname === '/api/salas-cerradas') return send(res, 200, { salas: salasArchive });
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'salas-cerradas' && parts[2]) {
+      // Borra una sala cerrada: sale del archivo y su carpeta (CONTEXT.md, HILO.md) va a la Papelera, de donde se recupera.
+      const e = salasArchive.find(x => x.id === parts[2]);
+      if (!e) return send(res, 404, { error: 'Esa sala ya no está en el archivo.' });
+      if (salas.some(x => x.id === e.id)) return send(res, 409, { error: 'Esa sala está abierta otra vez: ciérrala primero.' });
+      const dir = path.dirname(e.context);
+      const moved = dir.startsWith(SALAS_DIR + path.sep) ? toTrash(dir, `sala-${e.id}`) : null;
+      salasArchive = salasArchive.filter(x => x !== e);
+      fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
+      return send(res, 200, { ok: true, papelera: moved });
+    }
     if (req.method === 'POST' && url.pathname === '/api/salas') {
       const s = createSala(await readBody(req));
       emitSalas();
@@ -2625,13 +2650,15 @@ const server = http.createServer(async (req, res) => {
       if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
       try { return send(res, 200, { ok: true, ...exportConversation(a) }); } catch (e) { return send(res, 409, { error: e.message }); }
     }
-    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) { // lo quita de la lista; el .md del resumen queda
-      const n = archive.length;
-      archive = archive.filter(x => x.id !== parts[2]);
-      if (archive.length === n) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
+    if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) { // lo quita de la lista y su resumen va a la Papelera
+      const a = archive.find(x => x.id === parts[2]);
+      if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
+      archive = archive.filter(x => x !== a);
       fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
       emitArchive();
-      return send(res, 200, { ok: true });
+      // Solo si ningún otro despedido usa ese mismo .md (no debería, pero no se borra lo que otro necesita).
+      const moved = a.summaryPath && !archive.some(x => x.summaryPath === a.summaryPath) ? toTrash(a.summaryPath, path.basename(a.summaryPath, '.md')) : null;
+      return send(res, 200, { ok: true, papelera: moved });
     }
     if (req.method === 'GET' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) {
       const a = archive.find(x => x.id === parts[2]);

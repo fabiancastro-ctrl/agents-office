@@ -40,7 +40,7 @@ export async function startOffice(opts = {}) {
   for (const [f, c] of Object.entries(opts.files || {})) fs.writeFileSync(path.join(data, f), c); // datos previos de la oficina
   if (opts.maxRobots) process.env.OFFICE_MAX_ROBOTS_TEST = String(opts.maxRobots);
   const env = { ...process.env, OFFICE_DATA: data, OFFICE_PORT: String(port), OFFICE_SESSION: session, OFFICE_WORKSPACE: ws,
-    OFFICE_CLAUDE_BIN: fake, OFFICE_CONSOLE_CHECK_MS: '700', OFFICE_ROUTINE_TICK_MS: '300', ...(opts.maxRobots ? { OFFICE_MAX_ROBOTS: String(opts.maxRobots) } : {}), ...opts.env };
+    OFFICE_CLAUDE_BIN: fake, OFFICE_TRASH: path.join(base, 'papelera'), OFFICE_CONSOLE_CHECK_MS: '700', OFFICE_ROUTINE_TICK_MS: '300', ...(opts.maxRobots ? { OFFICE_MAX_ROBOTS: String(opts.maxRobots) } : {}), ...opts.env };
   const proc = spawn(process.execPath, [path.join(ROOT, 'daemon/daemon.mjs')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = ''; proc.stdout.on('data', d => { out += d; }); proc.stderr.on('data', d => { out += d; });
   const url = `http://127.0.0.1:${port}`;

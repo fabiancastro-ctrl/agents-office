@@ -125,7 +125,25 @@ function drawRooms() {
       }
       if (!re) { MAP.appendChild(el); geo.roomEls.set(r.id, re = {el, seats: []}); }
     }
-    if (re.props) { setRect(re.el, 1, r.top + 1, 98, r.boxH); re.props[1].querySelector('span').textContent = r.n ? '' : 'Nadie trabajando aquí ahora'; continue; }
+    if (re.props) {
+      setRect(re.el, 1, r.top + 1, 98, r.boxH);
+      re.props[1].querySelector('span').textContent = r.n ? '' : 'Nadie trabajando aquí ahora';
+      // Un portátil por puesto, sobre la mesa frente a su robot: aparece cuando llega y se sienta, y se va con él.
+      // Hace de «escritorio» del robot (deskFor): la pantalla se enciende cuando trabaja, como en los escritorios.
+      const n = Math.max(6, r.maxSlot + 1), tz = Math.round((SV.table.y + SV.table.h / 2) * 10) + 1;
+      while (re.seats.length < n) {
+        const el = document.createElement('div');
+        el.className = 'sv laptop';
+        el.innerHTML = '<i class="lid"></i><i class="kbd"></i><div class="paper" hidden></div>';
+        MAP.appendChild(el);
+        re.seats.push({el, paper: el.querySelector('.paper')});
+      }
+      while (re.seats.length > n) re.seats.pop().el.remove();
+      // Arriba se ve la tapa por detrás (el robot la mira desde el otro lado); abajo, la pantalla.
+      re.seats.forEach((d, j) => { const p = tableSeat(j); d.el.classList.toggle('front', j % 2 === 1); setRect(d.el, p.x - 1.5, j % 2 ? SV.table.y + SV.table.h - 4 : SV.table.y + 0.8, 3, 2.9); d.el.style.zIndex = tz; });
+      syncLaptops();
+      continue;
+    }
     setRect(re.el, ROOM_X - 1, r.top + 1, ROOM_W + 2, r.boxH);
     while (re.seats.length < r.seatRows * ROOM_COLS) {
       const el = document.createElement('div');
@@ -164,6 +182,12 @@ function tableSeat(k = 0) {
   return {x: SV.table.x + SV.table.w * (col + 0.5) / per, y: k % 2 ? SV.table.y + SV.table.h + 12 : SV.table.y - 4}; // los de arriba, detrás del borde de la mesa con el nombre a la vista
 }
 const salaEntry = () => ({...SV.door});
+function syncLaptops() {
+  const re = st.view && geo.roomEls.get(`sala-${st.view}`);
+  if (!re?.props) return;
+  const bots = [...st.robots.values()].filter(x => x.data.place.sala === st.view);
+  re.seats.forEach((d, j) => { const a = bots.find(x => x.data.place.slot === j); d.el.classList.toggle('placed', !!a && !a.el.classList.contains('moving')); });
+}
 // Por los pasillos de la sala: a la fila de abajo directo; a la de arriba rodeando la mesa por la derecha.
 function salaRoute(f, t) {
   const up = p => p.y < SV.table.y;
@@ -198,6 +222,9 @@ function renderBoard() {
   el.querySelector('.sb-ctx').scrollTop = keep;
 }
 setInterval(() => { if (st.view) loadBoard(); }, 15000);
+// Cambió el estado de alguien de la sala que estás viendo: el «Reparto» del tablero se refresca enseguida.
+let boardSoon = 0;
+function refreshBoardSoon() { clearTimeout(boardSoon); boardSoon = setTimeout(() => loadBoard(true), 1200); }
 // Punto dentro del cuarto «Salas de épica» donde entran y salen los robots de las salas (cada uno en su lugar).
 const salaDoor = place => ({x: 82 + ((place.slot || 0) % 4) * 4.5, y: 31});
 // Clic en una sala: el mapa pasa a mostrar solo esa sala con sus robots; «← Oficina» (o Esc) vuelve. Así la oficina
@@ -206,6 +233,8 @@ const shownHere = d => st.view ? d.place.sala === st.view : !d.place.sala;
 function viewClass(a) {
   const show = shownHere(a.data) || (!!a.transit && !st.view); // en la oficina se ve mientras camina hacia o desde las salas
   for (const el of [a.el, ...a.subEls.values(), a.extraEl].filter(Boolean)) { el.classList.toggle('offview', !show); el.classList.toggle('sv', show && !!st.view); }
+  // En la sala, los de la fila de abajo llevan el globo debajo del nombre: así no tapa la mesa ni los portátiles.
+  a.el.classList.toggle('bub-below', !!st.view && a.data.place?.sala === st.view && a.data.place.slot % 2 === 1);
 }
 function enterSala(id) {
   if (!st.salas.some(s => s.id === id)) return;
@@ -283,6 +312,9 @@ async function walkTo(a, dest) {
 }
 async function walkSteps(a, dest) {
   a.el.classList.add('moving');
+  // En la sala que estás viendo, el que llega trae su portátil en las manos (el que se va ya lleva su caja).
+  a.el.classList.toggle('carry-laptop', !!st.view && a.data?.place?.sala === st.view && !a.el.classList.contains('leaving'));
+  syncLaptops();
   for (const p of (st.view ? salaRoute : route)(a.pos, dest)) {
     const ms = Math.max(200, Math.hypot(p.x - a.pos.x, p.y - a.pos.y) * 30);
     void a.el.offsetWidth; // sin este reflow el navegador junta el cambio y el robot "salta"
@@ -293,7 +325,8 @@ async function walkSteps(a, dest) {
     a.pos = {...p};
     await new Promise(r => setTimeout(r, ms));
   }
-  a.el.classList.remove('moving');
+  a.el.classList.remove('moving', 'carry-laptop');
+  syncLaptops();
   delete a.el.dataset.dir;
   const puff = document.createElement('i');
   puff.className = 'puff';
