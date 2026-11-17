@@ -14,7 +14,7 @@ function createRobot(d, fromSnapshot) {
   st.robots.set(d.name, a);
   const fromBreak = takeFromBreak(d.name);
   if (fromSnapshot) placeAt(a, seatOf(d.place));
-  else { placeAt(a, fromBreak || door()); queue(a, () => walkTo(a, seatOf(d.place))); }
+  else { a.transit = true; placeAt(a, st.view && d.place.sala === st.view ? salaEntry() : fromBreak || door()); queue(a, () => walkTo(a, seatOf(d.place))); }
   return a;
 }
 
@@ -26,7 +26,9 @@ function upsert(d, fromSnapshot = false) {
   if (!a) a = createRobot(d, fromSnapshot);
   else if (prevPlace && !samePlace(prevPlace, d.place)) {
     vacate(prevPlace, a);
-    queue(a, () => walkTo(a, restPos(a)));
+    a.transit = true; // se ve caminando aunque vaya a una sala (o salga de ella)
+    const wasHidden = a.el.classList.contains('offview'); // si llega a la sala que estás viendo, entra por su puerta
+    queue(a, () => { if (st.view && wasHidden) placeAt(a, salaEntry()); return walkTo(a, restPos(a)); });
   }
   if (d.log) a.log = d.log;
   a.data = {...d, log: undefined};
@@ -122,6 +124,7 @@ function urgency(d) {
 setInterval(() => { for (const a of st.robots.values()) if (a.data.state === 'input' || isStuck(a.data)) paint(a); }, 30000);
 
 function paint(a) {
+  viewClass(a);
   const d = a.data;
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
@@ -194,6 +197,7 @@ function paintSubs(a) {
     a.extraEl.textContent = `+${extra}`;
     a.extraEl.style.left = (seat.x + 9.2) + '%'; a.extraEl.style.top = py(seat.y + 5);
   } else if (a.extraEl) { a.extraEl.remove(); a.extraEl = null; }
+  viewClass(a);
 }
 const shortType = t => String(t || 'agente').replace('general-purpose', 'general').replace(/^.*:/, '').toUpperCase().slice(0, 10);
 
@@ -211,7 +215,7 @@ function tickWaiting() {
     if (since && !a.data.spawnReq) a.sign.textContent = `? ${fmtWait(ms)}`;
     a.el.classList.toggle('dance', !!since && ms >= WAIT_DANCE_MS);
     a.el.classList.toggle('impatient', !!since && ms >= 60e3);
-    if (since && ms >= WAIT_QUEUE_MS) line.push([since, a]);
+    if (since && ms >= WAIT_QUEUE_MS && !st.view && !a.data.place.sala) line.push([since, a]); // la fila es frente a tu escritorio, en la oficina
   }
   line.sort((x, y) => x[0] - y[0]);
   const inLine = new Set(line.map(([, a]) => a));
@@ -290,7 +294,8 @@ function onLeft(name) {
   vacate(a.data.place, a);
   st.robots.delete(name);
   // Se va con una caja con sus cosas (planta, taza y papeles), como quien deja la oficina.
-  queue(a, async () => { a.el.classList.remove('sel'); a.el.classList.add('leaving'); a.el.insertAdjacentHTML('beforeend', '<div class="lbox" aria-hidden="true"><i class="lb-plant"></i><i class="lb-mug"></i><i class="lb-paper"></i></div>'); await walkTo(a, door()); a.el.remove(); layout(); });
+  a.transit = true; viewClass(a); // si estaba en una sala, sale del cuarto de salas hacia la puerta
+  queue(a, async () => { a.el.classList.remove('sel'); a.el.classList.add('leaving'); a.el.insertAdjacentHTML('beforeend', '<div class="lbox" aria-hidden="true"><i class="lb-plant"></i><i class="lb-mug"></i><i class="lb-paper"></i></div>'); await walkTo(a, st.view && a.data.place.sala === st.view ? salaEntry() : door()); a.el.remove(); layout(); });
   paneCache.delete(name);
   if (zoom.follow === name) stopFollow();
   if (st.side === name) { st.side = null; renderSide(); }

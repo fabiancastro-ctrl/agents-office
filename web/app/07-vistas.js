@@ -23,10 +23,31 @@ function placeGrowth(e) {
   if (box.children.length !== GROW_PLANTS.length) box.innerHTML = GROW_PLANTS.map(([lvl, , , , , , cls]) => `<i class="deco plant gp gl-${lvl}${cls ? ' ' + cls : ''}"></i>`).join('');
   GROW_PLANTS.forEach(([, x, y, w, h, low], k) => setRect(box.children[k], x, y + (low ? e : 0), w, h));
 }
+// Materas de la semana: cada renovación de la cuota trae otro color de matera.
+const POTS = ['#8a5a3c', '#b4563f', '#3f6f8a', '#6b5a9a', '#c08a3e', '#4f7a55', '#9a4f6b'];
+const growUi = {lvl: null, timer: 0};
+function setGrowLevel(lvl) { for (let i = 0; i <= 4; i++) MAP.classList.toggle(`grow-${i}`, i === lvl); growUi.lvl = lvl; }
 function renderGrowth() {
   const s = st.config?.stats || {total: 0, reviews: 0, today: 0};
-  const lvl = GROW_AT.filter(n => s.total >= n).length;
-  for (let i = 0; i <= 4; i++) MAP.classList.toggle(`grow-${i}`, i === lvl);
+  const week = s.week ?? s.total;
+  const lvl = GROW_AT.filter(n => week >= n).length;
+  const pot = n => POTS[((n % POTS.length) + POTS.length) % POTS.length];
+  if (!MAP.classList.contains('repotting')) MAP.style.setProperty('--pot', pot(s.pot || 0));
+  // Se renovó la cuota: cambio de materas (una vez por renovación y por navegador). Las plantas de la semana que se va
+  // se marchitan, las materas se cambian y lo de siempre vuelve a brotar chiquito.
+  let seen = null; try { seen = localStorage.getItem('office.repotSeen'); } catch { /* sin almacenamiento */ }
+  const fresh = s.repotAt && s.repotAt !== seen && Date.now() - Date.parse(s.repotAt) < 3 * 86400e3;
+  if (fresh) {
+    try { localStorage.setItem('office.repotSeen', s.repotAt); } catch { /* sin almacenamiento */ }
+    const was = growUi.lvl ?? 4; // al abrir la página no se sabe cómo estaban: se muestran crecidas y se marchitan
+    clearTimeout(growUi.timer);
+    setGrowLevel(Math.max(was, lvl));
+    MAP.classList.add('repotting');
+    MAP.style.setProperty('--pot', pot((s.pot || 0) - 1)); // se marchitan en la matera de la semana que se va
+    toast('🌱 Se renovó tu cuota semanal: cambié las materas. Las plantas vuelven a crecer con el trabajo de esta semana.');
+    growUi.timer = setTimeout(() => { setGrowLevel(lvl); MAP.style.setProperty('--pot', pot(s.pot || 0)); MAP.classList.add('repot-new'); }, 1700);
+    setTimeout(() => MAP.classList.remove('repotting', 'repot-new'), 4200);
+  } else if (!MAP.classList.contains('repotting')) setGrowLevel(lvl);
   const n = Math.floor(s.total / 10), shown = Math.min(n, 6);
   const tr = $('#trophies');
   tr.innerHTML = Array.from({length: shown}, (_, i) => `<i class="cup${i % 3 === 2 ? ' big' : ''}"></i>`).join('') + (n > shown ? `<b>+${n - shown}</b>` : '');
@@ -34,7 +55,8 @@ function renderGrowth() {
   tr.hidden = !n;
   $('#tboard').innerHTML = `<small>HOY</small><b>${s.today}</b><small>tareas</small>`;
   const next = GROW_AT[lvl];
-  $('#tboard').title = `Oficina nivel ${lvl} de 4 · ${s.total} tareas terminadas en total${next ? ` · el siguiente nivel (más plantas) llega a las ${next}` : ' · nivel máximo'}. Hoy: ${s.today}.`;
+  const until = s.weekTo ? new Date(s.weekTo).toLocaleString('es', {weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'}) : '';
+  $('#tboard').title = `Plantas nivel ${lvl} de 4 · ${week} tareas esta semana de la cuota${next ? ` · el siguiente nivel (más plantas) llega a las ${next}` : ' · nivel máximo'}${until ? ` · se cambian las materas al renovarse la cuota (${until})` : ''}. Hoy: ${s.today}. En total: ${s.total} (los trofeos cuentan el total).`;
 }
 // Cuadro «Empleado de la semana» en tu escritorio: el robot que más tokens gastó desde que se renovó tu cuota
 // semanal (lo calcula el daemon; se reinicia con la cuota). Si está en la oficina lleva corona con fuego (🔥🔥 si

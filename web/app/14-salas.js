@@ -3,8 +3,11 @@ const salaRobots = id => [...st.robots.values()].filter(a => a.data.place.sala =
 function renderSalaChips() {
   $('#sala-count').textContent = `${st.salas.length} sala${st.salas.length === 1 ? '' : 's'}`;
   $('#sala-chips').innerHTML = st.salas.map(s => { // lista completa: la sala es chica y hace scroll
-    const n = salaRobots(s.id).length;
-    return `<div class="rchip" data-sala="${esc(s.id)}"><i class="dot" style="background:${n ? 'var(--teal)' : 'var(--wall)'}"></i><span>${esc(s.name)}<br><small>${esc(s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'} · ${s.thread.length} msj</small></span></div>`;
+    const bots = salaRobots(s.id), n = bots.length;
+    // Sus robots no se ven en la oficina: si alguno te necesita, la sala lo avisa.
+    const need = bots.filter(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost).length;
+    const done = s.done && !need; // equipo terminado: todos entregaron
+    return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala"><i class="dot" style="background:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}"></i><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? ` · ⚠ ${need} te necesita${need === 1 ? '' : 'n'}` : done ? ' · ✓ terminó' : ` · ${s.thread.length} msj`}</small></span></div>`;
   }).join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';
 }
 
@@ -17,7 +20,7 @@ function salasPanel() {
       ${last ? `<div class="sub-h">Último: ${esc(last.from)} · ${esc(last.text.slice(0, 120))}</div>` : ''}
     </div>`;
   }).join('');
-  return `<div class="dlg-head"><h3>Salas de épica</h3><p>Cada sala agrupa a los robots que trabajan sobre una épica de Jira. Comparten un <code>CONTEXT.md</code> (alcance, decisiones, estado verificado) que leen al entrar y corrigen al aprender algo, y un hilo donde queda lo que cada uno dice al cerrar su turno.</p></div>
+  return `<div class="dlg-head"><h3>Salas de épica</h3><p>Cada sala agrupa a los robots que trabajan sobre una épica de Jira. Comparten un <code>CONTEXT.md</code> (alcance, decisiones, estado verificado) que leen al entrar y corrigen al aprender algo, y un hilo donde queda lo que cada uno dice al cerrar su turno. Cuando un robot pide robots y los apruebas, él y los nuevos quedan en una sala de equipo que se cierra sola al irse todos.</p></div>
     ${cards ? `<section class="dlg-sec"><h4>Salas</h4><div class="rt-grid">${cards}</div></section>` : ''}
     <form class="dlg-sec" id="sala-new">
       <h4>Nueva sala</h4>
@@ -37,7 +40,7 @@ function salaPanel(s) {
   const docs = s.docs.length ? `<h4>Documentos (${s.docs.length})</h4><div class="list doclist">${s.docs.slice().reverse().map(x => `<div class="item" data-docpath="${esc(x.path)}" title="${esc(x.path)}"><div class="meta-i"><b>${esc(fileName(x.path))}</b><div>${esc(x.robot)} · ${esc(shortPath(x.path))}</div></div></div>`).join('')}</div>` : '';
   const max = st.config.maxRobots || 3;
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done').length;
-  return `<div class="ph"><div style="min-width:0"><h3>Sala «${esc(s.name)}»</h3><div class="sub-h">${esc(s.key || 'sin clave de Jira')}${s.folder ? ' · documentos en ' + esc(s.folder) : ''}</div></div>
+  return `<div class="ph"><div style="min-width:0"><h3>Sala «${esc(s.name)}»</h3><div class="sub-h">${esc(s.auto ? `Equipo que armó ${s.owner}: se cierra sola cuando se van todos` : s.key || 'sin clave de Jira')}${s.folder ? ' · documentos en ' + esc(s.folder) : ''}</div></div>
       <div class="row" style="margin-left:auto"><button class="btn sm" data-sala-act="context">Ver CONTEXT.md</button><button class="btn sm" data-sala-act="reveal">Finder</button><button class="btn sm danger" data-sala-act="close" ${present.length ? 'disabled title="Da de baja a sus robots primero"' : ''}>Cerrar sala</button></div></div>
     <div class="rp-grid">
       <div class="rp-col">

@@ -32,24 +32,29 @@ function layout(incoming) {
   if (incoming) places.push(incoming);
   const used = places.filter(p => p.type !== 'room').map(p => p.idx);
   const rows = Math.max(BASE_ROWS, Math.ceil((Math.max(-1, ...used) + 1) / COLS));
-  const byRoom = new Map();
+  const byRoom = new Map(), v = st.view;
   for (const p of places) {
     if (p.type !== 'room') continue;
+    if (v ? p.sala !== v : p.sala) continue; // en la oficina no se dibujan las salas; dentro de una, solo esa
     const r = byRoom.get(p.room) || {id: p.room, name: p.name, sala: p.sala, maxSlot: -1, n: 0};
     r.maxSlot = Math.max(r.maxSlot, p.slot); r.n++;
     byRoom.set(p.room, r);
   }
+  if (v && !byRoom.has(`sala-${v}`)) byRoom.set(`sala-${v}`, {id: `sala-${v}`, name: st.salas.find(s => s.id === v)?.name || '', sala: v, maxSlot: -1, n: 0});
   // Orden estable: una sala no cambia de lugar mientras exista.
   geo.roomOrder = [...geo.roomOrder.filter(id => byRoom.has(id)), ...[...byRoom.keys()].filter(id => !geo.roomOrder.includes(id))];
   const specs = geo.roomOrder.map(id => ({...byRoom.get(id), seatRows: Math.max(1, Math.ceil((byRoom.get(id).maxSlot + 1) / ROOM_COLS))}));
-  for (const sp of specs) { const re = geo.roomEls.get(sp.id); if (re) re.el.querySelector('small').textContent = `${sp.n} robot${sp.n === 1 ? '' : 's'}`; }
-  const sig = rows + '|' + specs.map(sp => sp.id + ':' + sp.seatRows).join(',');
+  for (const sp of specs) { const re = geo.roomEls.get(sp.id); if (re) { re.el.querySelector('small').textContent = `${sp.n} robot${sp.n === 1 ? '' : 's'}`; re.el.querySelector('.sala-empty')?.toggleAttribute('hidden', sp.n > 0); } }
+  const sig = (v || '') + '|' + rows + '|' + specs.map(sp => sp.id + ':' + (v ? sp.maxSlot : sp.seatRows)).join(',');
   if (sig === geo.sig) return;
   geo.sig = sig;
   geo.rows = rows;
+  // Dentro de una sala el mapa es solo ella, a todo lo ancho; en la oficina, las de rutina debajo de los escritorios.
   let y = 43 + rows * ROW_H;
-  geo.rooms = specs.map(sp => { const boxH = 6 + sp.seatRows * SEAT_ROW_H; const r = {...sp, top: y, boxH, h: boxH + 6}; y += r.h; return r; });
-  geo.H = y + 5;
+  geo.rooms = v ? specs.map(sp => ({...sp, top: 2, boxH: SV.H - 4, h: SV.H - 2}))
+    : specs.map(sp => { const boxH = 6 + sp.seatRows * SEAT_ROW_H; const r = {...sp, top: y, boxH, h: boxH + 6}; y += r.h; return r; });
+  geo.H = v ? SV.H : y + 5;
+  MAP.classList.toggle('sala-view', !!v);
   const e = extra();
   MAP.style.aspectRatio = `16 / ${(10 * geo.H / 100).toFixed(3)}`;
   setRect($('.room.r-break'), 2, 3, 52, 30);
@@ -90,7 +95,7 @@ function layout(incoming) {
 function drawRooms() {
   for (const [id, re] of geo.roomEls) {
     if (geo.rooms.some(r => r.id === id)) continue;
-    re.el.remove(); re.seats.forEach(x => x.el.remove());
+    re.el.remove(); re.seats.forEach(x => x.el.remove()); re.props?.forEach(x => x.remove());
     geo.roomEls.delete(id);
   }
   for (const r of geo.rooms) {
@@ -98,12 +103,27 @@ function drawRooms() {
     if (!re) {
       const el = document.createElement('div');
       // Sala temporal de una rutina o de una sala de épica: el clic abre su panel.
-      el.className = r.sala ? 'room r-rt r-sala' : 'room r-rt';
-      if (r.sala) el.dataset.sala = r.sala; else el.dataset.room = 'cron';
-      el.innerHTML = `<div class="room-h"><span>${r.sala ? 'Sala' : 'Rutina'} «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small></div>`;
-      MAP.appendChild(el);
-      geo.roomEls.set(r.id, re = {el, seats: []});
+      if (r.sala && st.view) { // dentro de la sala: cabecera con la salida, tablero, mesa común y su puerta
+        const s = st.salas.find(x => x.id === r.sala);
+        el.className = 'room r-rt r-sala sv in-sala';
+        if (Number.isInteger(s?.color)) el.style.setProperty('--sala-c', COLORS[s.color % 8]); // el piso, del color de quien la armó
+        el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span>Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
+        MAP.appendChild(el);
+        const prop = (cls, html, x, y0, w, h) => { const p = document.createElement('div'); p.className = `sv ${cls}`; p.innerHTML = html; MAP.appendChild(p); setRect(p, x, y0, w, h); return p; };
+        const board = prop('sala-board', '', SV.board.x, SV.board.y, SV.board.w, SV.board.h);
+        const table = prop('sala-table', `<span>${r.n ? '' : 'Nadie trabajando aquí ahora'}</span>`, SV.table.x, SV.table.y, SV.table.w, SV.table.h);
+        table.style.zIndex = Math.round((SV.table.y + SV.table.h / 2) * 10); // los de arriba quedan detrás de la mesa y los de abajo delante
+        const dr = prop('sala-door', '<span>PUERTA</span>', SV.door.x - 4, SV.H - 4.2, 8, 2.6);
+        geo.roomEls.set(r.id, re = {el, seats: [], props: [board, table, dr]});
+        renderBoard();
+      } else {
+        el.className = 'room r-rt';
+        el.dataset.room = 'cron';
+        el.innerHTML = `<div class="room-h"><span>Rutina «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small></div>`;
+      }
+      if (!re) { MAP.appendChild(el); geo.roomEls.set(r.id, re = {el, seats: []}); }
     }
+    if (re.props) { setRect(re.el, 1, r.top + 1, 98, r.boxH); re.props[1].querySelector('span').textContent = r.n ? '' : 'Nadie trabajando aquí ahora'; continue; }
     setRect(re.el, ROOM_X - 1, r.top + 1, ROOM_W + 2, r.boxH);
     while (re.seats.length < r.seatRows * ROOM_COLS) {
       const el = document.createElement('div');
@@ -120,6 +140,8 @@ function drawRooms() {
 const roomSeat = (r, j) => ({x: ROOM_X + ROOM_W * ((j % ROOM_COLS) + 0.5) / ROOM_COLS, y: r.top + 1 + 7 + Math.floor(j / ROOM_COLS) * SEAT_ROW_H + 15});
 function seatOf(place) {
   if (!place) return door();
+  if (place.sala && !st.view) return salaDoor(place); // en la oficina su sala no se dibuja: camina al cuarto de salas y ahí desaparece
+  if (place.sala && place.sala === st.view) return tableSeat(place.slot);
   if (place.type === 'room') { const r = geo.rooms.find(x => x.id === place.room); return r ? roomSeat(r, place.slot) : door(); }
   const d = deskPos(place.idx); return {x: d.x + 6.5, y: d.y + 19};
 }
@@ -129,7 +151,74 @@ function deskFor(place) {
 }
 // Fila frente a tu escritorio para los que llevan 3 min esperando respuesta; si se llena, sigue por el pasillo derecho.
 const queuePos = k => k < 3 ? {x: 94 - k * 6.4, y: 95 + extra()} : {x: RIGHT_LANE, y: 95 + extra() - (k - 2) * 8};
-const restPos = a => a.queueSlot != null ? queuePos(a.queueSlot) : seatOf(a.data.place);
+const restPos = a => a.queueSlot != null && !st.view ? queuePos(a.queueSlot) : seatOf(a.data.place);
+
+/* ---------- vista de una sala ---------- */
+// Geometría de la sala por dentro (unidades del mapa): tablero a la izquierda, mesa común a la derecha con los robots
+// alrededor (mitad arriba, mitad abajo), pasillos por arriba, abajo y a la derecha de la mesa, y la puerta abajo.
+const SV = {H: 74, board: {x: 3.5, y: 11, w: 35, h: 58}, table: {x: 47, y: 35, w: 42, h: 11}, door: {x: 84, y: 71.5}, aisleTop: 20, aisleBottom: 64, aisleRight: 94};
+function tableSeat(k = 0) {
+  const n = Math.max(6, (geo.rooms[0]?.maxSlot ?? 0) + 1), per = Math.ceil(n / 2), col = Math.floor(k / 2);
+  return {x: SV.table.x + SV.table.w * (col + 0.5) / per, y: k % 2 ? SV.table.y + SV.table.h + 12 : SV.table.y - 4}; // los de arriba, detrás del borde de la mesa con el nombre a la vista
+}
+const salaEntry = () => ({...SV.door});
+// Por los pasillos de la sala: a la fila de abajo directo; a la de arriba rodeando la mesa por la derecha.
+function salaRoute(f, t) {
+  const up = p => p.y < SV.table.y;
+  const rowY = p => up(p) ? SV.aisleTop : SV.aisleBottom;
+  const pts = [{x: f.x, y: rowY(f)}];
+  if (up(f) !== up(t)) pts.push({x: SV.aisleRight, y: rowY(f)}, {x: SV.aisleRight, y: rowY(t)});
+  pts.push({x: t.x, y: rowY(t)}, t);
+  return pts;
+}
+// Tablero de la sala: por qué se creó, su CONTEXT.md y las últimas notas del hilo.
+const board = {ctx: '', at: 0, for: null, loading: false};
+async function loadBoard(force) {
+  const s = st.salas.find(x => x.id === st.view);
+  if (!s || board.loading || (!force && board.for === s.id && Date.now() - board.at < 15000)) return renderBoard();
+  board.loading = true;
+  try { const doc = await api('GET', `/api/doc?path=${encodeURIComponent(s.context)}`); board.ctx = doc.text || ''; } catch { board.ctx = ''; }
+  board.for = s.id; board.at = Date.now(); board.loading = false;
+  renderBoard();
+}
+function renderBoard() {
+  const el = MAP.querySelector('.sala-board'), s = st.salas.find(x => x.id === st.view);
+  if (!el || !s) return;
+  if (board.for !== s.id && !board.loading) setTimeout(() => loadBoard(true)); // al recargar ya dentro de la sala
+  const why = s.purpose || (s.key ? `Sala de la épica ${s.key}` : 'Sala de épica creada desde la oficina');
+  const ctx = board.for === s.id ? board.ctx.replace(/^# .*\n+/, '').replace(/^_Sala creada por la oficina.*_\n+/m, '') : '';
+  const notes = s.thread.slice(-4).reverse();
+  const keep = el.querySelector('.sb-ctx')?.scrollTop || 0;
+  el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></div>
+    <div class="sb-why" title="Por qué se creó esta sala">${esc(why)}</div>
+    <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
+    <div class="sb-notes">${notes.length ? notes.map((m, i) => `<div class="sb-note n${i}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 110))}</div>`).join('') : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
+  el.querySelector('.sb-ctx').scrollTop = keep;
+}
+setInterval(() => { if (st.view) loadBoard(); }, 15000);
+// Punto dentro del cuarto «Salas de épica» donde entran y salen los robots de las salas (cada uno en su lugar).
+const salaDoor = place => ({x: 82 + ((place.slot || 0) % 4) * 4.5, y: 31});
+// Clic en una sala: el mapa pasa a mostrar solo esa sala con sus robots; «← Oficina» (o Esc) vuelve. Así la oficina
+// principal no se llena con los equipos: ahí las salas solo salen en la lista de «Salas», con cuántos robots tienen.
+const shownHere = d => st.view ? d.place.sala === st.view : !d.place.sala;
+function viewClass(a) {
+  const show = shownHere(a.data) || (!!a.transit && !st.view); // en la oficina se ve mientras camina hacia o desde las salas
+  for (const el of [a.el, ...a.subEls.values(), a.extraEl].filter(Boolean)) { el.classList.toggle('offview', !show); el.classList.toggle('sv', show && !!st.view); }
+}
+function enterSala(id) {
+  if (!st.salas.some(s => s.id === id)) return;
+  if (st.selected) select(null);
+  st.view = id;
+  try { history.replaceState(null, '', '#sala=' + id); } catch { /* sin historial */ }
+  layout();
+  loadBoard(true);
+}
+function leaveSala() {
+  if (!st.view) return;
+  st.view = null;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch { /* sin historial */ }
+  layout();
+}
 
 // Franjas horizontales del mapa: una por fila de escritorios y una por sala de rutina, cada una con su pasillo
 // debajo (el de la ultima pasa junto a la puerta y la bandeja). Los pasillos verticales van entre columnas.
@@ -185,8 +274,14 @@ function placeAt(a, p) {
   void a.el.offsetWidth; // fija la posicion inicial antes de que empiece una transicion
 }
 async function walkTo(a, dest) {
+  if (!a.data) { if (st.view) placeAt(a, dest); else await walkSteps(a, dest); return; } // los de la sala de descanso no tienen puesto ni sala
+  if (st.view && !shownHere(a.data)) { placeAt(a, dest); return; } // dentro de una sala, los de afuera no se ven
+  a.transit = true; viewClass(a);
+  try { await walkSteps(a, dest); } finally { a.transit = false; viewClass(a); }
+}
+async function walkSteps(a, dest) {
   a.el.classList.add('moving');
-  for (const p of route(a.pos, dest)) {
+  for (const p of (st.view ? salaRoute : route)(a.pos, dest)) {
     const ms = Math.max(200, Math.hypot(p.x - a.pos.x, p.y - a.pos.y) * 30);
     void a.el.offsetWidth; // sin este reflow el navegador junta el cambio y el robot "salta"
     a.el.style.transition = `left ${ms}ms linear, top ${ms}ms linear`;

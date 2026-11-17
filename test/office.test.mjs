@@ -113,6 +113,75 @@ test('un robot pide robots: apruebas con cambios, entran según el cupo y los de
   } finally { await o.stop(); }
 });
 
+test('un robot pide robots: él y sus hijos quedan en una sala de equipo con su contexto, y se cierra sola al irse todos', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', { ...libre('jefe'), title: 'Migrar wallet' });
+    assert.equal((await o.robot('jefe')).place.type, 'desk');
+    const req = await o.api('POST', '/api/robots/jefe/encargos', { contexto: 'El saldo vive en wallet_balances; no tocar el legacy.', encargos: [{ titulo: 'Uno', encargo: 'haz uno' }, { titulo: 'Dos', encargo: 'haz dos' }] });
+    assert.equal((await o.robot('jefe')).spawnReq.context, 'El saldo vive en wallet_balances; no tocar el legacy.');
+    const ok = await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' });
+    assert.equal(ok.body.launched.length, 2);
+    let snap = await o.snapshot();
+    const sala = snap.salas.find(s => s.id === ok.body.sala);
+    assert.ok(sala?.auto, 'se crea una sala de equipo');
+    assert.equal(sala.owner, 'jefe');
+    assert.match(sala.name, /jefe.*Migrar wallet/);
+    for (const n of ['jefe', ...ok.body.launched]) assert.equal(snap.robots.find(r => r.name === n).place.sala, sala.id, `${n} está en la sala`);
+    const ctx = fs.readFileSync(sala.context, 'utf8');
+    assert.match(ctx, /wallet_balances/);
+    assert.match(ctx, /- Uno\n- Dos/);
+    // Los hijos arrancan sabiendo de la sala; al padre se le avisa por su consola.
+    await waitFor(() => o.claudeCalls().filter(c => c.includes(sala.context)).length >= 2, { what: 'que los hijos reciban la ruta del CONTEXT.md' });
+    // Un hijo que pide robots: los suyos entran a la misma sala, sin crear otra.
+    const kid = ok.body.launched[0];
+    const r2 = await o.api('POST', `/api/robots/${kid}/encargos`, { encargos: [{ titulo: 'Tres', encargo: 'haz tres' }] });
+    const ok2 = await o.api('POST', `/api/robots/${kid}/encargos/${r2.body.id}`, { decision: 'approve' });
+    assert.equal(ok2.body.sala, sala.id);
+    snap = await o.snapshot();
+    assert.equal(snap.salas.filter(s => s.auto).length, 1);
+    assert.match(fs.readFileSync(sala.context, 'utf8'), /lanzó más robots[\s\S]*- Tres/);
+    // Equipo terminado: cuando todos los hijos entregaron, la sala queda marcada (una sola vez).
+    const kids = snap.robots.filter(r => r.place.sala === sala.id && r.parent).map(r => r.name);
+    assert.equal(kids.length, 3);
+    for (const k of kids.slice(0, -1)) await turn(o, k, 'encargo', `Hecho por ${k}`);
+    assert.ok(!(await o.snapshot()).salas.find(s => s.id === sala.id).done, 'falta uno por entregar');
+    await turn(o, kids.at(-1), 'encargo', 'Hecho');
+    await waitFor(async () => (await o.snapshot()).salas.find(s => s.id === sala.id).done, { what: 'que el equipo quede terminado' });
+    // Mientras quede algún hijo la sala sigue; si el padre queda solo, vuelve a un escritorio y la sala pasa al archivo.
+    for (const n of kids.slice(0, -1)) await o.api('DELETE', `/api/robots/${n}`);
+    assert.ok((await o.snapshot()).salas.some(s => s.id === sala.id));
+    await o.api('DELETE', `/api/robots/${kids.at(-1)}`);
+    snap = await o.snapshot();
+    assert.ok(!snap.salas.some(s => s.id === sala.id), 'la sala de equipo se cierra sola');
+    assert.equal(snap.robots.find(r => r.name === 'jefe').place.type, 'desk', 'el padre vuelve a su escritorio');
+    const cerradas = (await o.api('GET', '/api/salas-cerradas')).body.salas;
+    assert.equal(cerradas[0].id, sala.id);
+    assert.match(cerradas[0].purpose, /jefe armó este equipo/);
+    assert.equal((await o.api('GET', `/api/doc?path=${encodeURIComponent(cerradas[0].context)}`)).status, 200, 'su contexto se puede abrir desde el archivo');
+    assert.ok(fs.existsSync(sala.context), 'sus archivos quedan');
+  } finally { await o.stop(); }
+});
+
+test('plantas: crecen con las tareas de la semana de la cuota y al renovarse se cambian las materas', async () => {
+  // Una semana vieja con muchas tareas: al arrancar, la semana ya cambió.
+  const o = await startOffice({ files: { 'estadisticas.json': JSON.stringify({ total: 334, reviews: 0, day: '2026-01-01', today: 0, week: { from: 1, count: 250, n: 2 } }) } });
+  try {
+    let s = (await o.snapshot()).config.stats;
+    assert.equal(s.total, 334, 'el total sigue (trofeos)');
+    assert.equal(s.week, 0, 'la semana nueva arranca en 0');
+    assert.equal(s.pot, 3, 'otra matera');
+    assert.ok(s.repotAt, 'queda anotado el cambio de materas');
+    const at = s.repotAt;
+    await o.api('POST', '/api/robots', libre('uno'));
+    await turn(o, 'uno', 'hola', 'listo');
+    await waitFor(async () => (await o.snapshot()).config.stats.week === 1, { what: 'que la tarea cuente en la semana' });
+    s = (await o.snapshot()).config.stats;
+    assert.equal(s.total, 335);
+    assert.equal(s.repotAt, at, 'no se repite el cambio en la misma semana');
+  } finally { await o.stop(); }
+});
+
 test('oficina llena: tu encargo espera en la puerta, se puede sacar y entra solo al liberarse un escritorio', async () => {
   const o = await startOffice({ maxRobots: 1 });
   try {

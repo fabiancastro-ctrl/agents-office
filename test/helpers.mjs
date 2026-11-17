@@ -37,6 +37,7 @@ export async function startOffice(opts = {}) {
     for (const r of opts.robots) execFileSync('tmux', ['new-window', '-d', '-t', `${session}:`, '-n', r.name, 'cat']);
     fs.writeFileSync(path.join(data, 'office-state.json'), JSON.stringify({ colorSeq: 0, maxRobots: opts.maxRobots || 4, inbox: [], robots: opts.robots.map(fakeRobot) }));
   }
+  for (const [f, c] of Object.entries(opts.files || {})) fs.writeFileSync(path.join(data, f), c); // datos previos de la oficina
   if (opts.maxRobots) process.env.OFFICE_MAX_ROBOTS_TEST = String(opts.maxRobots);
   const env = { ...process.env, OFFICE_DATA: data, OFFICE_PORT: String(port), OFFICE_SESSION: session, OFFICE_WORKSPACE: ws,
     OFFICE_CLAUDE_BIN: fake, OFFICE_CONSOLE_CHECK_MS: '700', OFFICE_ROUTINE_TICK_MS: '300', ...(opts.maxRobots ? { OFFICE_MAX_ROBOTS: String(opts.maxRobots) } : {}), ...opts.env };

@@ -23,7 +23,7 @@ const COLS = 4, ROW_H = 26, BASE_ROWS = 2;
 // Salas temporales de rutinas: debajo de los escritorios, una por rutina con robots en la oficina.
 const ROOM_COLS = 6, SEAT_ROW_H = 17, ROOM_X = 3, ROOM_W = 69, RIGHT_LANE = 74.5;
 // Plantas que aparecen al crecer la oficina (renderGrowth). Van aquí arriba porque layout() las ubica al arrancar.
-const GROW_AT = [5, 15, 40, 100];
+const GROW_AT = [10, 40, 120, 300]; // tareas en la semana de la cuota
 // [nivel desde el que aparece, x, y, ancho, alto, ¿sigue a las filas extra de escritorios?, clase extra]
 const GROW_PLANTS = [[1, 51.6, 20.5, 1.7, 4.5], [1, 3.2, 20, 1.7, 4.5], [2, 57.5, 27.6, 1.9, 5], [2, 95.4, 56, 1.9, 5], [2, 31.5, 91.6, 1.9, 5, true],
   [3, 45.4, 91.6, 1.9, 5, true], [3, 3.2, 90.6, 2.4, 6.4, true, 'big'], [3, 79.2, 56, 1.9, 5], [4, 72.4, 89.6, 2.8, 7.4, true, 'big'], [4, 96, 89, 2.4, 6.4, true, 'big']];
@@ -36,7 +36,7 @@ const deskPos = i => ({x: 5 + (i % COLS) * 18, y: 43 + Math.floor(i / COLS) * RO
 // Lugares de los subagentes alrededor del robot: dos a los lados y cinco debajo.
 const MINI_SLOTS = [[-4.8, 0], [4.8, 0], [-6.6, 6], [-3.3, 6], [0, 6], [3.3, 6], [6.6, 6]];
 
-const st = {robots: new Map(), pins: [], side: null, jump: null, inbox: [], door: [], fame: null, routines: [], salas: [], config: {}, selected: null, att: {}, weeks: [], claude: null, claudeLoading: false, claudeError: ''};
+const st = {robots: new Map(), pins: [], side: null, jump: null, inbox: [], door: [], fame: null, routines: [], salas: [], view: null, config: {}, selected: null, att: {}, weeks: [], claude: null, claudeLoading: false, claudeError: ''};
 const ATTACH_MAX = 20 * 1024 * 1024;
 const brk = {bots: new Map()}; // robots de la sala de descanso (solo animación)
 

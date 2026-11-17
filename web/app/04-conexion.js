@@ -11,6 +11,9 @@ function connect() {
       st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); st.inbox = m.inbox; st.routines = m.routines || []; st.salas = m.salas || []; st.favorites = m.favorites || []; st.pins = m.pins || []; renderPinsBadge(); setArchCount(m.archiveCount || 0); st.door = m.door || []; renderDoor(); st.fame = m.fame || null;
       setSetup(m.setup);
       renderInboxBadge();
+      // Al recargar sigue en la sala donde estabas (#sala=<id> en la dirección), si todavía existe.
+      const hv = st.view || (location.hash.match(/^#sala=([\w-]+)$/) || [])[1];
+      st.view = st.salas.some(s => s.id === hv) ? hv : null;
       m.robots.forEach(r => upsert(r, true));
       renderFame(); // con los robots ya cargados: la cara del cuadro lleva su corona
       layout();
@@ -20,7 +23,7 @@ function connect() {
     } else if (m.type === 'robot') { upsert(m.robot); if (m.robot.name === st.fame?.employee?.name) renderFame(); }
     else if (m.type === 'setup') onSetupSaved(m);
     else if (m.type === 'config') { st.config = m.config; setMapTheme(m.config.mapTheme); renderGrowth(); renderMeta(); if (st.selected === '@new') schedulePanel(); }
-    else if (m.type === 'salas') { st.salas = m.salas; renderSalaChips(); if (st.selected === '@war' || st.selected?.startsWith('@sala:')) schedulePanel(); }
+    else if (m.type === 'salas') { st.salas = m.salas; if (st.view && !st.salas.some(s => s.id === st.view)) { leaveSala(); toast('La sala se cerró: volviste a la oficina.'); } if (st.view) renderBoard(); renderSalaChips(); if (st.selected === '@war' || st.selected?.startsWith('@sala:')) schedulePanel(); }
     else if (m.type === 'routines') { st.routines = m.routines; renderRoutineChips(); renderMeta(); if (st.selected === '@cron') schedulePanel(); }
     else if (m.type === 'log') {
       const a = st.robots.get(m.name);

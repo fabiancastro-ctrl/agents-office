@@ -181,7 +181,7 @@ function knownDoc(p) {
   if (!p) return null;
   const abs = path.resolve(WORKSPACE, String(p));
   const known = inbox.some(i => i.path === abs) || [...robots.values()].some(r => r.docs.some(d => d.path === abs))
-    || salas.some(s => contextPath(s) === abs || threadPath(s) === abs) || archive.some(a => a.docs.includes(abs) || a.summaryPath === abs)
+    || salas.some(s => contextPath(s) === abs || threadPath(s) === abs) || salasArchive.some(s => s.context === abs || s.threadFile === abs) || archive.some(a => a.docs.includes(abs) || a.summaryPath === abs)
     || (abs.startsWith(convDir() + path.sep) && abs.endsWith('.md')); // conversaciones exportadas
   return known ? abs : null;
 }
@@ -192,11 +192,28 @@ const STATS_FILE = path.join(RUNS, 'estadisticas.json');
 let stats = { total: 0, reviews: 0, day: '', today: 0 };
 try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch { /* oficina nueva */ }
 const localDay = () => new Date().toLocaleDateString('sv'); // AAAA-MM-DD en hora local
-function statsView() { return { total: stats.total, reviews: stats.reviews, today: stats.day === localDay() ? stats.today : 0 }; }
+// Las plantas crecen con las tareas de la semana de la cuota (no con el total histórico, que las dejaba siempre al
+// máximo). Al renovarse la cuota la cuenta vuelve a 0, se anota repotAt y la página cambia las materas con una animación.
+// La primera vez (sin semana guardada) arranca con las de hoy, que seguro son de esta semana.
+function rollWeek() {
+  const from = quotaPeriods().weekFrom;
+  if (stats.week && stats.week.from === from) return false;
+  const first = !stats.week;
+  stats.week = { from, count: first ? (stats.day === localDay() ? stats.today : 0) : 0, n: first ? 0 : (stats.week.n || 0) + 1 };
+  if (!first) stats.repotAt = now();
+  try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
+  return !first;
+}
+function statsView() {
+  rollWeek();
+  return { total: stats.total, reviews: stats.reviews, today: stats.day === localDay() ? stats.today : 0, week: stats.week.count, pot: stats.week.n, repotAt: stats.repotAt || null, weekTo: quotaPeriods().weekTo };
+}
+setInterval(() => { if (rollWeek()) broadcast({ type: 'config', config: configView() }); }, 60e3);
 function bumpStats(r) {
   const d = localDay();
   if (stats.day !== d) { stats.day = d; stats.today = 0; }
-  stats.total++; stats.today++;
+  rollWeek();
+  stats.total++; stats.today++; stats.week.count++;
   if (/review|audit|security/i.test(String(r.skill || ''))) stats.reviews++;
   try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
   broadcast({ type: 'config', config: configView() });
@@ -713,7 +730,9 @@ function requestSpawn(r, body) {
   const items = list.map(x => ({ title: cleanTitle(x.titulo ?? x.title ?? ''), text: String(x.encargo ?? x.text ?? x.tarea ?? '').trim().slice(0, 20000) })).filter(x => x.text);
   if (!items.length) throw new Error('Manda {"encargos":[{"titulo":"…","encargo":"…"}]} con al menos un encargo.');
   if (items.length > SPAWN_MAX) throw new Error(`Máximo ${SPAWN_MAX} robots por petición.`);
-  r.spawnReq = { id: crypto.randomBytes(3).toString('hex'), at: now(), items };
+  // contexto: lo que todos los del equipo deben saber (lo que el padre ya averiguó). Va al CONTEXT.md de la sala del equipo.
+  const context = Array.isArray(body) ? '' : String(body?.contexto ?? body?.context ?? '').trim().slice(0, 30000);
+  r.spawnReq = { id: crypto.randomBytes(3).toString('hex'), at: now(), items, ...(context ? { context } : {}) };
   log(r, 'sys', `Pidió ${items.length} robot${items.length === 1 ? '' : 's'} nuevo${items.length === 1 ? '' : 's'}: espera tu aprobación`);
   console_(r.name, 'pide robots', items.map(i => i.title || trunc(i.text, 40)).join(' · '));
   emit(r);
@@ -725,10 +744,11 @@ function lookFromName(name) {
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return { ant: h % 4, visor: (h >>> 3) % 3, acc: (h >>> 6) % 4 };
 }
-const KID_PREAMBLE = parent => `\n\n(Te lanzó el robot ${parent} desde la Oficina de Agentes. Arrancas sin su contexto: lo que necesitas está en este encargo. Cuando termines, tu respuesta final se le envía a ${parent}, así que hazla completa y autosuficiente: resultado, archivos que tocaste o creaste y pendientes.)`;
+const KID_PREAMBLE = parent => `\n\n(Te lanzó el robot ${parent} desde la Oficina de Agentes. Arrancas sin su conversación: lo que necesitas está en este encargo y en el contexto compartido de la sala de tu equipo (abajo). Cuando termines, tu respuesta final se le envía a ${parent}, así que hazla completa y autosuficiente: resultado, archivos que tocaste o creaste y pendientes.)`;
 async function decideSpawn(r, id, approve, edited) {
   if (!r.spawnReq || r.spawnReq.id !== id) throw new Error('Esa petición ya no está pendiente.');
   const items = Array.isArray(edited) ? edited.map(x => ({ title: cleanTitle(x.title ?? ''), text: String(x.text ?? '').trim() })).filter(x => x.text) : r.spawnReq.items;
+  const context = r.spawnReq.context || '';
   r.spawnReq = null;
   if (!approve || !items.length) {
     log(r, 'sys', 'No aprobaste los robots que pidió');
@@ -736,11 +756,14 @@ async function decideSpawn(r, id, approve, edited) {
     await say(r, '[Oficina] El usuario no aprobó lanzar los robots que pediste. Sigue tú con el trabajo o pregúntale cómo prefiere hacerlo.').catch(() => {});
     return { launched: [], queued: 0 };
   }
-  for (const it of items) spawnQueue.push({ id: crypto.randomBytes(3).toString('hex'), parent: r.name, title: it.title, text: it.text, at: now() });
-  log(r, 'sys', `Aprobaste ${items.length} robot${items.length === 1 ? '' : 's'}`);
+  // El padre y sus hijos quedan juntos en una sala: se ve que trabajan en lo mismo y comparten CONTEXT.md y el hilo.
+  const { sala, created } = teamSala(r, items, context);
+  for (const it of items) spawnQueue.push({ id: crypto.randomBytes(3).toString('hex'), parent: r.name, title: it.title, text: it.text, sala: sala.id, at: now() });
+  log(r, 'sys', `Aprobaste ${items.length} robot${items.length === 1 ? '' : 's'} · ${created ? 'pasa a la sala' : 'entran a su sala'} «${sala.name}»`);
   const launched = await drainSpawnQueue();
   emit(r);
-  return { launched, queued: spawnQueue.filter(q => q.parent === r.name).length };
+  if (created) await say(r, `[Oficina] Aprobé tus robots. Tú y ellos quedan en la sala «${sala.name}».${salaPreamble(sala)}\nYa dejé en CONTEXT.md tu objetivo, el reparto${context ? ' y el contexto que mandaste' : ''}; agrégale lo que sepas y ellos no, para que no lo averigüen de nuevo. Sus resultados te siguen llegando como «[Oficina] Resultado del robot …».`).catch(() => {});
+  return { launched, queued: spawnQueue.filter(q => q.parent === r.name).length, sala: sala.id };
 }
 // Lanza los que esperan mientras haya cupo; se llama al aprobar, cuando un robot termina o se va, y cada tanto.
 let draining = false;
@@ -765,7 +788,8 @@ async function drainSpawnQueue() {
       }
       try {
         const par = robots.get(q.parent); // los hijos salen con el mismo diseño que el padre: color, antena, visor y accesorio
-        const kid = await launch({ kind: 'libre', text: q.text + KID_PREAMBLE(q.parent), label: q.title || trunc(q.text, 80), title: q.title, parent: q.parent,
+        const sala = q.sala && salas.some(s => s.id === q.sala) ? q.sala : undefined; // si cerraron su sala mientras esperaba, entra a un escritorio
+        const kid = await launch({ kind: 'libre', text: q.text + KID_PREAMBLE(q.parent), label: q.title || trunc(q.text, 80), title: q.title, parent: q.parent, sala,
           color: par?.color, look: par ? { ...lookFromName(par.name), ...(par.look || {}) } : null,
           origin: `Lanzado por el robot ${q.parent} (lo aprobaste en la oficina)` });
         launched.push(kid.name);
@@ -787,6 +811,7 @@ function reportToParent(r, lastMessage) {
   say(p, `${head}\n\n${String(lastMessage).slice(0, 20000)}`).catch(() => {});
   log(p, 'sys', `${r.name} terminó: su resultado te llegó a la consola`);
   emit(p);
+  checkTeamDone(r);
   setTimeout(drainSpawnQueue, 500);
 }
 
@@ -886,9 +911,10 @@ function savePins() { fs.writeFileSync(PIN_FILE, JSON.stringify(pins, null, 2));
 const ROBOT_HINTS = 'Trabajas dentro de la Oficina de Agentes, que muestra tus respuestas en una página web. Cuando te pidan redactar un mensaje para enviar a otra persona (Google Chat, WhatsApp, Slack, correo), entrega el texto del mensaje completo dentro de una cita Markdown (cada línea empieza con «> »), sin comentarios tuyos adentro; lo que quieras decirme a mí va fuera de la cita. Dentro de la cita usa Markdown normal (**negrita**, _cursiva_, listas con -, enlaces): la oficina lo convierte al formato del chat al copiarlo. Si son varios mensajes, usa una cita por mensaje. '
   + 'Esos mensajes los firmo yo: escríbelos en primera persona del singular (yo hice, revisé, encontré, necesito), nunca en plural (hicimos, revisamos, encontramos), y no menciones a Claude ni a la IA salvo que te lo pida; el plural solo vale cuando de verdad incluye al destinatario o a su equipo ("necesitamos validar juntos"). '
   + 'Si te piden repartir trabajo en ROBOTS (robots nuevos, robots independientes, otras consolas), no uses subagentes: pídele robots a la oficina. '
-  + 'Escribe un archivo JSON {"encargos":[{"titulo":"título corto","encargo":"qué debe hacer"}]} (máximo 6) y envíalo con: '
+  + 'Escribe un archivo JSON {"contexto":"lo que todos deben saber","encargos":[{"titulo":"título corto","encargo":"qué debe hacer"}]} (máximo 6) y envíalo con: '
   + 'curl -s -X POST "http://127.0.0.1:$OFFICE_PORT/api/robots/$OFFICE_ROBOT/encargos" -H "Content-Type: application/json" --data-binary @<archivo>. '
-  + 'Cada robot nuevo arranca sin tu contexto: el encargo debe ser autosuficiente (objetivo, repos y rutas, documentos de entrada, restricciones, qué entregar y en qué formato). '
+  + 'Cada robot nuevo arranca sin tu conversación: el encargo debe ser autosuficiente (objetivo, repos y rutas, documentos de entrada, restricciones, qué entregar y en qué formato). '
+  + 'En "contexto" pon lo que ya averiguaste y sirve a todos (decisiones, datos verificados, qué no repetir): al aprobarlos, tú y ellos quedan en una misma sala de equipo y ese contexto va a su CONTEXT.md compartido, que todos leen y corrigen. '
   + 'El usuario los aprueba en la oficina; mientras tanto sigue con tu trabajo. Cuando cada uno termine, su resultado te llegará como un mensaje «[Oficina] Resultado del robot …»: intégralo. '
   + 'Si te piden agentes o subagentes, usa la herramienta de agentes como siempre.';
 
@@ -1156,6 +1182,8 @@ async function removeRobot(r, reason, robotSummary) {
   let touched = false;
   for (const rt of routines) for (const h of rt.history || []) for (const x of h.robots || []) if (x.name === r.name && x.tokens == null) { x.tokens = u.out + u.in + u.cacheWrite; x.state = 'se fue'; touched = true; }
   if (touched) { saveRoutines(); emitRoutines(); }
+  ownerBackIfAlone();
+  closeEmptyTeamSalas();
   setTimeout(drainSpawnQueue, 500);
 }
 
@@ -2130,7 +2158,7 @@ function contextPath(s) { return path.join(SALAS_DIR, s.id, 'CONTEXT.md'); }
 function threadPath(s) { return path.join(SALAS_DIR, s.id, 'HILO.md'); }
 
 function salaView(s) {
-  return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt };
+  return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt, auto: !!s.auto, owner: s.owner || null, color: Number.isInteger(s.color) ? s.color : null, purpose: s.purpose || '', done: !!s.done };
 }
 function emitSalas() { broadcast({ type: 'salas', salas: salas.map(salaView) }); }
 
@@ -2168,6 +2196,79 @@ function createSala(b) {
   writeThreadFile(s);
   saveSalas();
   return s;
+}
+
+// Sala de equipo: cuando un robot pide robots y tú los apruebas. Si el padre ya está en una sala (de épica o de equipo),
+// los hijos entran a esa; si no, se crea una con su objetivo y el reparto en CONTEXT.md y el padre se muda a ella.
+// Las salas de equipo (auto) se cierran solas cuando no queda nadie ni nadie esperando para entrar; sus archivos quedan.
+function teamSala(r, items, context) {
+  const team = items.map(it => `- ${it.title || trunc(it.text.replace(/\s+/g, ' '), 80)}`).join('\n');
+  const stamp = now().slice(0, 16).replace('T', ' ');
+  const cur = r.place.sala && salas.find(s => s.id === r.place.sala);
+  if (cur) {
+    fs.appendFileSync(contextPath(cur), `\n## ${r.name} lanzó más robots (${stamp})\n\n${team}\n${context ? `\n${context}\n` : ''}`);
+    if (cur.done) { cur.done = false; saveSalas(); emitSalas(); } // entra más trabajo: el equipo vuelve a estar en curso
+    return { sala: cur, created: false };
+  }
+  const goal = r.title || r.label || 'su encargo';
+  const s = createSala({ name: `Equipo de ${r.name} · ${goal}`, context: `# Contexto del equipo de ${r.name}\n\n_Sala creada por la oficina el ${stamp} cuando ${r.name} pidió robots. La comparten ${r.name} y los robots que lanzó._\n\n`
+    + `## Objetivo\n\n${goal}\n\n## Reparto\n\n- ${r.name} (coordina)\n${team}\n\n## Contexto que mandó ${r.name}\n\n${context || '_Sin contexto adicional: está en cada encargo._'}\n\n`
+    + '## Decisiones tomadas\n\n## Estado verificado\n\n## Bloqueos y pendientes\n' });
+  s.auto = true;
+  s.owner = r.name;
+  s.color = r.color; // el piso de la sala lleva el color de quien la armó
+  s.purpose = `${r.name} armó este equipo para «${trunc(goal, 120)}» y repartió: ${items.map(it => it.title || trunc(it.text.replace(/\s+/g, ' '), 40)).join(', ')}`;
+  saveSalas();
+  r.place = roomSeat(`sala-${s.id}`, s.name, { sala: s.id });
+  log(r, 'sys', `Se mudó a la sala «${s.name}» con su equipo`);
+  emit(r);
+  saveState();
+  emitSalas();
+  return { sala: s, created: true };
+}
+function closeEmptyTeamSalas() {
+  const keep = s => !s.auto || [...robots.values()].some(r => r.place.sala === s.id) || spawnQueue.some(q => q.sala === s.id);
+  if (salas.every(keep)) return;
+  for (const s of salas.filter(x => !keep(x))) archiveSala(s, 'se fue todo el equipo');
+  salas = salas.filter(keep);
+  saveSalas(); emitSalas();
+}
+// Equipo terminado: todos los hijos que siguen en la sala ya entregaron su resultado y nadie espera para entrar.
+// Te avisa una vez y la sala queda marcada en verde hasta que entre más trabajo.
+function checkTeamDone(kid) {
+  const s = kid.place.sala && salas.find(x => x.id === kid.place.sala);
+  if (!s?.auto || s.done) return;
+  const kids = [...robots.values()].filter(x => x.place.sala === s.id && x.parent);
+  if (!kids.length || spawnQueue.some(q => q.sala === s.id) || kids.some(x => !x.reported)) return;
+  s.done = true;
+  saveSalas(); emitSalas();
+  const p = robots.get(s.owner);
+  if (p) log(p, 'sys', `Su equipo terminó: ${kids.length} de ${kids.length} entregaron`);
+  broadcast({ type: 'notice', text: `El equipo de ${s.owner} terminó: ${kids.length} de ${kids.length} entregaron. ${p ? `${s.owner} ya tiene sus resultados: revísalo.` : ''}`.trim() });
+}
+// Si en una sala de equipo queda solo quien la armó, vuelve caminando a un escritorio y la sala pasa al archivo.
+function ownerBackIfAlone() {
+  for (const s of salas) {
+    if (!s.auto) continue;
+    const inSala = [...robots.values()].filter(r => r.place.sala === s.id);
+    if (inSala.length !== 1 || inSala[0].name !== s.owner || spawnQueue.some(q => q.sala === s.id)) continue;
+    const o = inSala[0];
+    o.place = freeDesk();
+    log(o, 'sys', `Se quedó solo en «${s.name}»: volvió a su escritorio y la sala pasó al archivo`);
+    broadcast({ type: 'notice', text: `${o.name} se quedó solo en su sala: volvió a su escritorio. La sala «${s.name}» quedó en el archivo con su contexto y su hilo.` });
+    emit(o);
+    saveState();
+  }
+}
+// Salas cerradas (a mano o solas): se guardan para abrir su contexto y su hilo desde el archivo.
+const SALAS_ARCH_FILE = path.join(RUNS, 'salas-archivo.json');
+let salasArchive = [];
+try { salasArchive = JSON.parse(fs.readFileSync(SALAS_ARCH_FILE, 'utf8')); } catch { salasArchive = []; }
+function archiveSala(s, reason) {
+  salasArchive.unshift({ id: s.id, name: s.name, key: s.key || '', purpose: s.purpose || '', owner: s.owner || null, auto: !!s.auto, color: Number.isInteger(s.color) ? s.color : null,
+    context: contextPath(s), threadFile: threadPath(s), messages: s.thread.length, docs: s.docs.length, createdAt: s.createdAt, closedAt: now(), reason });
+  salasArchive = salasArchive.slice(0, 300);
+  fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
 }
 
 function salaPreamble(s) {
@@ -2347,6 +2448,7 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
     }
+    if (req.method === 'GET' && url.pathname === '/api/salas-cerradas') return send(res, 200, { salas: salasArchive });
     if (req.method === 'POST' && url.pathname === '/api/salas') {
       const s = createSala(await readBody(req));
       emitSalas();
@@ -2375,6 +2477,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method === 'DELETE' && !parts[3]) {
         if (inSala.length) return send(res, 409, { error: `La sala tiene ${inSala.length} robot${inSala.length === 1 ? '' : 's'}; dalos de baja antes de cerrarla.` });
+        archiveSala(s, 'la cerraste');
         salas = salas.filter(x => x !== s); // los archivos quedan en runs/salas/<id>/
         saveSalas(); emitSalas();
         return send(res, 200, { ok: true });

@@ -102,15 +102,25 @@ function setArchCount(n) { const b = $('#arch-n'); b.textContent = n > 99 ? '99+
 function archivoPanel() {
   return `<div class="dlg-head"><h3>🗄 Archivo de despedidos</h3><p>Cada robot que despides deja aquí su <b>super resumen</b> (el que escribió él con «📝 Despedir con su resumen» o el que armó la oficina). Con «↻ Retomar» entra un robot nuevo solo con ese resumen y lo que le digas. Cada resumen también queda como documento en <code>docs/resumenes-robots/</code> de tu carpeta de trabajo: puedes borrar esa carpeta cuando quieras (el archivo guarda su propia copia para retomar).</p></div>
     <input class="arch-q" id="arch-q" type="search" placeholder="Filtrar por nombre, título, nota o resumen…" autocomplete="off">
-    <div class="arch-list" id="arch-list"><p class="muted">Cargando…</p></div>`;
+    <div class="arch-list" id="arch-list"><p class="muted">Cargando…</p></div>
+    <section class="dlg-sec"><h4>🚪 Salas cerradas</h4><p class="note">Las salas que cerraste o que se cerraron solas al irse su equipo. Su contexto y su hilo siguen en <code>runs/salas/&lt;id&gt;/</code>.</p><div class="arch-list" id="arch-salas"><p class="muted">Cargando…</p></div></section>`;
 }
 async function loadArchivo() {
   try { archUi.list = (await (await fetch('/api/despedidos?all=1')).json()).recent || []; } catch { archUi.list = []; }
+  try { archUi.salas = (await (await fetch('/api/salas-cerradas')).json()).salas || []; } catch { archUi.salas = []; }
   drawArchivo();
 }
 function drawArchivo() {
   const box = $('#arch-list', PANEL); if (!box || !archUi.list) return;
   const q = norm(($('#arch-q', PANEL)?.value || '').trim());
+  const sb = $('#arch-salas', PANEL);
+  if (sb) {
+    const ss = (archUi.salas || []).filter(s => !q || norm(`${s.name} ${s.purpose} ${s.owner || ''} ${s.key}`).includes(q));
+    const whenS = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+    sb.innerHTML = !ss.length ? `<p class="muted">${archUi.salas?.length ? 'Nada coincide con el filtro.' : 'Todavía no se cierra ninguna sala.'}</p>`
+      : ss.map(s => `<article class="ac-item" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % 8] : 'var(--war)'}"><div class="ac-h"><b>${esc(s.name)}</b>${s.key ? `<span class="ac-title">${esc(s.key)}</span>` : ''}<small>${esc(s.reason || 'cerrada')} · ${whenS(s.closedAt)}</small></div>
+        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button></div></article>`).join('');
+  }
   const list = archUi.list.filter(a => !q || norm(`${a.name} ${a.title} ${a.note} ${a.label} ${a.excerpt}`).includes(q));
   const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
   box.innerHTML = !archUi.list.length ? '<p class="muted">Todavía no despides a ningún robot. Cuando lo hagas, su resumen queda aquí.</p>'

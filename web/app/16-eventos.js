@@ -11,12 +11,15 @@ async function quickKill(btn, name) {
 }
 
 MAP.addEventListener('click', e => {
+  if (e.target.closest('[data-sala-exit]')) return leaveSala();
+  if (e.target.closest('[data-sala-ctx]')) { const s = st.salas.find(x => x.id === st.view); if (s) showDoc(s.context); return; }
+  const so = e.target.closest('[data-sala-open]'); if (so) return select('@sala:' + so.dataset.salaOpen);
   const kx = e.target.closest('.kill-x'); if (kx) { e.stopPropagation(); return quickKill(kx, kx.closest('.robot').dataset.name); }
   const bb = e.target.closest('.robot.on-break'); if (bb) return assignFromBreak(bb.dataset.name);
   const r = e.target.closest('.robot'); if (r) return select(r.dataset.name);
   const dk = e.target.closest('.desk');
   if (dk) { const a = [...st.robots.values()].find(x => x.data.place.idx == dk.dataset.desk); return select(a ? a.data.name : '@new'); }
-  const sala = e.target.closest('[data-sala]'); if (sala) return select('@sala:' + sala.dataset.sala);
+  const sala = e.target.closest('[data-sala]'); if (sala) return enterSala(sala.dataset.sala);
   const room = e.target.closest('[data-room]'); if (room) select('@' + room.dataset.room);
 });
 MAP.addEventListener('keydown', e => {
@@ -27,7 +30,7 @@ MAP.addEventListener('keydown', e => {
 
 PANEL.addEventListener('change', e => { if (e.target.name === 'inboxf') { st.inboxFilter = e.target.value; return renderPanel(); } if (['kind', 'rtkind', 'rttype', 'skind', 'rtwhen'].includes(e.target.name) || ['rt-where', 'rt-hours', 'rt-c-kind', 'rt-c-to', 'rt-w-kind'].includes(e.target.id)) syncKind(); });
 PANEL.addEventListener('keydown', e => {
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.rt-card[data-sala]')) { e.preventDefault(); return select('@sala:' + e.target.dataset.sala); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.rt-card[data-sala]')) { e.preventDefault(); return enterSala(e.target.dataset.sala); }
   if (e.key === 'Enter' && !e.shiftKey && (e.target.id === 'chat-in' || e.target.id === 'sala-in')) { e.preventDefault(); e.target.form.requestSubmit(); } });
 // Nombre aleatorio pronunciable: 6 letras (consonante-vocal) y 2 números, p. ej. «bakuro17».
 function randomName() {
@@ -124,7 +127,7 @@ PANEL.addEventListener('submit', async e => {
 });
 PANEL.addEventListener('click', async e => {
   const pick = e.target.closest('[data-pick]'); if (pick) return select(pick.dataset.pick);
-  const sc = e.target.closest('.rt-card[data-sala]'); if (sc) return select('@sala:' + sc.dataset.sala);
+  const sc = e.target.closest('.rt-card[data-sala]'); if (sc) return enterSala(sc.dataset.sala);
   const sa = e.target.closest('[data-sala-act]');
   if (sa) {
     const s = st.salas.find(x => x.id === st.selected?.slice(6)); if (!s) return;
@@ -315,5 +318,6 @@ document.addEventListener('keydown', e => {
   else if (!$('#modal').hidden) $('#modal').hidden = true; // primero el documento, luego la ventana
   else if (st.selected) select(null);
   else if (zoom.follow) stopFollow();
+  else if (st.view) leaveSala();
 });
 
