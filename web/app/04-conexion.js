@@ -15,6 +15,9 @@ function connect() {
       const hv = st.view || (location.hash.match(/^#sala=([\w-]+)$/) || [])[1];
       st.view = st.salas.some(s => s.id === hv) ? hv : null;
       m.robots.forEach(r => upsert(r, true));
+      // 6 · Enlace directo: #robot=<nombre> abre la oficina en ese robot (una vez, al cargar).
+      const rh = (location.hash.match(/^#robot=([\w-]+)$/) || [])[1];
+      if (rh && !st.linked && st.robots.has(rh)) { st.linked = true; setTimeout(() => select(rh), 60); }
       renderFame(); // con los robots ya cargados: la cara del cuadro lleva su corona
       layout();
       PANEL.dataset.view = ''; // tras reconectar, repintado completo (el log pudo cambiar)
@@ -45,7 +48,7 @@ function connect() {
     } else if (m.type === 'deliver') onDeliver(m.name, m.items);
     else if (m.type === 'inbox') { st.inbox = m.inbox; renderInboxBadge(); renderMeta(); if (st.selected === '@inbox') schedulePanel(); }
     else if (m.type === 'left') onLeft(m.name);
-    else if (m.type === 'notice') { toast(m.text); if (notif.on) { beep(); if ('Notification' in window && Notification.permission === 'granted') try { new Notification('Oficina de Agentes', {body: m.text}); } catch { /* sin notificación */ } } }
+    else if (m.type === 'notice') { toast(m.text); if (/^El equipo de .* terminó/.test(m.text)) SFX.done(); if (notif.on) { beep(); if ('Notification' in window && Notification.permission === 'granted') try { new Notification('Oficina de Agentes', {body: m.text}); } catch { /* sin notificación */ } } }
     else if (m.type === 'archive') { setArchCount(m.count); if (st.selected === '@archivo') loadArchivo(); }
     else if (m.type === 'pins') { st.pins = m.pins; renderPinsBadge(); markPins(); if (st.selected === '@pins') schedulePanel(); }
     else if (m.type === 'fame') { st.fame = m.fame; renderFame(); }

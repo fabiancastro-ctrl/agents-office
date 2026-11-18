@@ -193,7 +193,7 @@ function cardHtml(a) {
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
     <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
       ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">⏸ sin actividad ${fmtDur(idleMs(d))}</span>` : ''}
-      <span title="Tokens de esta sesión">◆ ${fmtTok(tok)}</span>${spendChip(d)}${subs ? `<span class="rc-subs" title="Subagentes trabajando">⑂ ${subs}</span>` : ''}${docs ? `<span title="Documentos escritos">▤ ${docs}</span>` : ''}</div>
+      <span title="Tokens de esta sesión">◆ ${fmtTok(tok)}</span>${spendChip(d)}${d.loop ? `<span class="rc-loop" title="Posible bucle: ${esc(d.loop.who)} repitió lo mismo ${d.loop.n} veces seguidas (${esc(d.loop.what)}). Si es una espera a propósito, ignóralo.">⟳ ×${d.loop.n}</span>` : ''}${subs ? `<span class="rc-subs" title="Subagentes trabajando">⑂ ${subs}</span>` : ''}${docs ? `<span title="Documentos escritos">▤ ${docs}</span>` : ''}</div>
     ${actions ? `<div class="rc-acts">${actions}</div>` : ''}
   </article>`;
 }

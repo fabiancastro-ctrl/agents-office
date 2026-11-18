@@ -117,7 +117,9 @@ function drawRooms() {
         const table = prop('sala-table', `<span>${r.n ? '' : 'Nadie trabajando aquí ahora'}</span>`, SV.table.x, SV.table.y, SV.table.w, SV.table.h);
         table.style.zIndex = Math.round((SV.table.y + SV.table.h / 2) * 10); // los de arriba quedan detrás de la mesa y los de abajo delante
         const dr = prop('sala-door', '<span>PUERTA</span>', SV.door.x - 4, SV.H - 4.2, 8, 2.6);
-        geo.roomEls.set(r.id, re = {el, seats: [], props: [board, table, dr]});
+        // Q · Pizarra en la pared, sobre la mesa: cada mensaje del hilo deja un garabato que se dibuja solo.
+        const wb = prop('sala-wb', '<b>PIZARRA</b><svg viewBox="0 0 320 60" preserveAspectRatio="none" aria-hidden="true"></svg>', 51, 9.9, 34, 7.6);
+        geo.roomEls.set(r.id, re = {el, seats: [], props: [board, table, dr, wb]});
         renderBoard();
       } else {
         el.className = 'room r-rt';
@@ -227,6 +229,32 @@ function renderBoard() {
     <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
     <div class="sb-notes">${notes.length ? notes.map((m, i) => `<div class="sb-note n${i}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 110))}</div>`).join('') : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
   el.querySelector('.sb-ctx').scrollTop = keep;
+  drawDoodles(s);
+}
+// Garabatos de la pizarra: uno por mensaje del hilo (los últimos 16), con la forma y el color que salen del id del
+// mensaje (siempre el mismo dibujo para el mismo mensaje). Los nuevos se dibujan con una animación de trazo.
+const wbDrawn = new Map(); // sala -> ids ya dibujados
+function drawDoodles(s) {
+  const svg = MAP.querySelector('.sala-wb svg'); if (!svg) return;
+  const msgs = s.thread.slice(-16), seen = wbDrawn.get(s.id) || new Set();
+  const INK = ['#2c56a8', '#c24b58', '#2f8f5b', '#2a2620', '#b06a10'];
+  const hash = t => { let h = 2166136261; for (const c of String(t)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
+  const shapes = [
+    (x, y, r) => `M${x - 14} ${y + 4}q5 -14 10 0t10 0t10 0`,                                            // ola
+    (x, y) => `M${x - 13} ${y - 8}h22v16h-22zM${x - 9} ${y - 3}h14M${x - 9} ${y + 2}h10`,              // caja con renglones
+    (x, y) => `M${x - 14} ${y + 6}L${x + 10} ${y - 6}M${x + 3} ${y - 8}l7 2l-2 7`,                      // flecha
+    (x, y) => `M${x - 8} ${y}l5 6l11 -14`,                                                              // chulo
+    (x, y) => `M${x} ${y - 10}l3 7h8l-6 5l2 8l-7 -4l-7 4l2 -8l-6 -5h8z`,                                // estrella
+    (x, y) => `M${x + 11} ${y}a11 9 0 1 1 -1 -3`,                                                       // círculo
+    (x, y) => `M${x - 14} ${y - 6}h18M${x - 14} ${y}h24M${x - 14} ${y + 6}h12`,                         // texto
+    (x, y) => `M${x - 12} ${y + 8}l7 -10l6 6l6 -12l7 8`                                                 // gráfico
+  ];
+  svg.innerHTML = msgs.map((m, i) => {
+    const h = hash(m.id || m.at), x = 22 + (i % 8) * 39 + (h % 7) - 3, y = 17 + Math.floor(i / 8) * 28 + ((h >>> 3) % 5) - 2;
+    return `<path d="${shapes[h % shapes.length](x, y)}" stroke="${INK[(h >>> 5) % INK.length]}" pathLength="1" class="${seen.has(m.id) ? '' : 'new'}"><title>${esc(m.from)}: ${esc(plainMd(m.text).slice(0, 80))}</title></path>`;
+  }).join('');
+  for (const m of msgs) seen.add(m.id);
+  wbDrawn.set(s.id, seen);
 }
 setInterval(() => { if (st.view) loadBoard(); }, 15000);
 // Cambió el estado de alguien de la sala que estás viendo: el «Reparto» del tablero se refresca enseguida.

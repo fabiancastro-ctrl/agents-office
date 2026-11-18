@@ -140,6 +140,7 @@ PANEL.addEventListener('click', async e => {
     const s = st.salas.find(x => x.id === st.selected?.slice(6)); if (!s) return;
     try {
       if (sa.dataset.salaAct === 'context') return showDoc(s.context);
+      if (sa.dataset.salaAct === 'export') { const r = await api('POST', `/api/salas/${s.id}/exportar`); toast(`Sala exportada: ${r.shown}`); return showDoc(r.path); }
       if (sa.dataset.salaAct === 'reveal') await api('POST', '/api/reveal', {path: s.context});
       if (sa.dataset.salaAct === 'close' && confirm(`¿Cerrar la sala «${s.name}»? Sus archivos quedan en el disco.`)) { await api('DELETE', `/api/salas/${s.id}`); select('@war'); }
     } catch { /* toast ya mostrado */ }

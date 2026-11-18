@@ -41,7 +41,7 @@ function salaPanel(s) {
   const max = st.config.maxRobots || 3;
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done').length;
   return `<div class="ph"><div style="min-width:0"><h3>Sala «${esc(s.name)}»</h3><div class="sub-h">${esc(s.auto ? `Equipo que armó ${s.owner}: se cierra sola cuando se van todos` : s.key || 'sin clave de Jira')}${s.folder ? ' · documentos en ' + esc(s.folder) : ''}</div></div>
-      <div class="row" style="margin-left:auto"><button class="btn sm" data-sala-act="context">Ver CONTEXT.md</button><button class="btn sm" data-sala-act="reveal">Finder</button><button class="btn sm danger" data-sala-act="close" ${present.length ? 'disabled title="Da de baja a sus robots primero"' : ''}>Cerrar sala</button></div></div>
+      <div class="row" style="margin-left:auto"><button class="btn sm" data-sala-act="context">Ver CONTEXT.md</button><button class="btn sm" data-sala-act="export" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo, para compartirla">⬇ Exportar</button><button class="btn sm" data-copy-link="sala:${esc(s.id)}" title="Copia un enlace que abre la oficina directo en esta sala (solo funciona en este computador)">🔗 Copiar enlace</button><button class="btn sm" data-sala-act="reveal">Finder</button><button class="btn sm danger" data-sala-act="close" ${present.length ? 'disabled title="Da de baja a sus robots primero"' : ''}>Cerrar sala</button></div></div>
     <div class="rp-grid">
       <div class="rp-col">
         <h4>Hilo de la sala</h4>
@@ -93,7 +93,7 @@ function renderPanel() {
   $('#dialog').hidden = false;
   $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war');
   $('#dlg-card').classList.toggle('tall', !!a || !!sala || sel === '@arch');
-  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@arch' ? archPanel(st.archView) : sel === '@archivo' ? archivoPanel() : sel === '@pins' ? pinsPanel() : newPanel();
+  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@arch' ? archPanel(st.archView) : sel === '@archivo' ? archivoPanel() : sel === '@fama' ? famaPanel() : sel === '@pins' ? pinsPanel() : newPanel();
   if (sameView) {
     if (html === PANEL._html) { tickRoutines(); return; }
     const tpl = document.createElement('template'); tpl.innerHTML = html;
@@ -121,6 +121,7 @@ function renderPanel() {
   renderSide(); markPins(PANEL); doJump();
   if (sel === '@search') searchArchive();
   if (sel === '@archivo') loadArchivo();
+  if (sel === '@fama') { famaUi.weeks = null; loadFama(); }
   if (sel === '@cron') cronOpened();
   if (sel === '@arch' && st.focusRetake) { st.focusRetake = false; const t = $('#retake-in'); t?.scrollIntoView({block: 'center'}); t?.focus(); }
   if (wasHidden) (PANEL.querySelector('#search-in, #rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();

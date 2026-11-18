@@ -2,7 +2,7 @@
 // No actúan mientras escribes. J/K recorren los robots en el orden de las tarjetas (primero los que te necesitan).
 const KEYS = [['J / K', 'Siguiente / anterior robot'], ['S', 'Siguiente robot que te espera'], ['A / D', 'Aprobar / denegar el permiso (y pasa al siguiente que espera)'],
   ['R', 'Escribirle al robot abierto'], ['F', 'Seguir en el mapa al robot abierto'], ['/', 'Buscar en las conversaciones'], ['P', 'Para enviar (mensajes fijados)'], ['H', 'Archivo de despedidos (resúmenes para retomar)'],
-  ['+ / − / 0', 'Acercar / alejar / ver todo el mapa'], ['N', 'Nuevo encargo'], ['B', 'Bandeja'], ['Esc', 'Cerrar'], ['?', 'Esta ayuda']];
+  ['+ / − / 0', 'Acercar / alejar / ver todo el mapa'], ['N', 'Nuevo encargo'], ['C', 'Modo cine: solo el mapa a pantalla completa'], ['B', 'Bandeja'], ['Esc', 'Cerrar'], ['?', 'Esta ayuda']];
 function keysHelp() {
   let box = $('#keys');
   if (!box) {

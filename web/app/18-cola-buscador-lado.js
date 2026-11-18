@@ -130,7 +130,7 @@ function drawArchivo() {
     const whenS = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
     sb.innerHTML = !ss.length ? `<p class="muted">${archUi.salas?.length ? 'Nada coincide con el filtro.' : 'Todavía no se cierra ninguna sala.'}</p>`
       : ss.map(s => `<article class="ac-item" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><div class="ac-h"><b>${esc(s.name)}</b>${s.key ? `<span class="ac-title">${esc(s.key)}</span>` : ''}<small>${esc(s.reason || 'cerrada')} · ${whenS(s.closedAt)}</small></div>
-        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button><button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">🗑 Borrar</button></div></article>`).join('');
+        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button><button type="button" class="btn sm" data-sala-exp="${esc(s.id)}" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo">⬇ Exportar</button><button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">🗑 Borrar</button></div></article>`).join('');
   }
   const list = archUi.list.filter(a => !q || norm(`${a.name} ${a.title} ${a.note} ${a.label} ${a.excerpt}`).includes(q));
   const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
@@ -142,6 +142,8 @@ function drawArchivo() {
 }
 PANEL.addEventListener('input', e => { if (e.target.id === 'arch-q') drawArchivo(); });
 PANEL.addEventListener('click', async e => {
+  const sx = e.target.closest('[data-sala-exp]');
+  if (sx) { try { const r = await api('POST', `/api/salas-cerradas/${sx.dataset.salaExp}/exportar`); toast(`Sala exportada: ${r.shown}`); showDoc(r.path); } catch { /* toast ya mostrado */ } return; }
   const sd = e.target.closest('[data-sala-del]');
   if (sd) { // dos clics: el primero arma, el segundo (en 3 s) borra
     if (!sd.classList.contains('armed')) { sd.classList.add('armed'); sd.textContent = '¿Borrar?'; setTimeout(() => { sd.classList.remove('armed'); sd.textContent = '🗑 Borrar'; }, 3000); return; }

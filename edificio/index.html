@@ -343,6 +343,34 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
 .egg-ladder{position:fixed;z-index:47;width:16px;pointer-events:none;background:repeating-linear-gradient(transparent 0 7px,#b7c0cf 7px 9px) 0 0/100% 100%,linear-gradient(90deg,#b7c0cf 0 2px,transparent 2px calc(100% - 2px),#b7c0cf calc(100% - 2px));opacity:.9}
 .car.egg-new{animation:egg-drop .9s cubic-bezier(.3,1.5,.5,1)}
 @keyframes egg-drop{from{translate:0 -260px;opacity:0}60%{opacity:1}}
+/* S · Repartidor en bicicleta */
+.bike{position:fixed;z-index:45;width:64px;height:58px;transform:translateY(-100%);pointer-events:none}
+.bike .bk{position:absolute;left:0;bottom:0;width:64px;height:36px;overflow:visible}
+.bike .wh{fill:none;stroke:#2a3342;stroke-width:3}
+.bike .fr{fill:none;stroke:#ef7f8a;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.bike .pk{fill:#c79a5f;stroke:#7a5a30;stroke-width:1}
+.bike .rider{position:absolute;left:14px;bottom:16px;width:30px;height:37px}
+.bike .rider svg{width:100%;height:100%;overflow:visible}
+.bike .rider .legs,.bike .rider .p,.bike .rider .f{display:none}
+.bike-pk{position:fixed;z-index:46;width:13px;height:9px;background:#c79a5f;border:1px solid #7a5a30;border-radius:1.5px;pointer-events:none}
+/* T · Fuegos artificiales */
+.fw-trail{position:fixed;z-index:44;width:3px;height:14px;margin-left:-1.5px;border-radius:2px;pointer-events:none;filter:blur(.3px)}
+.fw-p{position:fixed;z-index:44;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;pointer-events:none}
+.roof .sign{cursor:default}
+/* U · Cada piso con el estilo de su oficina (vidrio, luz y placa) */
+.floor[data-theme=garaje] .win{--glass:#2c2b28;border-color:#6b5b45}
+.floor[data-theme=garaje].on .win:not(.r){background:radial-gradient(ellipse at 50% -10%,rgba(255,200,120,.45),transparent 60%),repeating-linear-gradient(0deg,#3f3e39 0 9px,#34332f 9px 10px)}
+.floor[data-theme=nave] .win{border-color:#5f86b3}
+.floor[data-theme=nave].on .win:not(.r){background:radial-gradient(ellipse at 50% -10%,rgba(124,182,240,.55),transparent 60%),linear-gradient(#173048,#0d1422)}
+.floor[data-theme=biblioteca] .win{border-color:#7a5236}
+.floor[data-theme=biblioteca].on .win:not(.r){background:radial-gradient(ellipse at 50% -10%,rgba(255,214,150,.5),transparent 60%),repeating-linear-gradient(90deg,#3b2617 0 1px,transparent 1px 12px),linear-gradient(#5f3f29,#35251b)}
+.floor[data-theme=cafeteria] .win{border-color:#b98a5e}
+.floor[data-theme=cafeteria].on .win:not(.r){background:radial-gradient(ellipse at 50% -10%,rgba(255,190,140,.55),transparent 60%),conic-gradient(rgba(0,0,0,.12) 25%,transparent 0 50%,rgba(0,0,0,.12) 0 75%,transparent 0) 0 0/14px 14px,#6a4031}
+.floor[data-theme=bosque] .win{border-color:#6b5a3a}
+.floor[data-theme=bosque].on .win:not(.r){background:radial-gradient(ellipse at 50% -10%,rgba(232,255,138,.4),transparent 60%),radial-gradient(circle at 20% 80%,rgba(110,170,90,.35) 0 3px,transparent 4px) 0 0/16px 12px,linear-gradient(#2a3a26,#1f2e1e)}
+.floor[data-theme] .plq .no::after{margin-left:6px;font-size:10px}
+.floor[data-theme=garaje] .plq .no::after{content:"🔧"} .floor[data-theme=nave] .plq .no::after{content:"🚀"} .floor[data-theme=biblioteca] .plq .no::after{content:"📚"}
+.floor[data-theme=cafeteria] .plq .no::after{content:"☕"} .floor[data-theme=bosque] .plq .no::after{content:"🌲"}
 </style>
 </head>
 <body>
@@ -509,6 +537,7 @@ function render() {
       if (fresh === o.name) { el.classList.add('build'); fresh = null; setTimeout(() => el.classList.remove('build'), 1700); }
     }
     el.style.setProperty('--oh', hue(o.title));
+    el.dataset.theme = o.mapTheme || 'moderna'; // U · el piso se ve con el estilo de su oficina
     // Edificio vivo: una oficina encendida sin nadie trabajando se ve más apagada.
     const busy = o.running ? (o.robotList || []).filter(r => ['working', 'delegating', 'walking'].includes(r.state)).length : 0;
     el.className = ['floor', o.running ? 'on' : 'off', o.running && !busy ? 'quiet' : '', o.running && o.need ? 'need' : '', !o.running && o.orphans ? 'orph' : '', el.classList.contains('build') ? 'build' : ''].filter(Boolean).join(' ');
@@ -520,6 +549,7 @@ function render() {
   // El más nuevo arriba. Solo se mueve el que esté fuera de lugar: reinsertar un nodo reinicia sus animaciones.
   els.reverse().forEach((el, k) => { if (box.children[k] !== el) box.insertBefore(el, box.children[k] || null); });
   box.querySelectorAll('[data-floor]').forEach(el => { if (!seen.has(el.dataset.floor)) el.remove(); });
+  trackDeliveries(list); checkFireworks(list);
   // Letrero del techo: cuántos robots trabajan ahora en todo el edificio.
   const working = list.filter(o => o.running).reduce((n, o) => n + (o.robotList || []).filter(r => ['working', 'delegating', 'walking'].includes(r.state)).length, 0);
   const sn = $('sign-n'); sn.hidden = !working; sn.textContent = ` · ${working} TRABAJANDO`;
@@ -835,6 +865,68 @@ function burst(r) {
 }
 
 load(); setInterval(load, 5000);
+// ---------- S · Repartidor en bicicleta ----------
+// Cuando a la bandeja de alguna oficina le llega algo nuevo, un robot en bicicleta pasa por la calle, deja un paquete en
+// el buzón y sigue. Solo dibujo.
+const inboxSeen = new Map();
+function trackDeliveries(list) {
+  let more = 0;
+  for (const o of list) { if (inboxSeen.has(o.name) && o.inbox > inboxSeen.get(o.name)) more += o.inbox - inboxSeen.get(o.name); inboxSeen.set(o.name, o.inbox); }
+  if (more) bikeDelivery(more).catch(() => {});
+}
+let biking = false;
+async function bikeDelivery(n) {
+  if (biking) return;
+  biking = true;
+  try {
+    const mail = document.querySelector('.mail .box').getBoundingClientRect(), street = document.querySelector('.lobby').getBoundingClientRect();
+    const y = street.bottom + 6, stopX = mail.left + mail.width / 2 - 34;
+    const el = document.createElement('div'); el.className = 'bike';
+    el.innerHTML = `<svg class="bk" viewBox="0 0 60 34" aria-hidden="true"><circle cx="12" cy="24" r="8" class="wh"/><circle cx="48" cy="24" r="8" class="wh"/><path d="M12 24l12-12h14l10 12M24 12l8 12h-20M38 12l-3-6h-4" class="fr"/><rect x="40" y="4" width="13" height="9" rx="1.5" class="pk"/></svg><span class="rider">${robotSVG('#7cb6f0', {ant: 1, visor: 0, acc: 2})}</span>`;
+    el.style.top = y + 'px'; el.style.left = '-80px';
+    document.body.appendChild(el);
+    const ride = (from, to, ms) => el.animate([{left: from + 'px'}, {left: to + 'px'}], {duration: ms, easing: 'ease-in-out', fill: 'forwards'}).finished;
+    await ride(-80, stopX, Math.max(1200, (stopX + 80) * 3.2));
+    // el paquete salta al buzón
+    const pk = document.createElement('i'); pk.className = 'bike-pk'; pk.style.left = (stopX + 46) + 'px'; pk.style.top = (y - 26) + 'px'; document.body.appendChild(pk);
+    el.querySelector('.pk').style.visibility = 'hidden';
+    await pk.animate([{transform: 'translate(0,0)'}, {transform: `translate(${mail.left + mail.width / 2 - stopX - 46}px, ${mail.top + 8 - y + 26 - 40}px)`, offset: .6}, {transform: `translate(${mail.left + mail.width / 2 - stopX - 46}px, ${mail.top + 8 - y + 26}px) scale(.5)`, opacity: 0}], {duration: 800, easing: 'ease-in', fill: 'forwards'}).finished;
+    pk.remove();
+    document.querySelector('.mail .box').animate([{scale: 1}, {scale: 1.25}, {scale: 1}], {duration: 400});
+    if (n > 1) toast(`📦 Llegaron ${n} documentos a las bandejas`);
+    await ride(stopX, innerWidth + 40, Math.max(1200, (innerWidth - stopX) * 3.2));
+    el.remove();
+  } finally { biking = false; }
+}
+// ---------- T · Fuegos artificiales al renovarse la cuota ----------
+// Una vez por renovación y por navegador (como el cambio de materas). Doble clic al letrero del techo los repite.
+function checkFireworks(list) {
+  const latest = list.map(o => o.repotAt).filter(Boolean).sort().pop();
+  if (!latest || Date.now() - Date.parse(latest) > 3 * 86400e3) return;
+  let seen = null; try { seen = localStorage.getItem('edificio.fwSeen'); } catch { /* sin almacenamiento */ }
+  if (seen === latest) return;
+  try { localStorage.setItem('edificio.fwSeen', latest); } catch { /* sin almacenamiento */ }
+  toast('🎆 Se renovó tu cuota semanal: ¡fuegos artificiales!');
+  fireworks();
+}
+document.querySelector('.roof .sign')?.addEventListener('dblclick', () => fireworks());
+async function fireworks() {
+  const sky = document.querySelector('.roof').getBoundingClientRect(), body = document.querySelector('.body').getBoundingClientRect();
+  const COL = ['#ffd36b', '#ef7f8a', '#7cb6f0', '#5fcbb9', '#d99ad6', '#ff9f4a', '#fff7d6'];
+  for (let k = 0; k < 7; k++) {
+    const x = body.left + body.width * (.12 + Math.random() * .76), top = Math.max(30, sky.top - 60 - Math.random() * 150), col = COL[k % COL.length];
+    const tr = document.createElement('i'); tr.className = 'fw-trail'; tr.style.left = x + 'px'; tr.style.top = (sky.top + 20) + 'px'; tr.style.background = col; document.body.appendChild(tr);
+    tr.animate([{transform: 'translateY(0)', opacity: 1}, {transform: `translateY(${top - sky.top - 20}px)`, opacity: .9}], {duration: 650, easing: 'cubic-bezier(.2,.6,.4,1)', fill: 'forwards'}).finished.then(() => {
+      tr.remove();
+      for (let p = 0; p < 22; p++) {
+        const e = document.createElement('i'); e.className = 'fw-p'; e.style.left = x + 'px'; e.style.top = top + 'px'; e.style.background = col; e.style.boxShadow = `0 0 6px ${col}`; document.body.appendChild(e);
+        const a = p / 22 * Math.PI * 2, d = 45 + Math.random() * 35;
+        e.animate([{transform: 'translate(0,0) scale(1)', opacity: 1}, {transform: `translate(${Math.cos(a) * d}px,${Math.sin(a) * d}px) scale(.9)`, opacity: 1, offset: .6}, {transform: `translate(${Math.cos(a) * d * 1.15}px,${Math.sin(a) * d * 1.15 + 26}px) scale(.4)`, opacity: 0}], {duration: 1300, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards'}).finished.then(() => e.remove());
+      }
+    });
+    await sleep(420 + Math.random() * 380);
+  }
+}
 // ---------- Easter egg: doble clic al ascensor ----------
 // Tiembla, despega como cohete dejando humo, cae en la torre de atrás con una explosión, y un robot blanco con barba
 // (el ingeniero del edificio) sale de la recepción, sube por una escalera, lo repara y vuelve. Solo dibujo: no toca nada.

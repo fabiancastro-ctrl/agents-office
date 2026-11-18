@@ -7,7 +7,7 @@ function createRobot(d, fromSnapshot) {
   el.style.setProperty('--d', `-${(Math.random() * 3).toFixed(2)}s`);
   el.style.setProperty('--d2', `-${(Math.random() * 5).toFixed(2)}s`);
   el.style.setProperty('--sp', (0.85 + Math.random() * 0.3).toFixed(2));
-  el.innerHTML = `<i class="shadow"></i><i class="jet" aria-hidden="true"></i><i class="lap" aria-hidden="true"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
+  el.innerHTML = `<i class="shadow"></i><i class="jet" aria-hidden="true"></i><i class="lap" aria-hidden="true"></i><i class="cup" aria-hidden="true"></i><i class="loopb" aria-hidden="true">⟳</i><i class="medal" aria-hidden="true"></i><div class="bubble" hidden></div><div class="sign"></div><div class="carry" hidden></div>${robotSVG(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}<div class="nm">${esc(d.name)}</div><button class="kill-x" type="button" title="Dar de baja" aria-label="Dar de baja a ${esc(d.name)}">×</button>`;
   MAP.appendChild(el);
   const a = {data: d, el, bubble: el.querySelector('.bubble'), sign: el.querySelector('.sign'), carry: el.querySelector('.carry'),
     pos: door(), queueSlot: null, q: Promise.resolve(), subEls: new Map(), log: d.log || [], lastBubble: ''};
@@ -23,6 +23,7 @@ function upsert(d, fromSnapshot = false) {
   layout(d.place); // agrega una fila de escritorios o la sala de su rutina si este robot la necesita
   let a = st.robots.get(d.name);
   const prevPlace = a?.data.place;
+  if (a && st.ready) soundOn(a.data, d); // W · campanita si pasa a esperarte
   if (st.view && d.place?.sala === st.view && a?.data.state !== d.state) refreshBoardSoon();
   if (!a) a = createRobot(d, fromSnapshot);
   else if (prevPlace && !samePlace(prevPlace, d.place)) {
@@ -131,7 +132,9 @@ function paint(a) {
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
   const tool = shownTool(a), urg = urgency(d);
-  a.el.className = ['robot', d.parent ? 'flyer' : '', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : '', d.consoleLost ? 'lost' : ''].filter(Boolean).join(' ');
+  // 10 · Antigüedad: medalla de veterano con más de 1 día en la oficina, de oro con más de 7.
+  const age = Date.now() - (Date.parse(d.startedAt || '') || Date.now());
+  a.el.className = ['robot', d.parent ? 'flyer' : '', d.loop ? 'looping' : '', age > 7 * 86400e3 ? 'vet2' : age > 86400e3 ? 'vet1' : '', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : '', d.consoleLost ? 'lost' : ''].filter(Boolean).join(' ');
   // Pide robots nuevos: cartel propio (no «LISTO») para que se vea que espera tu aprobación.
   // Al revivirlo: se endereza y los ojos vuelven a encender (solo la primera vez que deja de estar caído).
   if (a.wasLost && !d.consoleLost) { a.el.classList.add('poweron'); setTimeout(() => a.el.classList.remove('poweron'), 1600); }
@@ -244,15 +247,10 @@ function onDeliver(name, items) {
   const what = n === 1 ? items[0].path.split('/').pop() : `${n} documentos`;
   const crit = items.reduce((k, i) => k + (i.critical || 0), 0);
   if (!a) { toast(`${name} entregó ${what}`); pulseInbox(); celebrate(items); return; }
-  queue(a, async () => {
-    a.carry.hidden = false;
-    a.carry.dataset.count = n > 1 ? n : '';
-    await walkTo(a, coordDrop());
-    a.carry.hidden = true;
-    pulseInbox();
+  // N · Lo lleva un cartero desde su puesto; el robot no se levanta.
+  sendCourier(a.el.classList.contains('offview') ? restPos(a) : {...a.pos}, n).then(() => {
     celebrate(items);
     toast(crit ? `⚠ ${name} entregó ${what} con ${crit} hallazgo${crit === 1 ? '' : 's'} crítico${crit === 1 ? '' : 's'}` : `${name} entregó ${what} en tu bandeja`);
-    if (st.robots.has(name)) await walkTo(a, restPos(a));
   });
 }
 const inboxShown = () => st.inboxTemp ? st.inbox : st.inbox.filter(i => !isTempDoc(i.path));

@@ -46,8 +46,23 @@ function renderClock() {
   box.title = `Tu cuota semanal se renueva el ${new Date(to).toLocaleString('es', {weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit'})}: faltan ${txt}. Ese momento también se cambian las materas.`;
 }
 setInterval(renderClock, 30e3);
+// Cafetera de la sala de descanso: la jarra muestra cuánto queda de tu cuota semanal (de /usage, releído cada hora;
+// no gasta tokens). Llena al empezar la semana, ámbar con poco, vacía y en rojo cerca del límite.
+function renderCoffee() {
+  const el = $('#bcoffee'), s = st.config?.stats || {};
+  const pct = s.quotaPct;
+  el.classList.toggle('unknown', pct == null);
+  if (pct == null) { el.title = 'Cafetera: abre «Uso Claude» una vez y la jarra mostrará cuánto te queda de la cuota semanal.'; return; }
+  const left = Math.max(0, 100 - pct);
+  el.style.setProperty('--lvl', `${left}%`);
+  el.classList.toggle('low', left <= 30 && left > 10);
+  el.classList.toggle('empty', left <= 10);
+  const at = s.quotaAt ? new Date(s.quotaAt).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'}) : '';
+  el.title = `Cafetera: queda ${left} % de tu cuota semanal (usado ${pct} %${at ? `, medido a las ${at}` : ''}). Se vuelve a llenar cuando se renueva la cuota.`;
+}
 function renderGrowth() {
   renderClock();
+  renderCoffee();
   const s = st.config?.stats || {total: 0, reviews: 0, today: 0};
   const week = s.week ?? s.total;
   const lvl = GROW_AT.filter(n => week >= n).length;
@@ -73,7 +88,11 @@ function renderGrowth() {
   tr.innerHTML = Array.from({length: shown}, (_, i) => `<i class="cup${i % 3 === 2 ? ' big' : ''}"></i>`).join('') + (n > shown ? `<b>+${n - shown}</b>` : '');
   tr.title = n ? `${n} trofeo${n === 1 ? '' : 's'}: uno cada 10 tareas terminadas (${s.total} en total)` : '';
   tr.hidden = !n;
-  $('#tboard').innerHTML = `<small>HOY</small><b>${s.today}</b><small>tareas</small>`;
+  // O · Pizarra de la semana: una barra por día de la semana de la cuota (hoy resaltado) y el número de hoy.
+  const days = s.days || [], top = Math.max(1, ...days.map(x => x.n)), todayKey = new Date().toLocaleDateString('sv');
+  const DOW = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+  const bars = days.map(x => { const dt = new Date(x.day + 'T12:00:00'); const future = x.day > todayKey; return `<i class="tb-bar${x.day === todayKey ? ' hoy' : ''}${future ? ' fut' : ''}" style="--h:${future ? 0 : Math.max(4, Math.round(x.n * 100 / top))}%" title="${dt.toLocaleDateString('es', {weekday: 'long', day: 'numeric'})}: ${x.n} tarea${x.n === 1 ? '' : 's'}"><u>${DOW[dt.getDay()]}</u></i>`; }).join('');
+  $('#tboard').innerHTML = days.length ? `<small>HOY <b>${s.today}</b></small><span class="tb-bars">${bars}</span>` : `<small>HOY</small><b>${s.today}</b><small>tareas</small>`;
   const next = GROW_AT[lvl];
   const until = s.weekTo ? new Date(s.weekTo).toLocaleString('es', {weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'}) : '';
   $('#tboard').title = `Plantas nivel ${lvl} de 4 · ${week} tareas esta semana de la cuota${next ? ` · el siguiente nivel (más plantas) llega a las ${next}` : ' · nivel máximo'}${until ? ` · se cambian las materas al renovarse la cuota (${until})` : ''}. Hoy: ${s.today}. En total: ${s.total} (los trofeos cuentan el total).`;
@@ -88,7 +107,7 @@ function renderFame() {
   const live = st.robots.get(em.name)?.data;
   const crown = live?.crown || 0;
   const look = lookOf(em.name, live?.place || null, live || {look: em.look, crown: 0});
-  const html = `<small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % COLORS.length], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
+  const html = `<button type="button" class="eotm-zoom" data-fame-wall title="Muro de la fama: los últimos 4 empleados de la semana" aria-label="Ver los últimos 4 empleados de la semana">🔍</button><small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % COLORS.length], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
   if (box._html !== html) { box._html = html; box.innerHTML = html; }
   const p = st.fame.period, d = t => new Date(t).toLocaleString('es', {weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'});
   box.title = `👑 Empleado de la semana: ${em.name}${em.title ? ` («${em.title}»)` : ''} · ${em.tokens.toLocaleString('es')} tokens desde ${d(p.from)}.\n`
@@ -96,7 +115,22 @@ function renderFame() {
     + (em.present ? `Está en la oficina con la corona ${crown >= 2 ? 'de dos fuegos 🔥🔥: también es el que más gastó en esta sesión de 5 h' : 'de un fuego 🔥'}. Clic para verlo.` : 'Ya no está en la oficina (está en el archivo).');
   box.classList.toggle('live', !!em.present);
 }
-$('#eotm').addEventListener('click', () => { const n = st.fame?.employee?.name; if (n && st.robots.has(n)) select(n); });
+$('#eotm').addEventListener('click', e => {
+  if (e.target.closest('[data-fame-wall]')) { e.stopPropagation(); return select('@fama'); }
+  const n = st.fame?.employee?.name; if (n && st.robots.has(n)) select(n);
+});
+// 9 · Muro de la fama (lupa del cuadro): los últimos 4 empleados de la semana, en cuadros como el del escritorio.
+const famaUi = {weeks: null};
+function famaPanel() {
+  const w = famaUi.weeks;
+  const d = t => new Date(t).toLocaleDateString('es', {day: 'numeric', month: 'short'});
+  const frames = !w ? '<p class="muted">Calculando…</p>' : w.map(x => x.name ? `<figure class="fame-f${x.current ? ' cur' : ''}"><small>${x.current ? 'ESTA SEMANA' : `${d(x.from)} – ${d(x.to)}`}</small><span class="fame-face">${robotHead(COLORS[(x.color || 0) % COLORS.length], lookOf(x.name, null, {look: x.look}))}</span><b>${esc(x.name)}</b><i>${fmtTok(x.tokens)} tokens</i>${x.title ? `<em>📌 ${esc(x.title)}</em>` : ''}<span class="fame-st">${x.present ? 'sigue en la oficina' : 'ya se fue'}</span></figure>` : `<figure class="fame-f empty"><small>${d(x.from)} – ${d(x.to)}</small><span class="fame-face">—</span><b>Nadie</b><i>sin gasto</i></figure>`).join('');
+  return `<div class="dlg-head"><h3>🏆 Muro de la fama</h3><p>El robot que más tokens gastó en cada semana de tu cuota (con sus subagentes), las últimas 4. Sale de los transcripts: no gasta cuota.</p></div><div class="fame-wall">${frames}</div>`;
+}
+async function loadFama() {
+  try { famaUi.weeks = (await (await fetch('/api/fama')).json()).weeks; } catch { famaUi.weeks = []; }
+  if (st.selected === '@fama') renderPanel();
+}
 
 function setMapTheme(t) {
   t = TDECO[t] || t === 'moderna' ? t : 'moderna';

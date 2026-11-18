@@ -33,6 +33,9 @@ function usagePanel() {
     : !c ? `<p>${st.claudeLoading ? 'Abriendo /usage en una consola aparte… (la primera vez tarda unos segundos)' : 'Sin datos todavía.'}</p>`
     : `${bars}${c.detail ? `<details><summary>Qué está consumiendo (según Claude)</summary><pre class="term">${esc(c.detail)}</pre></details>` : ''}
        <div class="note">Leído ${new Date(c.at).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'})} · consola: tmux attach -t ${esc(st.config.session || 'office')}:_status</div>`;
+  // 3 · Tu cuota semana a semana (lo más alto leído de /usage en cada semana; se arma solo mientras usas la oficina).
+  const qh = st.config?.stats?.quotaHistory || [];
+  const hist = qh.length ? `<div class="dlg-sec"><h4>Tu cuota semana a semana</h4><div class="qh">${qh.map((w, i) => { const end = new Date(w.end + 'T12:00:00'); const cur = i === qh.length - 1; return `<div class="qh-c${cur ? ' cur' : ''}" title="Semana que termina el ${end.toLocaleDateString('es', {weekday: 'long', day: 'numeric', month: 'long'})}: ${w.pct} % usado${cur ? ' (en curso)' : ''}"><span class="qh-v">${w.pct}%</span><i class="${w.pct >= 90 ? 'hot' : w.pct >= 70 ? 'warm' : ''}" style="height:${Math.max(3, Math.min(100, w.pct))}%"></i><small>${end.toLocaleDateString('es', {day: 'numeric', month: 'short'})}</small></div>`; }).join('')}</div><p class="note">Lo más alto que marcó <code>/usage</code> en cada semana de tu cuota. La oficina lo relee cada hora mientras está abierta; no gasta tokens.</p></div>` : '';
   const rows = st.weeks.map((w, i) => `<tr${i === 0 ? ' class="cur"' : ''}><td>${i === 0 ? 'Esta semana' : 'Semana del ' + weekLabel(w.week)}</td><td>${w.sessions}</td>
       <td>${w.out.toLocaleString('es')}</td><td>${w.in.toLocaleString('es')}</td><td>${w.cacheRead.toLocaleString('es')}</td><td>${w.cacheWrite.toLocaleString('es')}</td></tr>`).join('');
   return `<div class="dlg-head"><h3>Uso y estado de Claude</h3><p>Los límites de tu suscripción salen de <code>/usage</code>; los tokens, de las sesiones que lanzó la oficina (incluidos sus subagentes).</p></div>
@@ -40,6 +43,7 @@ function usagePanel() {
       <div class="row between"><h4>Límites de tu suscripción</h4><button class="btn sm" data-usage="refresh" ${st.claudeLoading ? 'disabled' : ''}>${st.claudeLoading ? 'Leyendo…' : 'Actualizar'}</button></div>
       ${status}
     </div>
+    ${hist}
     <div class="dlg-sec">
       <h4>Tokens de la oficina por semana</h4>
       ${rows ? `<div class="tablewrap"><table class="usage"><thead><tr><th>Semana (lun–dom)</th><th>Robots</th><th>Salida</th><th>Entrada</th><th>Caché leída</th><th>Caché escrita</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p>Todavía no hay sesiones registradas.</p>'}
