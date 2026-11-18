@@ -1630,3 +1630,12 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .s-anniv{left:50%;top:4px;transform:translateX(-50%);z-index:40;display:flex;gap:8px;align-items:center;font:600 12px var(--body);color:#2a1d05;background:#ffd36b;border-radius:999px;padding:2px 12px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .s-anniv span:first-child,.s-anniv span:last-child{animation:sbat 2.4s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.s-lights i,.s-confetti i,.s-pumpkins i,.s-anniv span{animation:none!important}.s-confetti{display:none}}
+
+/* Cara de quien armó la sala (o un libro si es de épica) en la lista de salas; el aro dice su estado. */
+.sala-face{flex:none;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--panel) 70%,transparent);box-shadow:0 0 0 2px var(--st,var(--wall))}
+.sala-face svg{width:19px;height:19px;overflow:visible}
+.sala-face .sala-book{font-size:13px;line-height:1}
+.sala-face.big{width:28px;height:28px;box-shadow:none;margin-right:2px} .sala-face.big svg{width:26px;height:26px} .sala-face.big .sala-book{font-size:17px}
+.rchip.need .sala-face{animation:sfneed 1.8s ease-in-out infinite}
+@keyframes sfneed{50%{box-shadow:0 0 0 2px var(--st),0 0 0 5px color-mix(in srgb,var(--amber) 35%,transparent)}}
+@media (prefers-reduced-motion:reduce){.rchip.need .sala-face{animation:none}}

@@ -1,5 +1,11 @@
 /* ---------- salas de épica ---------- */
 const salaRobots = id => [...st.robots.values()].filter(a => a.data.place.sala === id);
+// Cara de quien armó la sala (con su color y apariencia, aunque ya se haya ido); si la creaste tú (sala de épica), un libro.
+function salaFace(s) {
+  if (!s.owner) return '<b class="sala-book" aria-hidden="true">📖</b>';
+  const live = st.robots.get(s.owner)?.data;
+  return robotHead(COLORS[(live?.color ?? s.color ?? 0) % COLORS.length], lookOf(s.owner, null, {look: live?.look ?? s.ownerLook}));
+}
 function renderSalaChips() {
   $('#sala-count').textContent = `${st.salas.length} sala${st.salas.length === 1 ? '' : 's'}`;
   $('#sala-chips').innerHTML = st.salas.map(s => { // lista completa: la sala es chica y hace scroll
@@ -8,7 +14,7 @@ function renderSalaChips() {
     const need = bots.filter(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost).length;
     const done = s.done && !need; // equipo terminado: todos entregaron
     const prog = salaProgress(s); // 3 · avance del equipo, visible sin entrar
-    return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><i class="dot" style="background:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}"></i><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? ` · ⚠ ${need} te necesita${need === 1 ? '' : 'n'}` : done ? ' · ✓ terminó' : prog ? ` · ${prog.ok}/${prog.n} entregaron` : ` · ${s.thread.length} msj`}</small></span>${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
+    return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><span class="sala-face" style="--st:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}">${salaFace(s)}</span><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? ` · ⚠ ${need} te necesita${need === 1 ? '' : 'n'}` : done ? ' · ✓ terminó' : prog ? ` · ${prog.ok}/${prog.n} entregaron` : ` · ${s.thread.length} msj`}</small></span>${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
   }).join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';
 }
 
@@ -16,7 +22,7 @@ function salasPanel() {
   const cards = st.salas.map(s => {
     const last = s.thread[s.thread.length - 1];
     return `<div class="rt-card" data-sala="${esc(s.id)}" role="button" tabindex="0" style="cursor:pointer">
-      <div class="top-r"><b>${esc(s.name)}</b>${s.key ? `<span class="pill p-idle">${esc(s.key)}</span>` : ''}</div>
+      <div class="top-r"><span class="sala-face big">${salaFace(s)}</span><b>${esc(s.name)}</b>${s.key ? `<span class="pill p-idle">${esc(s.key)}</span>` : ''}</div>
       ${(p => p ? `<div class="sub-h">📦 ${p.ok}/${p.n} entregaron<i class="rt-prog${p.ok === p.n ? ' full' : ''}" style="--p:${Math.round(p.ok * 100 / p.n)}%"></i></div>` : '')(salaProgress(s))}
       <div class="sub-h">${salaRobots(s.id).length} robots · ${s.thread.length} mensajes · ${s.docs.length} documentos${s.folder ? ' · ' + esc(s.folder) : ''}</div>
       ${last ? `<div class="sub-h">Último: ${esc(last.from)} · ${esc(last.text.slice(0, 120))}</div>` : ''}

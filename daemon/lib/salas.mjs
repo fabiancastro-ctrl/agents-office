@@ -29,7 +29,7 @@ function contextPath(s) { return path.join(SALAS_DIR, s.id, 'CONTEXT.md'); }
 function threadPath(s) { return path.join(SALAS_DIR, s.id, 'HILO.md'); }
 
 function salaView(s) {
-  return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt, auto: !!s.auto, owner: s.owner || null, color: Number.isInteger(s.color) ? s.color : null, purpose: s.purpose || '', done: !!s.done, spend: s.spend || 0,
+  return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt, auto: !!s.auto, owner: s.owner || null, ownerLook: robots.get(s.owner)?.look ?? s.ownerLook ?? null, color: Number.isInteger(s.color) ? s.color : null, purpose: s.purpose || '', done: !!s.done, spend: s.spend || 0,
     roster: (s.roster || []).map(e => ({ name: e.name, title: e.title || '', state: rosterState(e), owner: !!e.owner, delivered: !!(e.delivered || robots.get(e.name)?.reported) })),
     notes: s.notes || [] };
 }
@@ -92,6 +92,7 @@ function teamSala(r, items, context, salaId) {
   s.auto = true;
   s.owner = r.name;
   s.color = r.color; // el piso de la sala lleva el color de quien la armó
+  s.ownerLook = r.look || null; // y su cara sale en la lista de salas (aunque después se vaya)
   s.purpose = `${r.name} armó este equipo para «${trunc(goal, 120)}» y repartió: ${items.map(it => it.title || trunc(it.text.replace(/\s+/g, ' '), 40)).join(', ')}`;
   saveSalas();
   r.place = roomSeat(`sala-${s.id}`, s.name, { sala: s.id });
