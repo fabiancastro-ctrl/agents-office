@@ -112,7 +112,7 @@ function statsView() {
   const q = readConfig().quota || {}, measured = Number(q.weekPctAt) || 0;
   const quotaPct = Number.isFinite(q.weekPct) && measured ? (measured < per.weekFrom ? 0 : q.weekPct) : null;
   return { total: stats.total, reviews: stats.reviews, today: stats.day === localDay() ? stats.today : 0, week: stats.week.count, pot: stats.week.n, repotAt: stats.repotAt || null, weekTo: per.weekTo, days: week, quotaPct, quotaAt: measured || null,
-    quotaHistory: Object.entries(q.history || {}).sort().map(([end, pct]) => ({ end, pct })) };
+    quotaHistory: Object.entries(q.history || {}).sort().map(([end, pct]) => ({ end, pct })), waits: waitsView() };
 }
 setInterval(() => { if (rollWeek()) broadcast({ type: 'config', config: configView() }); }, 60e3);
 function bumpStats(r) {
@@ -127,6 +127,28 @@ function bumpStats(r) {
   try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
   broadcast({ type: 'config', config: configView() });
 }
+// 3 · Tiempo esperándote: cuánto pasaron los robots esperando un permiso, una pregunta o tu respuesta, por día (7 días).
+// Por día: total, por robot, por tipo y los permisos que más hicieron esperar (para decidir si darlos fijos).
+const WAIT_MIN_MS = 3000; // menos que eso es un permiso que se resolvió solo
+function addWait(name, startIso, kind, perm) {
+  const ms = Date.now() - (Date.parse(startIso || '') || Date.now());
+  if (!(ms >= WAIT_MIN_MS)) return;
+  const d = localDay(), all = (stats.waits ||= {});
+  const w = (all[d] ||= { total: 0, by: {}, kinds: {}, perms: {} });
+  w.total += ms;
+  w.by[name] = (w.by[name] || 0) + ms;
+  w.kinds[kind] = (w.kinds[kind] || 0) + ms;
+  if (perm) { const p = (w.perms[perm] ||= { n: 0, ms: 0 }); p.n++; p.ms += ms; }
+  const keys = Object.keys(w.perms);
+  if (keys.length > 20) for (const k of keys.sort((a, b) => w.perms[a].ms - w.perms[b].ms).slice(0, keys.length - 20)) delete w.perms[k];
+  for (const k of Object.keys(all).sort().slice(0, -7)) delete all[k]; // solo los últimos 7 días
+  try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
+  broadcast({ type: 'config', config: configView() });
+}
+function waitsView() {
+  const all = stats.waits || {};
+  return Array.from({ length: 7 }, (_, i) => { const day = new Date(Date.now() - (6 - i) * 86400e3).toLocaleDateString('sv'); const w = all[day]; return { day, total: w?.total || 0, by: w?.by || {}, kinds: w?.kinds || {}, perms: w?.perms || {} }; });
+}
 function configView() { return { maxRobots, maxRobotsLimit: MAX_ROBOTS_LIMIT, approval: APPROVAL, name: officeName, session: SESSION, stats: statsView(), mapTheme: MAP_THEMES.includes(readConfig().mapTheme) ? readConfig().mapTheme : 'moderna' }; }
 
-export { broadcast, bumpStats, configView, emit, fmtK, knownDoc, MAP_THEMES, TEXT_DOC, usage, view };
+export { addWait, broadcast, bumpStats, configView, emit, fmtK, knownDoc, MAP_THEMES, TEXT_DOC, usage, view };

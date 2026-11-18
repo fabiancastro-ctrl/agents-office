@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import { CLAUDE_BIN, console_, PORT, robots, run, SESSION, SETTINGS, WORKSPACE } from './base.mjs';
 import { broadcast, emit, usage } from './estado.mjs';
-import { convDirty, convFile, log, saveState, setState } from './persistencia.mjs';
+import { convDirty, convFile, endWait, log, saveState, setState } from './persistencia.mjs';
 import { drainSpawnQueue, flushIfIdle, pendingResults, resultTimers } from './equipo.mjs';
 import { deliver, ROBOT_HINTS } from './turno.mjs';
 import { archiveRobot } from './exportar.mjs';
@@ -50,6 +50,7 @@ async function revive(r) {
 
 async function removeRobot(r, reason, robotSummary) {
   deliver(r); // si se da de baja con documentos sin entregar, no se pierden
+  endWait(r); // si se va mientras te esperaba, esa espera también cuenta
   try { archiveRobot(r, reason, robotSummary); } catch { /* el archivo es un extra: no frena la baja */ }
   r.alive = false;
   try { await run('tmux', ['kill-window', '-t', `${SESSION}:${r.name}`]); } catch { /* ya cerrada */ }

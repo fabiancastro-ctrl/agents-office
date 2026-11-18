@@ -681,3 +681,59 @@ test('la página: /app.js une web/app/*.js en orden, dentro de una sola función
     for (const f of parts) assert.ok(fs.readFileSync(path.join(dir, f), 'utf8').endsWith('\n'), `${f} termina en salto de línea`);
   } finally { await o.stop(); }
 });
+
+test('tiempo esperándote: suma la espera al responder y al despedir, por robot, tipo y permiso', async () => {
+  const hace = min => new Date(Date.now() - min * 60e3).toISOString();
+  const o = await startOffice({ robots: [
+    { name: 'uno', state: 'input', inputAt: hace(10), inputKind: 'permiso', inputPerm: 'Bash: git push' },
+    { name: 'dos', idx: 1, state: 'input', inputAt: hace(5), inputKind: 'respuesta' }
+  ] });
+  try {
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: 'dale' });
+    await o.api('DELETE', '/api/robots/dos');
+    const hoy = new Date().toLocaleDateString('sv');
+    let w;
+    await waitFor(async () => { w = (await o.snapshot()).config.stats.waits.find(x => x.day === hoy); return w.total >= 14 * 60e3; }, { what: 'que se sumen las dos esperas' });
+    const s = (await o.snapshot()).config.stats.waits;
+    assert.equal(s.length, 7, 'siete días');
+    assert.ok(Math.abs(w.by.uno - 10 * 60e3) < 5000 && Math.abs(w.by.dos - 5 * 60e3) < 5000, JSON.stringify(w.by));
+    assert.ok(w.kinds.permiso >= 10 * 60e3 - 5000 && w.kinds.respuesta >= 5 * 60e3 - 5000);
+    assert.equal(w.perms['Bash: git push'].n, 1);
+    // Un robot que vuelve a esperar y se le responde enseguida (menos de 3 s) no suma.
+    await o.hook('uno', { hook_event_name: 'Stop', last_assistant_message: '¿Sigo?' });
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: 'sí' });
+    await sleep(300);
+    assert.equal((await o.snapshot()).config.stats.waits.find(x => x.day === hoy).total, w.total);
+  } finally { await o.stop(); }
+});
+
+test('salas: el avance cuenta a los que entregaron (también despedidos) y tus notas del tablero no llegan a los robots', async () => {
+  const o = await startOffice({ maxRobots: 5, env: { OFFICE_RESULT_DEBOUNCE_MS: '300' } });
+  try {
+    await o.api('POST', '/api/robots', libre('jefe'));
+    await turn(o, 'jefe', 'arranca', 'Pido robots');
+    const req = await o.api('POST', '/api/robots/jefe/encargos', { encargos: [{ titulo: 'Uno', encargo: 'a' }, { titulo: 'Dos', encargo: 'b' }] });
+    const ok = await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' });
+    const [k1] = ok.body.launched, id = ok.body.sala;
+    const sala = async () => (await o.snapshot()).salas.find(x => x.id === id);
+    const prog = async () => (await sala()).roster.filter(e => !e.owner && e.delivered).length;
+    assert.equal(await prog(), 0);
+    await turn(o, k1, 'encargo', 'Hecho UNO');
+    await waitFor(async () => await prog() === 1, { what: 'que cuente al que entregó' });
+    await o.api('POST', `/api/salas/${id}/despedir-equipo`);
+    await waitFor(async () => !(await o.snapshot()).robots.some(r => r.name === k1), { what: 'que se vaya' });
+    assert.equal(await prog(), 1, 'despedido, sigue contando como entregado');
+    // Notas: se guardan, tope de 4, se quitan; no tocan el hilo ni le escriben a nadie.
+    const calls = o.claudeCalls().length, hilo = (await sala()).thread.length;
+    for (const t of ['revisar el PR', 'llamar a QA', 'tres', 'cuatro']) assert.equal((await o.api('POST', `/api/salas/${id}/notas`, { text: t })).status, 201);
+    assert.equal((await o.api('POST', `/api/salas/${id}/notas`, { text: 'quinta' })).status, 409);
+    assert.equal((await o.api('POST', `/api/salas/${id}/notas`, { text: '  ' })).status, 400);
+    let s = await sala();
+    assert.deepEqual(s.notes.map(n => n.text), ['revisar el PR', 'llamar a QA', 'tres', 'cuatro']);
+    assert.equal((await o.api('DELETE', `/api/salas/${id}/notas/${s.notes[0].id}`)).status, 200);
+    s = await sala();
+    assert.deepEqual(s.notes.map(n => n.text), ['llamar a QA', 'tres', 'cuatro']);
+    assert.equal(s.thread.length, hilo, 'las notas no van al hilo');
+    assert.equal(o.claudeCalls().length, calls, 'ni se le escriben a los robots');
+  } finally { await o.stop(); }
+});

@@ -172,7 +172,9 @@ function reportToParent(r, lastMessage) {
   pendingResults.set(p.name, b);
   saveState();
   checkTeamDone(r);
-  for (const s of rosterOf(r.name)) writeRoster(s);
+  // Queda anotado en el reparto que entregó: aunque después lo despidas, la sala sigue contándolo en su avance.
+  for (const s of rosterOf(r.name)) { const e = s.roster.find(x => x.name === r.name); if (e) e.delivered = true; writeRoster(s); }
+  saveSalas();
   if (parentBusy(p)) log(p, 'sys', `${r.name} terminó; su resultado te llega apenas termines lo que haces`);
   else scheduleFlush(p.name);
   emit(p);

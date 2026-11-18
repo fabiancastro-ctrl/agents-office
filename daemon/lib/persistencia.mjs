@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { colorSeq, console_, inbox, maxRobots, now, robots, run, RUNS, SESSION, setColorSeq, setMaxRobots, TIMELINE_MAX, WORKSPACE } from './base.mjs';
-import { broadcast, emit } from './estado.mjs';
+import { addWait, broadcast, emit } from './estado.mjs';
 import { pendingResults, spawnQueue } from './equipo.mjs';
 import { criticalOf } from './turno.mjs';
 import { markLost } from './consola.mjs';
@@ -24,7 +24,7 @@ function saveState() {
       robots: [...robots.values()].map(r => ({
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
-        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt,
+        leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, inputKind: r.inputKind || null, inputPerm: r.inputPerm || null, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt,
         parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported, note: r.note || '', salaNote: r.salaNote || ''
       })),
       spawnQueue,
@@ -126,8 +126,21 @@ function loadConv(r) {
   } catch { /* sin conversación guardada: se reconstruye desde el transcript */ }
 }
 
+// Al dejar de esperarte (o al irse mientras esperaba) se anota cuánto esperó y por qué.
+function endWait(r) {
+  if (r.state !== 'input' || !r.inputAt) return;
+  addWait(r.name, r.inputAt, r.inputKind || 'respuesta', r.inputPerm || '');
+  r.inputKind = r.inputPerm = null;
+}
+// «Bash: git push origin x» → «Bash: git push»; «Edit: /ruta/a.go» → «Edit».
+const permKey = t => { const m = String(t || '').match(/^([\w.-]+)(?::\s*(.*))?$/s); if (!m) return 'Permiso'; return m[1] === 'Bash' && m[2] ? `Bash: ${m[2].trim().split(/\s+/).slice(0, 2).join(' ')}` : m[1]; };
 function setState(r, state) {
   if (r.state === state) return;
+  endWait(r);
+  if (state === 'input') {
+    r.inputKind = r.hold || r.needsPermission ? 'permiso' : r.ask ? 'pregunta' : 'respuesta';
+    r.inputPerm = r.hold ? permKey(r.hold.tool) : r.needsPermission ? permKey(r.tool) : null;
+  }
   r.state = state;
   r.inputAt = state === 'input' ? now() : null; // desde cuándo espera tu respuesta (la web cuenta el tiempo)
   // Historial de estados para la línea de tiempo de la oficina (acotado: un robot largo no crece sin fin).
@@ -151,4 +164,4 @@ function roomSeat(room, name, extra = {}) {
   return { type: 'room', room, name, slot, ...extra };
 }
 
-export { convDirty, convFile, flushConvs, freeDesk, log, restore, roomSeat, saveState, setState, taskNote };
+export { convDirty, convFile, endWait, flushConvs, freeDesk, log, restore, roomSeat, saveState, setState, taskNote };

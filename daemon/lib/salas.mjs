@@ -30,7 +30,8 @@ function threadPath(s) { return path.join(SALAS_DIR, s.id, 'HILO.md'); }
 
 function salaView(s) {
   return { id: s.id, name: s.name, key: s.key, folder: s.folder, context: contextPath(s), threadFile: threadPath(s), thread: s.thread.slice(-150), docs: s.docs, createdAt: s.createdAt, auto: !!s.auto, owner: s.owner || null, color: Number.isInteger(s.color) ? s.color : null, purpose: s.purpose || '', done: !!s.done, spend: s.spend || 0,
-    roster: (s.roster || []).map(e => ({ name: e.name, title: e.title || '', state: rosterState(e), owner: !!e.owner })) };
+    roster: (s.roster || []).map(e => ({ name: e.name, title: e.title || '', state: rosterState(e), owner: !!e.owner, delivered: !!(e.delivered || robots.get(e.name)?.reported) })),
+    notes: s.notes || [] };
 }
 function emitSalas() { broadcast({ type: 'salas', salas: salas.map(salaView) }); }
 
@@ -39,6 +40,7 @@ function writeThreadFile(s) {
   fs.writeFileSync(threadPath(s), `# Hilo de la sala «${s.name}»${s.key ? ` (${s.key})` : ''}\n\nMás reciente al final.\n\n${msgs.join('\n')}`);
 }
 
+const NOTES_MAX = 4, NOTE_MAX = 240; // notas tuyas por sala y largo de cada una (el tablero es chico)
 function postThread(s, from, text) {
   const t = String(text ?? '').trim();
   if (!t) throw new Error('Mensaje vacío.');
@@ -278,6 +280,22 @@ async function salasApi(req, res, url, parts) {
       if (req.method === 'POST' && parts[3] === 'exportar') {
         const file = exportSala({ ...s, context: contextPath(s), threadFile: threadPath(s) });
         return send(res, 200, { ok: true, path: file, shown: path.relative(WORKSPACE || RUNS, file) });
+      }
+      // 5 · Tus notas en el tablero: post-its para ti. No van al hilo, ni a CONTEXT.md, ni a los robots (no gastan nada).
+      if (req.method === 'POST' && parts[3] === 'notas') {
+        const text = String((await readBody(req)).text ?? '').trim().slice(0, NOTE_MAX);
+        if (!text) return send(res, 400, { error: 'La nota está vacía.' });
+        if ((s.notes ||= []).length >= NOTES_MAX) return send(res, 409, { error: `El tablero ya tiene ${NOTES_MAX} notas tuyas: quita una primero.` });
+        s.notes.push({ id: crypto.randomBytes(4).toString('hex'), text, at: now() });
+        saveSalas(); emitSalas();
+        return send(res, 201, { ok: true });
+      }
+      if (req.method === 'DELETE' && parts[3] === 'notas' && parts[4]) {
+        const before = (s.notes || []).length;
+        s.notes = (s.notes || []).filter(n => n.id !== parts[4]);
+        if (s.notes.length === before) return send(res, 404, { error: 'Esa nota ya no está.' });
+        saveSalas(); emitSalas();
+        return send(res, 200, { ok: true });
       }
       if (req.method === 'POST' && parts[3] === 'despedir-equipo') {
         const done = inSala.filter(r => r.parent && r.reported);
