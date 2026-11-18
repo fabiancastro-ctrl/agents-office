@@ -93,9 +93,9 @@ function renderPanel() {
   const wasHidden = $('#dialog').hidden;
   const sameView = !wasHidden && PANEL.dataset.view === sel;
   $('#dialog').hidden = false;
-  $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war');
+  $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war' || sel === '@oficina' || sel === '@cierre');
   $('#dlg-card').classList.toggle('tall', !!a || !!sala || sel === '@arch');
-  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@arch' ? archPanel(st.archView) : sel === '@archivo' ? archivoPanel() : sel === '@fama' ? famaPanel() : sel === '@pins' ? pinsPanel() : newPanel();
+  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@arch' ? archPanel(st.archView) : sel === '@archivo' ? archivoPanel() : sel === '@fama' ? famaPanel() : sel === '@cierre' ? cierrePanel() : sel === '@oficina' ? oficinaPanel() : sel === '@pins' ? pinsPanel() : newPanel();
   if (sameView) {
     if (html === PANEL._html) { tickRoutines(); return; }
     const tpl = document.createElement('template'); tpl.innerHTML = html;
@@ -124,6 +124,7 @@ function renderPanel() {
   if (sel === '@search') searchArchive();
   if (sel === '@archivo') loadArchivo();
   if (sel === '@fama') { famaUi.weeks = null; loadFama(); }
+  if (sel === '@oficina') loadSalud();
   if (sel === '@cron') cronOpened();
   if (sel === '@arch' && st.focusRetake) { st.focusRetake = false; const t = $('#retake-in'); t?.scrollIntoView({block: 'center'}); t?.focus(); }
   if (wasHidden) (PANEL.querySelector('#search-in, #rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();

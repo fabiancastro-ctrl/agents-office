@@ -13,7 +13,7 @@
 <body>
 <header class="top">
   <div class="brand">Oficina de Agentes <button class="office-name" id="office-name" type="button" title="Nombre de esta oficina, para distinguirla de otras en el navegador. Clic para cambiarlo.">ponle nombre</button><span class="tag" id="conn">conectando…</span></div>
-  <div class="meta"><span id="meta"></span><button class="weekchip" id="btn-theme" type="button" title="Alterna tema claro y oscuro (el mapa sigue de noche)">tema claro</button><button class="weekchip" id="btn-fz" type="button" title="Tamaño del texto de las tarjetas, las métricas, los paneles y los globos del mapa. Clic para cambiarlo; se guarda en este navegador." aria-label="Tamaño del texto">Aa 100 %</button><button class="weekchip" id="btn-hc" type="button" aria-pressed="false" title="Alto contraste: textos y bordes más marcados, y globos blancos con letra negra en el mapa. Se guarda en este navegador.">contraste</button><button class="weekchip" id="ws-chip" title="Carpeta de trabajo de los robots. Clic para verla o cambiarla."></button><button class="weekchip" id="week-chip" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button></div>
+  <div class="meta"><span id="meta"></span><button class="weekchip" id="btn-theme" type="button" title="Alterna tema claro y oscuro (el mapa sigue de noche)">tema claro</button><button class="weekchip" id="btn-fz" type="button" title="Tamaño del texto de las tarjetas, las métricas, los paneles y los globos del mapa. Clic para cambiarlo; se guarda en este navegador." aria-label="Tamaño del texto">Aa 100 %</button><button class="weekchip" id="btn-hc" type="button" aria-pressed="false" title="Alto contraste: textos y bordes más marcados, y globos blancos con letra negra en el mapa. Se guarda en este navegador.">contraste</button><button class="weekchip" id="btn-salud" type="button" title="Salud, limpieza y respaldo de esta oficina (no gasta tokens)">🩺 oficina</button><button class="weekchip" id="ws-chip" title="Carpeta de trabajo de los robots. Clic para verla o cambiarla."></button><button class="weekchip" id="week-chip" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button></div>
 </header>
 
 <div class="toolbar">
@@ -21,6 +21,7 @@
   <button class="btn door-chip" id="btn-door" hidden title="Encargos que lanzaste con la oficina llena: entran solos, en orden, cuando se libera un escritorio. Clic para verlos o sacar alguno.">🚪 <b id="door-n">0</b> en la puerta</button>
   <button class="btn" id="btn-routine">Rutinas</button>
   <button class="btn" id="btn-inbox">Bandeja</button>
+  <button class="btn" id="btn-cierre" title="Cierre del día: lo que queda abierto (quién te espera, quién terminó, salas, bandeja) para dejar todo en orden">🌙 Cierre</button>
   <button class="btn" id="btn-pins" title="Mensajes que guardaste con 📌 para pegarlos después en Google Chat o Slack (tecla P)">📌 Para enviar <b class="pins-n" id="pins-n" hidden></b></button>
   <button class="btn" id="btn-search" title="Buscar en todas las conversaciones de la oficina (tecla /)">🔎 Buscar</button>
   <button class="btn" id="btn-usage" title="Uso y estado de Claude: límites de tu suscripción y tokens de la oficina">Uso Claude</button>

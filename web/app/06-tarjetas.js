@@ -16,7 +16,7 @@ const spendChip = d => d.spend?.officeWeek ? `<span class="rc-spend${d.spend.hot
 const runningSubs = d => d.subs.filter(s => s.status !== 'done').length;
 const prefGet = (k, def) => { try { return localStorage.getItem('office.' + k) ?? def; } catch { return def; } };
 const prefSet = (k, v) => { try { localStorage.setItem('office.' + k, v); } catch { /* sin almacenamiento */ } };
-const cardUi = {hl: null, reply: {}};
+const cardUi = {hl: null, reply: {}, repo: (() => { try { return localStorage.getItem('office.repoFilter') || ''; } catch { return ''; } })()};
 let cardsRaf = 0;
 // Mini mapa (solo en vista compacta): una tira con los escritorios y quién está en cada uno, con el color de su
 // estado; los robots de rutinas y salas van aparte. Clic abre el robot.
@@ -220,13 +220,29 @@ function cardHtml(a) {
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
     <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
       ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">⏸ sin actividad ${fmtDur(idleMs(d))}</span>` : ''}
-      <span title="Tokens de esta sesión">◆ ${fmtTok(tok)}</span>${spendChip(d)}${d.loop ? `<span class="rc-loop" title="Posible bucle: ${esc(d.loop.who)} repitió lo mismo ${d.loop.n} veces seguidas (${esc(d.loop.what)}). Si es una espera a propósito, ignóralo.">⟳ ×${d.loop.n}</span>` : ''}${subs ? `<span class="rc-subs" title="Subagentes trabajando">⑂ ${subs}</span>` : ''}${docs ? `<span title="Documentos escritos">▤ ${docs}</span>` : ''}</div>
+      ${d.repo ? `<span class="rc-repo" title="Repo donde trabaja (sale de lo que edita o de la carpeta de su consola)">⎇ ${esc(d.repo)}</span>` : ''}<span title="Tokens de esta sesión">◆ ${fmtTok(tok)}</span>${spendChip(d)}${d.loop ? `<span class="rc-loop" title="Posible bucle: ${esc(d.loop.who)} repitió lo mismo ${d.loop.n} veces seguidas (${esc(d.loop.what)}). Si es una espera a propósito, ignóralo.">⟳ ×${d.loop.n}</span>` : ''}${subs ? `<span class="rc-subs" title="Subagentes trabajando">⑂ ${subs}</span>` : ''}${docs ? `<span title="Documentos escritos">▤ ${docs}</span>` : ''}</div>
     ${actions ? `<div class="rc-acts">${actions}</div>` : ''}
   </article>`;
 }
 
+// 2 · Filtro por repo: chips arriba de las tarjetas cuando hay robots en más de un repo. Se recuerda en el navegador;
+// los robots de otros repos se atenúan en el mapa.
+function repoBar(all) {
+  const count = new Map();
+  for (const a of all) { const r = a.data.repo || ''; count.set(r, (count.get(r) || 0) + 1); }
+  const repos = [...count.keys()].filter(Boolean).sort();
+  if (cardUi.repo && !count.has(cardUi.repo === '—' ? '' : cardUi.repo)) cardUi.repo = ''; // ese repo ya no tiene robots
+  if (repos.length + (count.has('') ? 1 : 0) < 2) { cardUi.repo = ''; return ''; }
+  const chip = (v, label, n) => `<button type="button" class="rf-chip${cardUi.repo === v ? ' on' : ''}" data-repo-filter="${esc(v)}" aria-pressed="${cardUi.repo === v}">${esc(label)} <small>${n}</small></button>`;
+  return `<div class="repo-bar" role="toolbar" aria-label="Filtrar por repo">${chip('', 'Todos', all.length)}${repos.map(r => chip(r, '⎇ ' + r, count.get(r))).join('')}${count.has('') ? chip('—', 'sin repo', count.get('')) : ''}</div>`;
+}
+const repoMatch = d => !cardUi.repo || (cardUi.repo === '—' ? !d.repo : d.repo === cardUi.repo);
+function dimByRepo() { for (const a of st.robots.values()) a.el.classList.toggle('repo-dim', !repoMatch(a.data)); }
 function renderCards() {
-  const all = [...st.robots.values()];
+  const everyone = [...st.robots.values()];
+  const bar = repoBar(everyone);
+  const all = everyone.filter(a => repoMatch(a.data));
+  dimByRepo();
   const by = {need: [], work: [], done: []};
   for (const a of all) by[groupOf(a.data)].push(a);
   const t = (a, k) => Date.parse(a.data[k] || 0) || 0;
@@ -238,7 +254,7 @@ function renderCards() {
   const sec = (key, title, list, hint) => list.length ? `<section class="rc-sec sec-${key}" id="sec-${key}"><h4>${title} <small>${list.length}</small></h4>${list.map(cardHtml).join('')}</section>` : (hint ? `<section class="rc-sec sec-${key}" id="sec-${key}"><h4>${title}</h4><p class="rc-empty">${hint}</p></section>` : '');
   const html = !all.length
     ? `<div class="rc-zero"><b>La oficina está vacía</b><p>Lanza un encargo o haz clic en un robot de la sala de descanso.</p><button class="btn primary" data-card-act="new">Nuevo encargo</button></div>`
-    : sec('need', '✋ Te necesitan', by.need, 'Nadie te espera.') + sec('work', '⚙ Trabajando', by.work, '') +
+    : bar + sec('need', '✋ Te necesitan', by.need, 'Nadie te espera.') + sec('work', '⚙ Trabajando', by.work, '') +
       (by.done.length ? `<details class="rc-sec sec-done" id="sec-done"${doneOpen ? ' open' : ''}><summary><h4>✓ Listos <small>${by.done.length}</small></h4></summary>${by.done.map(cardHtml).join('')}</details>` : '');
   if (CARDS._html === html) return;
   CARDS._html = html;
@@ -259,6 +275,13 @@ function highlight(name) {
 }
 CARDS.addEventListener('mouseover', e => { const c = e.target.closest('[data-card]'); if (c) highlight(c.dataset.card); });
 CARDS.addEventListener('mouseleave', () => highlight(null));
+CARDS.addEventListener('click', e => {
+  const f = e.target.closest('[data-repo-filter]'); if (!f) return;
+  e.stopPropagation();
+  cardUi.repo = cardUi.repo === f.dataset.repoFilter ? '' : f.dataset.repoFilter;
+  try { localStorage.setItem('office.repoFilter', cardUi.repo); } catch { /* sin almacenamiento */ }
+  renderCards();
+}, true);
 MAP.addEventListener('mouseover', e => { const r = e.target.closest('.robot:not(.on-break)'); highlight(r ? r.dataset.name : null); });
 CARDS.addEventListener('toggle', e => { if (e.target.id === 'sec-done') prefSet('doneOpen', e.target.open ? '1' : '0'); }, true);
 CARDS.addEventListener('submit', async e => {

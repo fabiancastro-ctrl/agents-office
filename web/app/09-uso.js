@@ -37,7 +37,7 @@ function usagePanel() {
   const qh = st.config?.stats?.quotaHistory || [];
   const hist = qh.length ? `<div class="dlg-sec"><h4>Tu cuota semana a semana</h4><div class="qh">${qh.map((w, i) => { const end = new Date(w.end + 'T12:00:00'); const cur = i === qh.length - 1; return `<div class="qh-c${cur ? ' cur' : ''}" title="Semana que termina el ${end.toLocaleDateString('es', {weekday: 'long', day: 'numeric', month: 'long'})}: ${w.pct} % usado${cur ? ' (en curso)' : ''}"><span class="qh-v">${w.pct}%</span><i class="${w.pct >= 90 ? 'hot' : w.pct >= 70 ? 'warm' : ''}" style="height:${Math.max(3, Math.min(100, w.pct))}%"></i><small>${end.toLocaleDateString('es', {day: 'numeric', month: 'short'})}</small></div>`; }).join('')}</div><p class="note">Lo más alto que marcó <code>/usage</code> en cada semana de tu cuota. La oficina lo relee cada hora mientras está abierta; no gasta tokens.</p></div>` : '';
   // 3 · Tiempo esperándote: los últimos 7 días, quién esperó más hoy y qué permisos hicieron esperar más.
-  const {days: wd, today: wt} = waitDays(), wtop = Math.max(1, ...wd.map(w => w.total)), todayKey = new Date().toLocaleDateString('sv');
+  const {days: wd, today: wt} = waitDays(), wtop = Math.max(10 * 60e3, ...wd.map(w => w.total)), todayKey = new Date().toLocaleDateString('sv');
   const perms = {};
   for (const w of wd) for (const [p, v] of Object.entries(w.perms || {})) { const x = (perms[p] ||= {n: 0, ms: 0}); x.n += v.n; x.ms += v.ms; }
   const permRows = Object.entries(perms).sort((x, y) => y[1].ms - x[1].ms).slice(0, 5);
@@ -47,6 +47,18 @@ function usagePanel() {
       ${whoRows.length ? `<p class="note"><b>Hoy:</b> ${whoRows.map(([n, ms]) => `${esc(n)} ${esc(fmtDur(ms))}`).join(' · ')}${wt ? ` — ${WAIT_KINDS.filter(([k]) => wt.kinds[k]).map(([k, l]) => `${l} ${esc(fmtDur(wt.kinds[k]))}`).join(', ')}` : ''}</p>` : '<p class="note">Hoy ningún robot ha tenido que esperarte.</p>'}
       ${permRows.length ? `<table class="usage wperm"><thead><tr><th>Permisos que más hicieron esperar (7 días)</th><th>Veces</th><th>Espera</th></tr></thead><tbody>${permRows.map(([p, v]) => `<tr><td><code>${esc(p)}</code></td><td>${v.n}</td><td>${esc(fmtDur(v.ms))}</td></tr>`).join('')}</tbody></table><p class="note">Si un permiso se repite y es seguro, puedes darlo fijo en <code>permissions.allow</code> de <code>.claude/settings.json</code> del workspace y los robots dejan de esperarte por él.</p>` : ''}
       <p class="note">Cuenta desde que un robot pide permiso, te pregunta o termina su turno con una pregunta, hasta que le respondes. Lo calcula la oficina; no gasta tokens.</p></div>` : '';
+  // 6 · Horas de trabajo: a qué hora del día trabajan los robots y a qué hora te esperan (últimos 14 días). Se apaga aquí.
+  const hr = st.config?.stats?.hours;
+  const hoursSec = hr ? (() => {
+    const tog = `<label class="check"><input type="checkbox" id="hours-on"${hr.on ? ' checked' : ''}> Registrar las horas de trabajo</label>`;
+    if (!hr.on) return `<div class="dlg-sec"><div class="row between"><h4>Horas de trabajo</h4>${tog}</div><p class="note">Apagado: la oficina no anota a qué hora trabajan los robots. Actívalo para ver la gráfica.</p></div>`;
+    const top = Math.max(1, ...hr.w.map((w, h) => w + hr.i[h])), sum = hr.w.reduce((a, b) => a + b, 0) + hr.i.reduce((a, b) => a + b, 0);
+    const peak = arr => { const m = Math.max(...arr); return m ? arr.indexOf(m) : -1; }, pw = peak(hr.w), pi = peak(hr.i);
+    const hh = h => `${h}–${h + 1} h`;
+    const cols = hr.w.map((w, h) => { const i = hr.i[h]; return `<div class="hr-c${new Date().getHours() === h ? ' cur' : ''}" title="${hh(h)}: ${Math.round(w / 60 * 10) / 10} h-robot trabajando y ${Math.round(i / 60 * 10) / 10} h-robot esperándote (${hr.days} día${hr.days === 1 ? '' : 's'})"><i class="hw" style="height:${w * 100 / top}%"></i><i class="hi" style="height:${i * 100 / top}%"></i>${h % 3 === 0 ? `<small>${h}</small>` : ''}</div>`; }).join('');
+    return `<div class="dlg-sec"><div class="row between"><h4>Horas de trabajo</h4>${tog}</div>
+      ${sum ? `<div class="hr-chart">${cols}</div><p class="note"><span class="hr-k hw"></span> trabajando · <span class="hr-k hi"></span> esperándote · ${hr.days} día${hr.days === 1 ? '' : 's'}${pw >= 0 ? ` · más trabajo: <b>${hh(pw)}</b>` : ''}${pi >= 0 ? ` · más te esperan: <b>${hh(pi)}</b>` : ''}. Lo anota la oficina cada minuto; no gasta tokens.</p>` : '<p class="note">Todavía no hay datos: se anotan cada minuto mientras haya robots en la oficina.</p>'}</div>`;
+  })() : '';
   const rows = st.weeks.map((w, i) => `<tr${i === 0 ? ' class="cur"' : ''}><td>${i === 0 ? 'Esta semana' : 'Semana del ' + weekLabel(w.week)}</td><td>${w.sessions}</td>
       <td>${w.out.toLocaleString('es')}</td><td>${w.in.toLocaleString('es')}</td><td>${w.cacheRead.toLocaleString('es')}</td><td>${w.cacheWrite.toLocaleString('es')}</td></tr>`).join('');
   return `<div class="dlg-head"><h3>Uso y estado de Claude</h3><p>Los límites de tu suscripción salen de <code>/usage</code>; los tokens, de las sesiones que lanzó la oficina (incluidos sus subagentes).</p></div>
@@ -55,6 +67,7 @@ function usagePanel() {
       ${status}
     </div>
     ${waitSec}
+    ${hoursSec}
     ${hist}
     <div class="dlg-sec">
       <h4>Tokens de la oficina por semana</h4>
@@ -62,6 +75,7 @@ function usagePanel() {
     </div>`;
 }
 PANEL.addEventListener('click', e => { if (e.target.closest('[data-usage=refresh]')) loadClaudeStatus(true); });
+PANEL.addEventListener('change', e => { if (e.target.id === 'hours-on') api('POST', '/api/config', {hoursOn: e.target.checked}).then(c => { st.config = c; renderPanel(); }).catch(() => {}); });
 loadWeeks();
 setInterval(loadWeeks, 60000);
 
