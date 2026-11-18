@@ -98,31 +98,69 @@ function declutterBubbles() {
   if (bubbleRaf) return;
   bubbleRaf = requestAnimationFrame(() => {
     bubbleRaf = 0;
-    const list = [...MAP.querySelectorAll('.bubble:not([hidden])')].filter(b => !b.closest('.offview')); // los que no se ven no empujan
-    list.forEach(b => b.style.removeProperty('--by'));
+    const list = [...MAP.querySelectorAll('.bubble:not([hidden])')].filter(b => !b.closest('.offview') && b.offsetParent); // los que no se ven no empujan
+    list.forEach(b => { b.style.transition = 'none'; b.style.removeProperty('--by'); b.closest('.robot')?.classList.remove('bub-flip'); }); // sin transición: se mide donde queda, no a mitad de camino
     // Un globo que se sale por un costado del mapa (robot pegado al borde, letra grande) se corre hacia adentro; la
     // flecha sigue apuntando al robot.
     const wrap = MAP.closest('.map-wrap') || MAP, wr = wrap.getBoundingClientRect(), mr = MAP.getBoundingClientRect();
-    const minX = Math.max(wr.left, mr.left) + 4, maxX = Math.min(wr.right, mr.right) - 4;
+    let minX = Math.max(wr.left, mr.left) + 4;
+    const maxX = Math.min(wr.right, mr.right) - 4;
+    const sb = st.view && MAP.querySelector('.sala-board');
+    if (sb) minX = Math.max(minX, sb.getBoundingClientRect().right + 4); // en la sala, nunca encima del tablero
+    // En la sala, cada globo cabe en el espacio entre dos puestos vecinos de la mesa: así no chocan de lado (el texto
+    // se corta con «…» y completo se ve al pasar el mouse).
+    if (sb) { const gap = (tableSeat(2).x - tableSeat(0).x) * mr.width / 100; MAP.style.setProperty('--sala-bw', Math.max(56, Math.round(gap - 14)) + 'px'); }
     for (const b of list) {
       b.style.removeProperty('--bx');
       const r = b.getBoundingClientRect(), k = b.offsetWidth ? r.width / b.offsetWidth : 1;
       const dx = r.left < minX ? minX - r.left : r.right > maxX ? maxX - r.right : 0;
       if (dx && r.width < maxX - minX) b.style.setProperty('--bx', Math.round(dx / k) + 'px');
     }
-    if (list.length < 2) return;
-    const boxes = list.map(b => ({b, r: b.getBoundingClientRect()})).sort((x, y) => x.r.left - y.r.left);
+    list.forEach(b => b.classList.remove('crowded'));
+    if (list.length < 2) { list.forEach(b => { b.style.transition = ''; }); return; }
+    // En una sala los globos no pueden tapar la cabecera (título y botones) ni salirse por abajo: los de la fila de
+    // arriba suben hasta la cabecera y los de abajo (globo bajo el nombre) bajan hasta el borde de la sala. Si no
+    // caben, se corren de lado; si tampoco, se esconde el más viejo (al pasar el mouse por el robot se ve igual).
+    const sala = st.view && MAP.querySelector('.r-sala.in-sala'), hd = sala?.querySelector('.room-h');
+    const lim = sala ? {top: (hd || sala).getBoundingClientRect().bottom + 3, bottom: sala.getBoundingClientRect().bottom - 3} : null;
+    const boxes = list.map(b => ({b, r: b.getBoundingClientRect(), dir: b.closest('.robot')?.classList.contains('bub-below') ? 1 : -1, at: +b.dataset.at || 0}))
+      .sort((x, y) => sala ? y.at - x.at : x.r.left - y.r.left); // en la sala, los más nuevos se acomodan primero
     const placed = [];
-    for (const {b, r} of boxes) {
-      let up = 0;
+    const hits = (l, r, t, bt) => placed.some(p => l < p.right + 8 && r > p.left - 8 && t < p.bottom + 3 && bt > p.top - 3); // con aire
+    const inside = (t, bt, l, r) => !lim || (t >= lim.top && bt <= lim.bottom && l >= minX && r <= maxX);
+    for (const {b, r, dir} of boxes) {
+      let off = 0, dx = 0, ok = false;
       for (let floor = 0; floor < 3; floor++) {
-        const top = r.top - up, bottom = r.bottom - up;
-        if (!placed.some(p => r.left < p.right + 8 && r.right > p.left - 8 && top < p.bottom + 3 && bottom > p.top - 3)) break; // con aire: que no queden pegados
-        up += r.height + 4;
+        const t = r.top + dir * off, bt = r.bottom + dir * off;
+        if (!inside(t, bt, r.left, r.right)) break;
+        if (!hits(r.left, r.right, t, bt)) { ok = true; break; }
+        off += r.height + 4;
       }
-      if (up) b.style.setProperty('--by', up + 'px');
-      placed.push({left: r.left, right: r.right, top: r.top - up, bottom: r.bottom - up});
+      if (!ok && lim) { // de lado, a la altura de siempre
+        off = 0;
+        for (const shift of [0.6, -0.6, 1.1, -1.1].map(f => Math.round(f * r.width))) {
+          if (inside(r.top, r.bottom, r.left + shift, r.right + shift) && !hits(r.left + shift, r.right + shift, r.top, r.bottom)) { dx = shift; ok = true; break; }
+        }
+      }
+      let rr = r;
+      if (!ok && lim && dir === -1) { // fila de arriba sin lugar: el globo pasa debajo del robot (sobre la mesa)
+        const bot = b.closest('.robot'); bot.classList.add('bub-flip');
+        rr = b.getBoundingClientRect(); off = 0; dx = 0;
+        for (let floor = 0; floor < 3 && !ok; floor++) {
+          const t = rr.top + off, bt = rr.bottom + off;
+          if (!inside(t, bt, rr.left, rr.right)) break;
+          if (!hits(rr.left, rr.right, t, bt)) ok = true; else off += rr.height + 4;
+        }
+        if (ok) { const k = b.offsetWidth ? rr.width / b.offsetWidth : 1; if (off) b.style.setProperty('--by', Math.round(off / k) + 'px'); placed.push({left: rr.left, right: rr.right, top: rr.top + off, bottom: rr.bottom + off}); continue; }
+        bot.classList.remove('bub-flip'); rr = r;
+      }
+      if (!ok && lim) { b.classList.add('crowded'); continue; }
+      const k = b.offsetWidth ? r.width / b.offsetWidth : 1;
+      if (off) b.style.setProperty('--by', Math.round(off / k) + 'px');
+      if (dx) b.style.setProperty('--bx', Math.round((parseFloat(b.style.getPropertyValue('--bx')) || 0) + dx / k) + 'px');
+      placed.push({left: r.left + dx, right: r.right + dx, top: r.top + dir * off, bottom: r.bottom + dir * off});
     }
+    void MAP.offsetWidth; list.forEach(b => { b.style.transition = ''; }); // ya en su lugar: vuelve la transición
   });
 }
 setInterval(() => { if (MAP.querySelectorAll('.robot:not(.offview) .bubble:not([hidden])').length) declutterBubbles(); }, 700);
@@ -144,16 +182,16 @@ function paint(a) {
   const tool = shownTool(a), urg = urgency(d);
   // 10 · Antigüedad: medalla de veterano con más de 1 día en la oficina, de oro con más de 7.
   const age = Date.now() - (Date.parse(d.startedAt || '') || Date.now());
-  a.el.className = ['robot', d.parent ? 'flyer' : '', d.loop ? 'looping' : '', age > 7 * 86400e3 ? 'vet2' : age > 86400e3 ? 'vet1' : '', `st-${shownState}`, tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : '', d.consoleLost ? 'lost' : ''].filter(Boolean).join(' ');
+  a.el.className = ['robot', d.parent ? 'flyer' : '', d.loop ? 'looping' : '', age > 7 * 86400e3 ? 'vet2' : age > 86400e3 ? 'vet1' : '', `st-${shownState}`, onHold(d) ? 'onhold' : '', tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : '', d.consoleLost ? 'lost' : ''].filter(Boolean).join(' ');
   // Pide robots nuevos: cartel propio (no «LISTO») para que se vea que espera tu aprobación.
   // Al revivirlo: se endereza y los ojos vuelven a encender (solo la primera vez que deja de estar caído).
   if (a.wasLost && !d.consoleLost) { a.el.classList.add('poweron'); setTimeout(() => a.el.classList.remove('poweron'), 1600); }
   a.wasLost = !!d.consoleLost;
-  a.sign.textContent = d.consoleLost ? '⚠ sin consola' : d.spawnReq ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?` : d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
+  a.sign.textContent = d.consoleLost ? '⚠ sin consola' : d.spawnReq ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?` : onHold(d) ? `⏳${d.bg.length > 1 ? ' ' + d.bg.length : ''}` : d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
   const text = d.consoleLost ? 'Se cerró mi consola: revíveme' : d.summaryPending ? 'Escribo mi resumen y me voy' : d.spawnReq ? `Quiero lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: apruébalo en mi ventana` : d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
   if (text && text !== a.lastBubble) {
     a.lastBubble = text;
-    a.bubble.textContent = text; a.bubble.title = text; a.bubble.hidden = false;
+    a.bubble.textContent = text; a.bubble.title = text; a.bubble.hidden = false; a.bubble.dataset.at = Date.now();
     clearTimeout(a.bt); a.bt = setTimeout(() => { a.bubble.hidden = true; declutterBubbles(); }, d.state === 'input' ? 12000 : 5000);
     declutterBubbles();
   }

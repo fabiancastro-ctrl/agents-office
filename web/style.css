@@ -1682,3 +1682,17 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .room-h .out-need{background:#c93f50;border-color:#ef7f8a;color:#fff;font-family:var(--body);font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:outbtn 1.6s ease-in-out infinite}
 @keyframes outbtn{50%{background:#e2566a}}
 @media (prefers-reduced-motion:reduce){.r-sala.in-sala.outside-need{animation:none;box-shadow:inset 0 0 0 3px rgba(239,90,100,.9)}.room-h .out-need{animation:none}}
+
+/* Globo que no cabe en la sala sin tapar la cabecera: se esconde; al pasar el mouse por su robot se ve igual. */
+.bubble.crowded{visibility:hidden}
+.robot:hover .bubble.crowded{visibility:visible;z-index:7}
+#map.sala-view .robot.sv .bubble{max-width:var(--sala-bw,200px)}
+#map.sala-view .robot.sv:hover .bubble{max-width:340px}
+.robot.bub-flip .bubble{bottom:auto!important;top:calc(100% + 20px + var(--by, 0px))}
+.robot.bub-flip .bubble::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--ink)}
+html.hc .robot.bub-flip .bubble::after{border-top-color:transparent;border-bottom-color:#fff}
+.robot.bub-flip{z-index:450!important} /* delante de la mesa (z ≈ 405) mientras su globo va debajo; detrás de la fila de abajo */
+
+/* En espera: terminó su turno pero tiene algo corriendo de fondo. Ticket pequeño en lugar de LISTO. */
+.st-done.onhold .sign{background:#c8d8f8;color:#1d2d44;border-color:#3d5a8a;font-size:11px;padding:0 4px;animation:none}
+.pill.p-hold,.rc.g-hold .pill{background:color-mix(in srgb,var(--sky) 22%,transparent);color:var(--sky);border-color:color-mix(in srgb,var(--sky) 45%,transparent)}

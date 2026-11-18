@@ -4,7 +4,7 @@
 const CARDS = $('#cards'), KPIS = $('#kpis');
 const GROUP_OF = {input: 'need', working: 'work', walking: 'work', delegating: 'work', idle: 'work', done: 'done'};
 // Un robot que pide robots nuevos te necesita aunque siga trabajando.
-const groupOf = d => d.spawnReq || d.consoleLost ? 'need' : GROUP_OF[d.state] || 'work';
+const groupOf = d => d.spawnReq || d.consoleLost ? 'need' : onHold(d) ? 'hold' : GROUP_OF[d.state] || 'work';
 const fmtDur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
 const tokOf = d => (d.usage?.out || 0) + (d.usage?.in || 0) + (d.usage?.cacheWrite || 0);
 // Gasto del robot (lo calcula el daemon cada minuto): su parte del gasto de la OFICINA en la semana de tu cuota (la
@@ -203,6 +203,7 @@ function cardHtml(a) {
     : d.ask ? `Te hizo ${d.ask.questions.length === 1 ? 'una pregunta' : `${d.ask.questions.length} preguntas`}: ${d.ask.questions.map(q => q.header || q.question).join(' · ')}`
     : d.state === 'input'
     ? (perm ? `Pide permiso: ${d.hold ? d.hold.tool : (d.activity || 'una herramienta')}` : (plainMd(d.bubble) || 'Tiene una pregunta para ti'))
+    : onHold(d) ? `⏳ En espera: ${holdText(d)}`
     : d.state === 'done' ? (plainMd(d.bubble) || 'Terminó su turno') : (d.activity || (d.state === 'walking' ? 'Llegando a su escritorio' : 'Pensando…'));
   let actions = '';
   if (d.consoleLost) actions = `<button class="btn primary sm" data-card-act="revive">↻ Revivir</button><button class="btn sm" data-card-act="open">Ver</button><button class="btn sm danger" data-card-act="kill">Despedir</button>`;
@@ -243,7 +244,7 @@ function renderCards() {
   const bar = repoBar(everyone);
   const all = everyone.filter(a => repoMatch(a.data));
   dimByRepo();
-  const by = {need: [], work: [], done: []};
+  const by = {need: [], work: [], hold: [], done: []};
   for (const a of all) by[groupOf(a.data)].push(a);
   const t = (a, k) => Date.parse(a.data[k] || 0) || 0;
   by.need.sort((x, y) => t(x, 'inputAt') - t(y, 'inputAt')); // el que más lleva esperando, primero
@@ -254,7 +255,7 @@ function renderCards() {
   const sec = (key, title, list, hint) => list.length ? `<section class="rc-sec sec-${key}" id="sec-${key}"><h4>${title} <small>${list.length}</small></h4>${list.map(cardHtml).join('')}</section>` : (hint ? `<section class="rc-sec sec-${key}" id="sec-${key}"><h4>${title}</h4><p class="rc-empty">${hint}</p></section>` : '');
   const html = !all.length
     ? `<div class="rc-zero"><b>La oficina está vacía</b><p>Lanza un encargo o haz clic en un robot de la sala de descanso.</p><button class="btn primary" data-card-act="new">Nuevo encargo</button></div>`
-    : bar + sec('need', '✋ Te necesitan', by.need, 'Nadie te espera.') + sec('work', '⚙ Trabajando', by.work, '') +
+    : bar + sec('need', '✋ Te necesitan', by.need, 'Nadie te espera.') + sec('work', '⚙ Trabajando', by.work, '') + sec('hold', '⏳ En espera', by.hold, '') +
       (by.done.length ? `<details class="rc-sec sec-done" id="sec-done"${doneOpen ? ' open' : ''}><summary><h4>✓ Listos <small>${by.done.length}</small></h4></summary>${by.done.map(cardHtml).join('')}</details>` : '');
   if (CARDS._html === html) return;
   CARDS._html = html;

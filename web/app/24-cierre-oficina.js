@@ -8,7 +8,8 @@ function cierrePanel() {
   const ago = iso => { const t = Date.parse(iso || ''); return t ? fmtDur(Date.now() - t) : '–'; };
   const busyKids = d => (d.kids || []).some(k => k.state === 'queued' || (k.name && !st.robots.get(k.name)?.data.reported));
   const need = ds.filter(d => d.state === 'input' || d.spawnReq || d.consoleLost);
-  const done = ds.filter(d => d.state === 'done' && !d.spawnReq && !d.consoleLost);
+  const hold = ds.filter(onHold);
+  const done = ds.filter(d => d.state === 'done' && !d.spawnReq && !d.consoleLost && !onHold(d));
   const canGo = done.filter(d => !busyKids(d));
   const work = ds.filter(d => ['working', 'delegating', 'walking'].includes(d.state));
   const salasOpen = st.salas.map(s => ({s, p: salaProgress(s), n: salaRobots(s.id).length}));
@@ -16,12 +17,13 @@ function cierrePanel() {
   const open = d => `<button type="button" class="btn sm" data-cz-open="${esc(d.name)}">Abrir</button>`;
   const sec = (title, n, body, empty) => `<section class="dlg-sec"><h4>${title}${n ? ` <small>${n}</small>` : ''}</h4>${n ? body : `<p class="note">${empty}</p>`}</section>`;
   const unread = unseen(), door = st.door.length, pinsN = st.pins.length;
-  const clear = !need.length && !done.length && !work.length && !st.salas.length && !unread && !door && !pinsN;
+  const clear = !need.length && !done.length && !hold.length && !work.length && !st.salas.length && !unread && !door && !pinsN;
   return `<div class="dlg-head"><h3>🌙 Cierre del día</h3><p>Lo que queda abierto en la oficina, para dejar todo en orden antes de irte. Sale de lo que la oficina ya sabe: no gasta tokens.</p></div>
     ${clear ? '<section class="dlg-sec"><p class="cz-ok">✓ Todo en orden: no queda nada abierto.</p></section>' : ''}
     ${sec('✋ Te esperan', need.length, `<div class="list">${need.map(d => row(d, d.consoleLost ? 'consola caída' : d.spawnReq ? 'pide robots' : d.ask ? 'te hizo una pregunta' : d.hold || d.needsPermission ? 'pide permiso' : 'espera tu respuesta', `${d.inputAt ? `<span class="pill p-input">${fmtDur(Date.now() - Date.parse(d.inputAt))}</span>` : ''}${open(d)}`)).join('')}</div>`, 'Nadie te espera.')}
     ${sec('✓ Listos', done.length, `<div class="list">${done.map(d => row(d, `terminó hace ${ago(d.lastEventAt || d.timeline?.at(-1)?.at)}${d.docs.length ? ` · ▤ ${d.docs.length}` : ''}${busyKids(d) ? ' · sus hijos siguen' : ''}`, `${open(d)}${busyKids(d) ? '' : `<button type="button" class="btn sm danger" data-cz-kill="${esc(d.name)}" title="Dar de baja sin resumen (sus documentos pendientes pasan a la bandeja)">Despedir</button>`}`)).join('')}</div>
       ${canGo.length > 1 ? `<div class="row cz-bulk"><button type="button" class="btn sm danger${cierreUi.armed ? ' armed' : ''}" data-cz-killall>${cierreUi.armed ? `¿Seguro? Clic otra vez para despedir a ${canGo.length}` : `👋 Despedir a los ${canGo.length} listos`}</button><span class="note">Sin resumen. Los que tienen hijos trabajando se quedan.</span></div>` : ''}`, 'Nadie terminó y quedó esperando.')}
+    ${sec('⏳ En espera', hold.length, `<div class="list">${hold.map(d => row(d, esc(holdText(d)), open(d))).join('')}</div><p class="note">Dejaron algo corriendo de fondo (una shell, un monitor, un despertador): siguen solos cuando eso termine.</p>`, 'Nadie dejó tareas de fondo corriendo.')}
     ${sec('⚙ Siguen trabajando', work.length, `<p class="note">${work.map(d => `<b>${esc(d.name)}</b>${d.repo ? ` (⎇ ${esc(d.repo)})` : ''}`).join(' · ')} — seguirán aunque cierres la página.</p>`, 'Nadie está trabajando.')}
     ${sec('🚪 Salas en curso', salasOpen.length, `<div class="list">${salasOpen.map(({s, p, n}) => `<div class="item cz-row"><div class="meta-i"><b>${esc(s.name)}</b><div>${n} robot${n === 1 ? '' : 's'}${p ? ` · ${p.ok}/${p.n} entregaron` : ''}${s.done ? ' · ✓ terminó' : ''}${s.notes?.length ? ` · 📌 ${s.notes.length} nota${s.notes.length === 1 ? '' : 's'} tuya${s.notes.length === 1 ? '' : 's'}` : ''}</div></div><div class="row"><button type="button" class="btn sm" data-cz-sala="${esc(s.id)}">Entrar</button></div></div>`).join('')}</div>`, 'No hay salas abiertas.')}
     <section class="dlg-sec"><h4>📥 Pendientes tuyos</h4><div class="cz-mini">
@@ -43,7 +45,7 @@ PANEL.addEventListener('click', async e => {
     if (!cierreUi.armed) { cierreUi.armed = true; clearTimeout(cierreUi.t); cierreUi.t = setTimeout(() => { cierreUi.armed = false; if (st.selected === '@cierre') renderPanel(); }, 3000); return renderPanel(); }
     cierreUi.armed = false; all.disabled = true;
     const ds = [...st.robots.values()].map(a => a.data);
-    const go = ds.filter(d => d.state === 'done' && !d.spawnReq && !d.consoleLost && !(d.kids || []).some(k2 => k2.state === 'queued' || (k2.name && !st.robots.get(k2.name)?.data.reported)));
+    const go = ds.filter(d => d.state === 'done' && !d.spawnReq && !d.consoleLost && !onHold(d) && !(d.kids || []).some(k2 => k2.state === 'queued' || (k2.name && !st.robots.get(k2.name)?.data.reported)));
     let n = 0;
     for (const d of go) { try { await api('DELETE', `/api/robots/${d.name}`); n++; } catch { /* toast ya mostrado */ } }
     toast(`Despedí a ${n} robot${n === 1 ? '' : 's'}. ¡Buen cierre!`);

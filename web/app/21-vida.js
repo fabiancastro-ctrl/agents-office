@@ -1,15 +1,16 @@
 /* ---------- vida de la oficina: café y cartero ---------- */
 // No gastan cuota: son solo animaciones de la página.
 
-// M · Visita al café: un robot con LISTO hace más de 2 min va de vez en cuando a la cafetera de la sala de descanso
+// M · Visita al café: un robot con LISTO (o en espera) hace más de 2 min va de vez en cuando a la cafetera de la sala de descanso
 // con su taza y vuelve. Si le escribes (deja de estar LISTO) regresa enseguida. Uno a la vez, cada robot cada 12 min.
 const COFFEE_SPOT = {x: 50.4, y: 18};
 const coffee = {last: new Map(), busy: false};
+const quietMs = d => Date.now() - (Date.parse(d.lastEventAt || d.timeline?.at(-1)?.at || '') || Date.now()); // sin actividad desde
 setInterval(() => {
   if (st.view || document.hidden || coffee.busy) return;
   const now = Date.now();
   const cand = [...st.robots.values()].filter(a => a.data.state === 'done' && !a.data.spawnReq && !a.data.place.sala && a.queueSlot == null
-    && !a.el.classList.contains('moving') && !a.el.classList.contains('offview') && sleepMs(a.data) > 2 * 60e3 && now - (coffee.last.get(a.data.name) || 0) > 12 * 60e3);
+    && !a.el.classList.contains('moving') && !a.el.classList.contains('offview') && quietMs(a.data) > 2 * 60e3 && now - (coffee.last.get(a.data.name) || 0) > 12 * 60e3);
   if (!cand.length || Math.random() < .4) return;
   const a = cand[Math.floor(Math.random() * cand.length)];
   coffee.last.set(a.data.name, now); coffee.busy = true;

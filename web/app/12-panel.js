@@ -312,7 +312,7 @@ async function revive(name, btn) {
   try { await api('POST', `/api/robots/${name}/revivir`); toast(`${name} volvió con su sesión`); } catch { if (btn) btn.disabled = false; }
 }
 const SLEEP_MS = 2 * 3600e3;
-const sleepMs = d => d.state === 'done' && !d.spawnReq ? Date.now() - (Date.parse(d.lastEventAt || d.timeline?.at(-1)?.at || '') || Date.now()) : 0;
+const sleepMs = d => d.state === 'done' && !d.spawnReq && !onHold(d) ? Date.now() - (Date.parse(d.lastEventAt || d.timeline?.at(-1)?.at || '') || Date.now()) : 0;
 const isSleepy = d => sleepMs(d) >= SLEEP_MS;
 
 function titleEditor(d) {

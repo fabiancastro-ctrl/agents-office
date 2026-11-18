@@ -5,7 +5,12 @@ const COLORS = ROBOT_COLORS; // web/robot-art.js
 const STATE_LABEL = {idle: 'en espera', walking: 'llegando', working: 'trabajando', delegating: 'con subagentes', input: 'te necesita', done: 'terminó'};
 // Una sola etiqueta por estado para tarjeta, ventana y tarjeta flotante.
 // Un robot de tarea libre que terminó sigue vivo esperando tu siguiente orden; uno de skill espera que lo despidas.
-const stateLabel = d => d.state === 'done' ? (d.kind === 'libre' ? 'esperando orden' : 'terminó') : STATE_LABEL[d.state] || d.state;
+// En espera: terminó su turno pero dejó algo corriendo de fondo (una shell que vigila un CI, un Monitor, un despertador
+// de /loop o un cron). No está LISTO: cuando eso termine, sigue solo.
+const onHold = d => d.state === 'done' && !d.spawnReq && !d.consoleLost && d.bg?.length > 0;
+const BG_KIND = {shell: 'shell de fondo', monitor: 'monitor', despertador: 'despertador', cron: 'tarea programada'};
+const holdText = d => { const e = d.bg[0]; return `${e.what} (${BG_KIND[e.kind] || e.kind}${d.bg.length > 1 ? ` y ${d.bg.length - 1} más` : ''})`; };
+const stateLabel = d => onHold(d) ? 'en espera' : d.state === 'done' ? (d.kind === 'libre' ? 'esperando orden' : 'terminó') : STATE_LABEL[d.state] || d.state;
 // Resúmenes de una línea (burbuja, tarjeta): sin símbolos de Markdown. La conversación completa sí se formatea.
 // Claude Code envuelve lo que pegas en su consola en <pasted_content id="…">…</pasted_content id="…">. No es HTML
 // válido: el Markdown mostraba el cierre como texto y se comía el formato del primer párrafo. Se quita la envoltura.

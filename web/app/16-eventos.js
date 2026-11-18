@@ -290,7 +290,7 @@ $('#week-chip').addEventListener('click', () => $('#btn-usage').click());
 // Despide a todos los que terminaron; como la ✕ de cada robot, pide un segundo clic para confirmar.
 $('#btn-dismiss').addEventListener('click', async () => {
   const b = $('#btn-dismiss');
-  const done = [...st.robots.values()].filter(a => a.data.state === 'done').map(a => a.data.name);
+  const done = [...st.robots.values()].filter(a => a.data.state === 'done' && !onHold(a.data)).map(a => a.data.name);
   if (!b.classList.contains('armed')) {
     b.classList.add('armed'); b.textContent = `¿Despedir ${done.join(', ')}?`;
     clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove('armed'); renderMeta(); }, 4000);
