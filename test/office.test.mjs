@@ -313,6 +313,57 @@ test('gasto por robot: el «% sem.» usa la semana de la cuota, la misma del emp
   } finally { await o.stop(); }
 });
 
+test('detector de bucles: marca ⟳ a la 4.ª repetición idéntica, se apaga al cambiar de acción y al cerrar el turno', async () => {
+  const o = await startOffice();
+  try {
+    await o.api('POST', '/api/robots', libre('uno'));
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: 'x' });
+    const bash = cmd => o.hook('uno', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: Math.random().toString(36), tool_input: { command: cmd } });
+    for (let k = 0; k < 3; k++) await bash('npm test');
+    assert.equal((await o.robot('uno')).loop, null, 'tres veces todavía no');
+    await bash('npm test');
+    const r = await o.robot('uno');
+    assert.equal(r.loop.n, 4);
+    assert.match(r.loop.what, /npm test/);
+    assert.ok(r.log.some(l => /Posible bucle/.test(l.text)));
+    await bash('npm run lint');
+    assert.equal((await o.robot('uno')).loop, null, 'cambió de acción: ya salió');
+    for (let k = 0; k < 4; k++) await bash('ls');
+    assert.ok((await o.robot('uno')).loop);
+    await o.hook('uno', { hook_event_name: 'Stop', last_assistant_message: 'listo' });
+    assert.equal((await o.robot('uno')).loop, null, 'al cerrar el turno se limpia');
+  } finally { await o.stop(); }
+});
+
+test('exportar sala, muro de la fama e historial de la cuota', async () => {
+  const o = await startOffice({ env: { OFFICE_SPEND_TICK_MS: '300' }, files: { 'config.json': JSON.stringify({ quota: { weekEnd: Date.now() + 86400e3, history: { '2026-11-18': 60, '2026-11-04': 30, '2026-11-11': 75 } } }) } });
+  try {
+    // Exportar una sala: .md en docs/salas con porqué, contexto e hilo, y se puede abrir.
+    const s = await o.api('POST', '/api/salas', { name: 'Épica de pagos', key: 'TECH-9', context: '# Contexto\n\nEl saldo vive en wallet_balances.' });
+    await o.api('POST', `/api/salas/${s.body.id}/hilo`, { text: 'Arranco por los puertos' });
+    const ex = await o.api('POST', `/api/salas/${s.body.id}/exportar`);
+    assert.equal(ex.status, 200);
+    assert.ok(ex.body.path.startsWith(path.join(o.ws, 'docs', 'salas')));
+    const md = fs.readFileSync(ex.body.path, 'utf8');
+    assert.match(md, /# Sala «Épica de pagos» \(TECH-9\)/);
+    assert.match(md, /wallet_balances/);
+    assert.match(md, /## Hilo[\s\S]*Arranco por los puertos/);
+    assert.equal((await o.api('GET', `/api/doc?path=${encodeURIComponent(ex.body.path)}`)).status, 200);
+    // Muro de la fama: 4 semanas, con el que más gastó en la actual.
+    await o.api('POST', '/api/robots', libre('gasta'));
+    const tr = path.join(o.base, 'gasta.jsonl');
+    fs.writeFileSync(tr, JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(), message: { id: 'g1', usage: { input_tokens: 0, output_tokens: 777 }, content: [] } }) + '\n');
+    await o.hook('gasta', { hook_event_name: 'SessionStart', source: 'startup', session_id: 's-gasta', transcript_path: tr });
+    const wall = await waitFor(async () => { const w = (await o.api('GET', '/api/fama')).body.weeks; return w[0].name === 'gasta' && w; }, { what: 'el muro de la fama' });
+    assert.equal(wall.length, 4);
+    assert.equal(wall[0].current, true);
+    assert.equal(wall[0].tokens, 777);
+    assert.equal(wall[1].name, null, 'la semana anterior no gastó nadie');
+    // Historial de la cuota: en orden por semana.
+    assert.deepEqual((await o.snapshot()).config.stats.quotaHistory.map(x => x.pct), [30, 75, 60]);
+  } finally { await o.stop(); }
+});
+
 test('oficina llena: tu encargo espera en la puerta, se puede sacar y entra solo al liberarse un escritorio', async () => {
   const o = await startOffice({ maxRobots: 1 });
   try {

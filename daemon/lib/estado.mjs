@@ -9,7 +9,7 @@ import { saveState } from './persistencia.mjs';
 import { kidsOf } from './equipo.mjs';
 import { archive, criticalOf, requestOf } from './turno.mjs';
 import { convDir } from './exportar.mjs';
-import { contextPath, salas, salasArchive, threadPath } from './salas.mjs';
+import { contextPath, salaExportDir, salas, salasArchive, threadPath } from './salas.mjs';
 
 /* ---------- estado ---------- */
 
@@ -54,7 +54,7 @@ function view(r, withLog = false) {
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
     parent: r.parent || null, reported: !!r.reported, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending, consoleLost: !!r.consoleLost,
     permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null,
-    spend: r.spend || null, crown: crownOf(r.name)
+    spend: r.spend || null, crown: crownOf(r.name), loop: r.loop || null
   };
   if (withLog) v.log = r.log.slice(-150);
   return v;
@@ -74,7 +74,8 @@ function knownDoc(p) {
   const abs = path.resolve(WORKSPACE, String(p));
   const known = inbox.some(i => i.path === abs) || [...robots.values()].some(r => r.docs.some(d => d.path === abs))
     || salas.some(s => contextPath(s) === abs || threadPath(s) === abs) || salasArchive.some(s => s.context === abs || s.threadFile === abs) || archive.some(a => a.docs.includes(abs) || a.summaryPath === abs)
-    || (abs.startsWith(convDir() + path.sep) && abs.endsWith('.md')); // conversaciones exportadas
+    || (abs.startsWith(convDir() + path.sep) && abs.endsWith('.md')) // conversaciones exportadas
+    || (abs.startsWith(salaExportDir() + path.sep) && abs.endsWith('.md')); // salas exportadas
   return known ? abs : null;
 }
 
@@ -96,9 +97,22 @@ function rollWeek() {
   try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
   return !first;
 }
+// Tareas por día (para la pizarra de la semana de la sala de descanso): se guardan los últimos 21 días. La primera vez
+// arranca con las de hoy.
+function dayCounts() {
+  if (!stats.days) stats.days = stats.day ? { [stats.day]: stats.today || 0 } : {};
+  return stats.days;
+}
 function statsView() {
   rollWeek();
-  return { total: stats.total, reviews: stats.reviews, today: stats.day === localDay() ? stats.today : 0, week: stats.week.count, pot: stats.week.n, repotAt: stats.repotAt || null, weekTo: quotaPeriods().weekTo };
+  const per = quotaPeriods(), days = dayCounts();
+  // Los 7 días de la semana de la cuota, desde el día en que se renovó.
+  const week = Array.from({ length: 7 }, (_, i) => { const day = new Date(per.weekFrom + i * 86400e3).toLocaleDateString('sv'); return { day, n: days[day] || 0 }; });
+  // % usado de la cuota semanal (de /usage) para la cafetera; si se midió antes de la última renovación, ya volvió a 0.
+  const q = readConfig().quota || {}, measured = Number(q.weekPctAt) || 0;
+  const quotaPct = Number.isFinite(q.weekPct) && measured ? (measured < per.weekFrom ? 0 : q.weekPct) : null;
+  return { total: stats.total, reviews: stats.reviews, today: stats.day === localDay() ? stats.today : 0, week: stats.week.count, pot: stats.week.n, repotAt: stats.repotAt || null, weekTo: per.weekTo, days: week, quotaPct, quotaAt: measured || null,
+    quotaHistory: Object.entries(q.history || {}).sort().map(([end, pct]) => ({ end, pct })) };
 }
 setInterval(() => { if (rollWeek()) broadcast({ type: 'config', config: configView() }); }, 60e3);
 function bumpStats(r) {
@@ -106,6 +120,9 @@ function bumpStats(r) {
   if (stats.day !== d) { stats.day = d; stats.today = 0; }
   rollWeek();
   stats.total++; stats.today++; stats.week.count++;
+  const days = dayCounts();
+  days[d] = (days[d] || 0) + 1;
+  for (const k of Object.keys(days).sort().slice(0, -21)) delete days[k]; // solo los últimos 21 días
   if (/review|audit|security/i.test(String(r.skill || ''))) stats.reviews++;
   try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
   broadcast({ type: 'config', config: configView() });

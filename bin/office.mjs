@@ -105,7 +105,9 @@ function summary(o) {
     robots: robots.length, working: count(['working', 'walking', 'delegating']), need: count(['input']), done: count(['done']),
     // Igual que la bandeja de la oficina: los archivos de carpetas temporales no cuentan como nuevos.
     inbox: (state.inbox || []).filter(i => i.status !== 'visto' && !isTempDoc(i.path)).length,
-    orphans: orphans.length, orphansBusy: orphans.filter(r => r.busy).length
+    orphans: orphans.length, orphansBusy: orphans.filter(r => r.busy).length,
+    // Para el edificio: el estilo de la oficina (su piso se ve igual) y cuándo se renovó su cuota (fuegos artificiales).
+    mapTheme: cfg.mapTheme || 'moderna', repotAt: (readJson(path.join(o.data, 'estadisticas.json')) || {}).repotAt || null
   };
 }
 

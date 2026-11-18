@@ -6,7 +6,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { ATTACH_DIR, ATTACH_MAX_BYTES, clients, console_, inbox, MAX_ROBOTS_LIMIT, PORT, robots, run, setMaxRobots, setWorkspace, WEB, WORKSPACE } from './base.mjs';
 import { broadcast, configView, emit, knownDoc, MAP_THEMES, TEXT_DOC, view } from './estado.mjs';
-import { claudeStatus, fame, loadSessions, officeUsage } from './uso.mjs';
+import { claudeStatus, fame, fameWall, loadSessions, officeUsage } from './uso.mjs';
 import { OFFICE_NAME_MAX, officeName, saveConfig, saveWorkspace, setOfficeName, setupView, workspaceInfo } from './carpeta.mjs';
 import { log, restore, saveState } from './persistencia.mjs';
 import { doorView, drainSpawnQueue, equipoRobotApi, launchOrQueue, puertaApi, resumeResults, spawnQueue } from './equipo.mjs';
@@ -167,6 +167,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, configView());
     }
     if (req.method === 'GET' && url.pathname === '/api/usage') return send(res, 200, { weeks: officeUsage() });
+    if (req.method === 'GET' && url.pathname === '/api/fama') return send(res, 200, { weeks: fameWall(4) });
     if (req.method === 'GET' && url.pathname === '/api/claude-status') return send(res, 200, await claudeStatus(url.searchParams.get('refresh') === '1'));
     if (req.method === 'GET' && url.pathname === '/api/skills') return send(res, 200, { skills: listSkills() });
     // Repos de la carpeta de trabajo (primer nivel con .git): el autocompletado del chat los sugiere.

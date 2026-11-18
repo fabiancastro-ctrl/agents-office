@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, describeTool, EVENTS_FILE, HOLD_TOOLS, NEVER_ALLOW, now, pending, robots, trunc } from './base.mjs';
-import { emit } from './estado.mjs';
+import { broadcast, emit } from './estado.mjs';
 import { registerSession } from './uso.mjs';
 import { log, setState, taskNote } from './persistencia.mjs';
 import { finishTurn, trackDoc } from './turno.mjs';
@@ -96,6 +96,27 @@ function subFor(r, body) {
   return s;
 }
 
+// Detector de bucles: si el robot (o uno de sus subagentes) usa la MISMA herramienta con los MISMOS datos varias veces
+// seguidas, probablemente está dando vueltas y gastando tokens sin avanzar. Se marca con ⟳ y se avisa una vez.
+// No gasta nada: solo compara los avisos de herramientas que ya llegan. Puede ser una espera a propósito (un sondeo).
+const LOOP_N = Number(process.env.OFFICE_LOOP_N) || 4;
+function trackLoop(r, sub, body, what) {
+  const who = sub ? `sub:${sub.type}:${sub.desc}` : 'robot';
+  let sig;
+  try { sig = `${body.tool_name}|${JSON.stringify(body.tool_input ?? {}).slice(0, 4000)}`; } catch { return; }
+  r.loopTrack ||= {};
+  const t = r.loopTrack[who];
+  if (t && t.sig === sig) t.n++; else r.loopTrack[who] = { sig, n: 1 };
+  const n = r.loopTrack[who].n;
+  if (n >= LOOP_N) {
+    const first = !r.loop || r.loop.who !== who;
+    r.loop = { who: sub ? `su subagente ${sub.type}` : r.name, what: trunc(what, 140), n, since: r.loop?.since || now() };
+    if (first) {
+      log(r, 'sys', `⟳ Posible bucle: ${r.loop.who} repitió lo mismo ${n} veces seguidas (${r.loop.what})`);
+      broadcast({ type: 'notice', text: `⟳ ${r.name} puede estar en un bucle: ${r.loop.who === r.name ? 'repitió' : r.loop.who + ' repitió'} lo mismo ${n} veces seguidas (${r.loop.what}). Si es una espera a propósito, ignóralo.` });
+    }
+  } else if (r.loop && r.loop.who === (sub ? `su subagente ${sub.type}` : r.name)) r.loop = null; // cambió de acción: ya salió
+}
 async function onHook(name, body, via = '', closers = []) {
   // Pregunta: la atiende el hook largo (via=ask). Si llega por el general, espera un momento por si llega el largo;
   // los robots lanzados antes de este cambio solo tienen el general y siguen como antes (9 minutos).
@@ -134,6 +155,7 @@ async function onHook(name, body, via = '', closers = []) {
       else if (/^\s*<task-notification>/.test(p)) log(r, 'bg', taskNote(p));
       else log(r, 'user', p);
       r.needsPermission = false;
+      if (r.loop) { r.loop = null; r.loopTrack = {}; } // le escribiste o le llegó algo: arranca de cero
       setState(r, 'working');
       break;
     }
@@ -141,6 +163,7 @@ async function onHook(name, body, via = '', closers = []) {
     case 'PreToolUse': {
       if (internalHelper) break;
       const what = describeTool(body.tool_name, body.tool_input);
+      trackLoop(r, sub, body, what);
       if (sub) {
         sub.activity = what;
         emit(r);
@@ -197,6 +220,7 @@ async function onHook(name, body, via = '', closers = []) {
     }
 
     case 'Stop':
+      r.loop = null; r.loopTrack = {}; // terminó su turno: ya no está dando vueltas
       pumpTranscript(r);
       finishTurn(r, body.last_assistant_message);
       break;

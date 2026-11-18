@@ -3,8 +3,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { CLAUDE_BIN, console_, now, robots, run, RUNS, SESSION, WORKSPACE } from './base.mjs';
-import { broadcast, emit, fmtK } from './estado.mjs';
+import { CLAUDE_BIN, clients, console_, now, robots, run, RUNS, SESSION, WORKSPACE } from './base.mjs';
+import { broadcast, configView, emit, fmtK } from './estado.mjs';
 import { readConfig, saveConfig } from './carpeta.mjs';
 import { log } from './persistencia.mjs';
 import { lookFromName } from './equipo.mjs';
@@ -132,6 +132,29 @@ function quotaPeriods(t = Date.now()) {
   };
 }
 let fame = { employee: null, sessionTop: null, period: null };
+// 9 · Muro de la fama: el que más gastó en cada una de las últimas n semanas de la cuota (la actual incluida).
+// Se calcula solo cuando abres la vista (lupa del cuadro), sobre los transcripts: no gasta cuota.
+function topSpender(from, to) {
+  const by = new Map();
+  for (const s of officeSessions.values()) {
+    if (!s.robot) continue;
+    for (const f of sessionFiles(s.transcript)) {
+      const msgs = fileUsage(f);
+      if (msgs) for (const { at, u } of msgs.values()) { const ms = Date.parse(at); if (ms >= from && ms < to) by.set(s.robot, (by.get(s.robot) || 0) + spendTok(u)); }
+    }
+  }
+  const top = [...by].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  return top && top[1] > 0 ? top : null;
+}
+function fameWall(n = 4) {
+  const per = quotaPeriods();
+  return Array.from({ length: n }, (_, k) => {
+    const from = per.weekFrom - k * WEEK_MS, to = from + WEEK_MS, t = topSpender(from, to), name = t?.[0] || null;
+    const live = name && robots.get(name), gone = name && !live ? [...archive].reverse().find(a => a.name === name) : null, src = live || gone;
+    return { from: new Date(from).toISOString(), to: new Date(to).toISOString(), current: k === 0, name, tokens: t?.[1] || 0,
+      color: src?.color ?? 0, look: src?.look || (name ? lookFromName(name) : null), present: !!live, title: live?.title || gone?.title || '' };
+  });
+}
 // Lo que gastó toda la oficina en la semana de la cuota: base del «% sem.» de cada robot (así cuadra con el empleado).
 let quotaWeekTotal = 0;
 function computeFame(per) {
@@ -315,18 +338,31 @@ function parseClaudeStatus(text) {
     limits.push({ title: toSpanish(clean[i - 1] || ''), pct: Number(m[1]), resets: /^Resets/.test(raw) ? toSpanish(raw) : '' });
     const at = /^Resets/.test(raw) ? resetAt(raw) : null;
     if (at && /^Current session$/.test(clean[i - 1] || '')) ends.sessionEnd = at;
-    if (at && /^Current week \(all models\)$/.test(clean[i - 1] || '')) ends.weekEnd = at;
+    if (at && /^Current week \(all models\)$/.test(clean[i - 1] || '')) { ends.weekEnd = at; ends.weekPct = Number(m[1]); ends.weekPctAt = Date.now(); }
   });
-  if (ends.sessionEnd || ends.weekEnd) saveConfig({ quota: { ...(readConfig().quota || {}), ...ends } });
+  if (ends.sessionEnd || ends.weekEnd) {
+    const q = { ...(readConfig().quota || {}), ...ends };
+    // 3 · Historial: el % más alto leído en cada semana de la cuota (clave = día en que termina), últimas 16 semanas.
+    if (ends.weekEnd && Number.isFinite(ends.weekPct)) {
+      const k = new Date(ends.weekEnd).toLocaleDateString('sv'), h = { ...(q.history || {}) };
+      h[k] = Math.max(h[k] || 0, ends.weekPct);
+      q.history = Object.fromEntries(Object.entries(h).sort().slice(-16));
+    }
+    saveConfig({ quota: q });
+    broadcast({ type: 'config', config: configView() });
+  }
   const start = clean.findIndex(l => /^What's contributing/.test(l));
   const detail = start < 0 ? '' : lines.slice(start).filter(l => l.trim() && !/^\s*(Esc to|f to fix)/.test(l)).map(toSpanish).join('\n');
   return { limits, detail, at: now() };
 }
 
+// La cafetera de la sala de descanso muestra cuánto queda de tu cuota semanal: se relee /usage (comando local de
+// Claude Code, no gasta tokens) una vez por hora mientras haya alguien con la oficina abierta.
+setInterval(() => { if (clients.size && WORKSPACE) claudeStatus(true).catch(() => {}); }, Number(process.env.OFFICE_USAGE_REFRESH_MS) || 3600e3);
 async function claudeStatus(refresh) {
   if (statusCache && !refresh && Date.now() - Date.parse(statusCache.at) < 60_000) return statusCache;
   statusPending ||= readClaudeStatus().then(s => (statusCache = s)).finally(() => { statusPending = null; });
   return statusPending;
 }
 
-export { claudeStatus, crownOf, fame, loadSessions, officeUsage, quotaPeriods, registerSession, updateTeamSpend };
+export { claudeStatus, crownOf, fame, fameWall, loadSessions, officeUsage, quotaPeriods, registerSession, updateTeamSpend };

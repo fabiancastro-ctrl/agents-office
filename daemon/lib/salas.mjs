@@ -222,7 +222,36 @@ Contexto compartido: ${contextPath(s)}${s.folder ? ` · documentos en ${path.joi
 }
 
 // Rutas de la API: salas abiertas y cerradas. Las llama http.mjs en orden; devuelven algo (true) si atendieron la petición.
+// Exportar una sala completa (abierta o cerrada) a un .md en docs/salas/ de la carpeta de trabajo, para compartirla:
+// porqué, reparto, contexto e hilo. No gasta cuota: junta lo que ya está en sus archivos.
+const salaExportDir = () => path.join(WORKSPACE || RUNS, 'docs', 'salas');
+function exportSala(meta) {
+  const dir = path.dirname(meta.context), read = f => { try { return fs.readFileSync(f, 'utf8').trim(); } catch { return ''; } };
+  const strip = t => t.replace(/^# .*\n+/, '').replace(/^_Lo mantiene la oficina[^\n]*\n+/m, '');
+  const day = d => d ? new Date(d).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const parts = [`# Sala «${meta.name}»${meta.key ? ` (${meta.key})` : ''}`, '',
+    `_Creada ${day(meta.createdAt)}${meta.closedAt ? ` · cerrada ${day(meta.closedAt)}` : ' · abierta'} · exportada ${day(Date.now())}_`, ''];
+  if (meta.purpose) parts.push('## Por qué se creó', '', meta.purpose, '');
+  const roster = read(path.join(dir, 'REPARTO.md'));
+  if (roster) parts.push('## Reparto', '', strip(roster), '');
+  const ctx = read(meta.context);
+  if (ctx) parts.push('## Contexto', '', strip(ctx).replace(/^## /gm, '### '), '');
+  const thread = read(meta.threadFile);
+  const msgs = thread.split(/\n(?=### )/).slice(1).join('\n').trim();
+  parts.push('## Hilo', '', msgs || '_Sin mensajes._', '');
+  fs.mkdirSync(salaExportDir(), { recursive: true });
+  const slug = String(meta.name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'sala';
+  const file = path.join(salaExportDir(), `${now().slice(0, 10)}-${slug}.md`);
+  fs.writeFileSync(file, parts.join('\n'));
+  return file;
+}
 async function salasApi(req, res, url, parts) {
+    if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'salas-cerradas' && parts[2] && parts[3] === 'exportar') {
+      const e = salasArchive.find(x => x.id === parts[2]);
+      if (!e) return send(res, 404, { error: 'Esa sala ya no está en el archivo.' });
+      const file = exportSala(e);
+      return send(res, 200, { ok: true, path: file, shown: path.relative(WORKSPACE || RUNS, file) });
+    }
     if (req.method === 'GET' && url.pathname === '/api/salas-cerradas') return url.searchParams.get('q') ? send(res, 200, { results: searchClosedSalas(url.searchParams.get('q')) }) : send(res, 200, { salas: salasArchive });
     if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'salas-cerradas' && parts[2]) {
       // Borra una sala cerrada: sale del archivo y su carpeta (CONTEXT.md, HILO.md) va a la Papelera, de donde se recupera.
@@ -246,6 +275,10 @@ async function salasApi(req, res, url, parts) {
       const inSala = [...robots.values()].filter(r => r.place.sala === s.id);
       // «Despedir equipo»: da de baja (sin resumen) a los hijos de la sala que ya entregaron su resultado. Los que siguen
       // trabajando y el padre se quedan; si el padre queda solo, vuelve a su escritorio y la sala pasa al archivo.
+      if (req.method === 'POST' && parts[3] === 'exportar') {
+        const file = exportSala({ ...s, context: contextPath(s), threadFile: threadPath(s) });
+        return send(res, 200, { ok: true, path: file, shown: path.relative(WORKSPACE || RUNS, file) });
+      }
       if (req.method === 'POST' && parts[3] === 'despedir-equipo') {
         const done = inSala.filter(r => r.parent && r.reported);
         for (const r of done) await removeRobot(r, 'equipo despedido');
@@ -278,4 +311,4 @@ async function salasApi(req, res, url, parts) {
     }
 }
 
-export { archiveSala, checkTeamDone, closeEmptyTeamSalas, contextPath, createSala, emitSalas, ownerBackIfAlone, postThread, rosterOf, rosterPath, rosterState, salaPreamble, salas, SALAS_ARCH_FILE, SALAS_DIR, salasApi, salasArchive, salaView, saveSalas, searchClosedSalas, teamSala, threadPath, toTrash, writeRoster };
+export { archiveSala, checkTeamDone, closeEmptyTeamSalas, contextPath, createSala, emitSalas, exportSala, ownerBackIfAlone, postThread, rosterOf, rosterPath, rosterState, salaExportDir, salaPreamble, salas, SALAS_ARCH_FILE, SALAS_DIR, salasApi, salasArchive, salaView, saveSalas, searchClosedSalas, teamSala, threadPath, toTrash, writeRoster };
