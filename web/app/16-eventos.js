@@ -19,6 +19,11 @@ MAP.addEventListener('click', e => {
     api('POST', `/api/salas/${sdm.dataset.salaDismiss}/despedir-equipo`).then(r => toast(r.despedidos.length ? `Despedí a ${r.despedidos.join(', ')}${r.quedan ? ` · quedan ${r.quedan} en la sala` : ''}` : 'No había nadie que ya entregara.')).catch(() => {}).finally(() => { sdm.disabled = false; sdm.classList.remove('armed'); });
     return;
   }
+  // 5 · Tus notas en el tablero de la sala.
+  if (e.target.closest('[data-sala-note-add]')) { board.noteFor = board.noteFor === st.view ? null : st.view; return renderBoard(); }
+  const nd = e.target.closest('[data-sala-note-del]');
+  if (nd) { nd.disabled = true; api('DELETE', `/api/salas/${st.view}/notas/${nd.dataset.salaNoteDel}`).catch(() => { nd.disabled = false; }); return; }
+  if (e.target.closest('[data-sala-note-form]')) return;
   if (e.target.closest('[data-sala-ctx]')) { const s = st.salas.find(x => x.id === st.view); if (s) showDoc(s.context); return; }
   const so = e.target.closest('[data-sala-open]'); if (so) return select('@sala:' + so.dataset.salaOpen);
   const kx = e.target.closest('.kill-x'); if (kx) { e.stopPropagation(); return quickKill(kx, kx.closest('.robot').dataset.name); }
@@ -29,7 +34,22 @@ MAP.addEventListener('click', e => {
   const sala = e.target.closest('[data-sala]'); if (sala) return enterSala(sala.dataset.sala);
   const room = e.target.closest('[data-room]'); if (room) select('@' + room.dataset.room);
 });
+async function saveSalaNote(form) {
+  const ta = form.querySelector('textarea'), text = ta.value.trim(), id = st.view;
+  if (!text || !id) return;
+  form.querySelector('button').disabled = true;
+  try { await api('POST', `/api/salas/${id}/notas`, {text}); board.noteFor = null; ta.value = ''; renderBoard(); }
+  catch { form.querySelector('button').disabled = false; }
+}
+MAP.addEventListener('submit', e => { const f = e.target.closest('[data-sala-note-form]'); if (f) { e.preventDefault(); saveSalaNote(f); } });
 MAP.addEventListener('keydown', e => {
+  const nf = e.target.closest?.('[data-sala-note-form]');
+  if (nf) {
+    e.stopPropagation();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveSalaNote(nf); }
+    if (e.key === 'Escape') { e.preventDefault(); board.noteFor = null; renderBoard(); }
+    return;
+  }
   if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.classList.contains('robot')) return;
   e.preventDefault();
   if (e.target.classList.contains('on-break')) assignFromBreak(e.target.dataset.name); else select(e.target.dataset.name);

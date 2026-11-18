@@ -7,7 +7,8 @@ function renderSalaChips() {
     // Sus robots no se ven en la oficina: si alguno te necesita, la sala lo avisa.
     const need = bots.filter(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost).length;
     const done = s.done && !need; // equipo terminado: todos entregaron
-    return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala"><i class="dot" style="background:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}"></i><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? ` · ⚠ ${need} te necesita${need === 1 ? '' : 'n'}` : done ? ' · ✓ terminó' : ` · ${s.thread.length} msj`}</small></span></div>`;
+    const prog = salaProgress(s); // 3 · avance del equipo, visible sin entrar
+    return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><i class="dot" style="background:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}"></i><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? ` · ⚠ ${need} te necesita${need === 1 ? '' : 'n'}` : done ? ' · ✓ terminó' : prog ? ` · ${prog.ok}/${prog.n} entregaron` : ` · ${s.thread.length} msj`}</small></span>${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
   }).join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';
 }
 
@@ -16,6 +17,7 @@ function salasPanel() {
     const last = s.thread[s.thread.length - 1];
     return `<div class="rt-card" data-sala="${esc(s.id)}" role="button" tabindex="0" style="cursor:pointer">
       <div class="top-r"><b>${esc(s.name)}</b>${s.key ? `<span class="pill p-idle">${esc(s.key)}</span>` : ''}</div>
+      ${(p => p ? `<div class="sub-h">📦 ${p.ok}/${p.n} entregaron<i class="rt-prog${p.ok === p.n ? ' full' : ''}" style="--p:${Math.round(p.ok * 100 / p.n)}%"></i></div>` : '')(salaProgress(s))}
       <div class="sub-h">${salaRobots(s.id).length} robots · ${s.thread.length} mensajes · ${s.docs.length} documentos${s.folder ? ' · ' + esc(s.folder) : ''}</div>
       ${last ? `<div class="sub-h">Último: ${esc(last.from)} · ${esc(last.text.slice(0, 120))}</div>` : ''}
     </div>`;

@@ -100,6 +100,16 @@ function declutterBubbles() {
     bubbleRaf = 0;
     const list = [...MAP.querySelectorAll('.bubble:not([hidden])')].filter(b => !b.closest('.offview')); // los que no se ven no empujan
     list.forEach(b => b.style.removeProperty('--by'));
+    // Un globo que se sale por un costado del mapa (robot pegado al borde, letra grande) se corre hacia adentro; la
+    // flecha sigue apuntando al robot.
+    const wrap = MAP.closest('.map-wrap') || MAP, wr = wrap.getBoundingClientRect(), mr = MAP.getBoundingClientRect();
+    const minX = Math.max(wr.left, mr.left) + 4, maxX = Math.min(wr.right, mr.right) - 4;
+    for (const b of list) {
+      b.style.removeProperty('--bx');
+      const r = b.getBoundingClientRect(), k = b.offsetWidth ? r.width / b.offsetWidth : 1;
+      const dx = r.left < minX ? minX - r.left : r.right > maxX ? maxX - r.right : 0;
+      if (dx && r.width < maxX - minX) b.style.setProperty('--bx', Math.round(dx / k) + 'px');
+    }
     if (list.length < 2) return;
     const boxes = list.map(b => ({b, r: b.getBoundingClientRect()})).sort((x, y) => x.r.left - y.r.left);
     const placed = [];
@@ -115,7 +125,7 @@ function declutterBubbles() {
     }
   });
 }
-setInterval(() => { if (MAP.querySelectorAll('.robot:not(.offview) .bubble:not([hidden])').length > 1) declutterBubbles(); }, 700);
+setInterval(() => { if (MAP.querySelectorAll('.robot:not(.offview) .bubble:not([hidden])').length) declutterBubbles(); }, 700);
 
 // Urgencia de un robot que te espera: 1 recién (ámbar), 2 desde 5 min (naranja), 3 desde 15 min (rojo).
 const URG_MS = [5 * 60e3, 15 * 60e3];

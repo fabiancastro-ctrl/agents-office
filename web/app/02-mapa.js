@@ -201,7 +201,7 @@ function salaRoute(f, t) {
   return pts;
 }
 // Tablero de la sala: por qué se creó, su CONTEXT.md y las últimas notas del hilo.
-const board = {ctx: '', at: 0, for: null, loading: false};
+const board = {ctx: '', at: 0, for: null, loading: false, noteFor: null};
 async function loadBoard(force) {
   const s = st.salas.find(x => x.id === st.view);
   if (!s || board.loading || (!force && board.for === s.id && Date.now() - board.at < 15000)) return renderBoard();
@@ -220,16 +220,59 @@ function renderBoard() {
   const db = MAP.querySelector('[data-sala-dismiss]');
   if (db && !db.classList.contains('armed')) { db.hidden = !ready; db.textContent = `👋 Despedir a los que entregaron (${ready})`; }
   const ctx = board.for === s.id ? board.ctx.replace(/^# .*\n+/, '').replace(/^_Sala creada por la oficina.*_\n+/m, '') : '';
-  const notes = s.thread.slice(-4).reverse();
+  // 5 · Tus notas primero (📌, solo para ti); el resto del corcho, las últimas del hilo (al menos 2).
+  const mine = s.notes || [], notes = s.thread.slice(-Math.max(2, 4 - mine.length)).reverse();
   const keep = el.querySelector('.sb-ctx')?.scrollTop || 0;
-  el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></div>
+  // Si estabas escribiendo una nota, el tablero se redibuja sin perder lo escrito ni el foco.
+  const ta = el.querySelector('.sb-nf textarea'), draft = ta ? {v: ta.value, f: document.activeElement === ta, a: ta.selectionStart, b: ta.selectionEnd} : null;
+  const prog = salaProgress(s);
+  el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><span><button type="button" class="btn sm ghost" data-sala-note-add ${mine.length >= 4 ? 'disabled title="Ya hay 4 notas tuyas: quita una con su ×"' : 'title="Pega una nota tuya en el tablero: es solo para ti, no se manda a los robots ni gasta tokens"'}>📌 Nota</button> <button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></span></div>
     <div class="sb-why" title="Por qué se creó esta sala">${esc(why)}</div>
     ${s.spend ? `<div class="sb-spend" title="Lo que gastaron todos los que pasaron por esta sala (padre e hijos, también los que ya se fueron, con sus subagentes) desde que se armó. Entrada + salida + caché escrita, como los KPI. Se recalcula cada minuto y no gasta cuota.">💸 Gasto del equipo: <b>${fmtTok(s.spend)}</b> tokens desde que se armó</div>` : ''}
-    ${s.roster?.length ? `<div class="sb-team"><b>Reparto</b>${s.roster.map(e => `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}"><code>${esc(e.name)}</code> ${esc(e.title || '')} <i>${esc(e.state)}</i></span>`).join('')}</div>` : ''}
+    ${board.noteFor === s.id ? `<form class="sb-nf" data-sala-note-form><textarea rows="2" maxlength="240" placeholder="Tu nota (Enter pega, Esc cancela)…"></textarea><button class="btn sm">Pegar</button></form>` : ''}
+    ${s.roster?.length ? `<div class="sb-team"><b>Reparto${prog ? ` · ${prog.ok}/${prog.n} entregaron` : ''}</b>${prog ? `<i class="sb-prog${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%"></i>` : ''}${s.roster.map(e => `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}"><code>${esc(e.name)}</code> ${esc(e.title || '')} <i>${esc(e.state)}</i></span>`).join('')}</div>` : ''}
     <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
-    <div class="sb-notes">${notes.length ? notes.map((m, i) => `<div class="sb-note n${i}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 110))}</div>`).join('') : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
+    <div class="sb-notes">${mine.map(n => `<div class="sb-note mine" title="Tu nota (${esc(new Date(n.at).toLocaleString('es', {day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'}))}): solo la ves tú"><button type="button" class="sb-nx" data-sala-note-del="${esc(n.id)}" title="Quitar la nota" aria-label="Quitar la nota">×</button><b>📌 Tú</b>${esc(n.text)}</div>`).join('')}${notes.length ? notes.map((m, i) => `<div class="sb-note n${i}${salaMail.flying.has(m.id) ? ' arriving' : ''}" data-mid="${esc(m.id)}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 110))}</div>`).join('') : mine.length ? '' : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
   el.querySelector('.sb-ctx').scrollTop = keep;
+  const nta = el.querySelector('.sb-nf textarea');
+  if (nta && draft) { nta.value = draft.v; if (draft.f) { nta.focus(); nta.setSelectionRange(draft.a, draft.b); } } else if (nta && !draft) nta.focus();
   drawDoodles(s);
+  flyNewMail(s);
+}
+// 3 · Avance del equipo: cuántos hijos ya entregaron su resultado (aunque después los hayas despedido).
+function salaProgress(s) {
+  const kids = (s.roster || []).filter(e => !e.owner && e.state !== 'no se lanzó');
+  return kids.length ? {n: kids.length, ok: kids.filter(e => e.delivered).length} : null;
+}
+// 6 · Mensajes que viajan: cuando alguien escribe en el hilo de la sala que estás viendo, un sobrecito vuela de él (o
+// de la puerta, si escribiste tú o ya no está) al corcho del tablero, y ahí aparece su post-it.
+const salaMail = {seen: new Map(), flying: new Set()};
+function flyNewMail(s) {
+  const seen = salaMail.seen.get(s.id), ids = s.thread.map(m => m.id);
+  salaMail.seen.set(s.id, new Set(ids));
+  if (!seen) return; // primera vez que se dibuja esta sala: nada «nuevo» que volar
+  const fresh = s.thread.filter(m => !seen.has(m.id)).slice(-3);
+  if (!fresh.length || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const mr = MAP.getBoundingClientRect(); if (!mr.width) return;
+  const pct = r => ({x: (r.left + r.width / 2 - mr.left) * 100 / mr.width, y: (r.top + r.height / 2 - mr.top) * 100 / mr.height});
+  fresh.forEach((m, i) => {
+    const note = MAP.querySelector(`.sb-note[data-mid="${CSS.escape(m.id)}"]`); if (!note) return;
+    const bot = st.robots.get(m.from), from = bot && !bot.el.classList.contains('offview') ? bot.el.querySelector('svg') || bot.el : MAP.querySelector('.sala-door');
+    if (!from) return;
+    const a = pct(from.getBoundingClientRect()), b = pct(note.getBoundingClientRect());
+    salaMail.flying.add(m.id); note.classList.add('arriving');
+    const env = document.createElement('div');
+    env.className = 'sv sala-mail'; /* sv: en la vista de sala solo se ve lo que la lleva */ env.textContent = '✉️'; env.setAttribute('aria-hidden', 'true');
+    env.style.left = a.x + '%'; env.style.top = a.y + '%';
+    MAP.appendChild(env);
+    const mid = {left: (a.x + b.x) / 2 + '%', top: Math.min(a.y, b.y) - 12 + '%'};
+    const anim = env.animate([{left: a.x + '%', top: a.y + '%', transform: 'translate(-50%,-50%) scale(.6) rotate(-10deg)', opacity: 0}, {offset: .12, opacity: 1}, {...mid, transform: 'translate(-50%,-50%) scale(1.15) rotate(8deg)', offset: .5}, {left: b.x + '%', top: b.y + '%', transform: 'translate(-50%,-50%) scale(.7) rotate(0)', opacity: 1}], {duration: 1100, delay: i * 350, easing: 'ease-in-out', fill: 'backwards'});
+    anim.onfinish = () => {
+      env.remove(); salaMail.flying.delete(m.id);
+      const n = MAP.querySelector(`.sb-note[data-mid="${CSS.escape(m.id)}"]`);
+      if (n) { n.classList.remove('arriving'); n.classList.add('landed'); setTimeout(() => n.classList.remove('landed'), 700); }
+    };
+  });
 }
 // Garabatos de la pizarra: uno por mensaje del hilo (los últimos 16), con la forma y el color que salen del id del
 // mensaje (siempre el mismo dibujo para el mismo mensaje). Los nuevos se dibujan con una animación de trazo.

@@ -103,6 +103,32 @@ $('#btn-notify').addEventListener('click', async () => {
 });
 syncNotifyBtn();
 
+// 3 · Tiempo esperándote: lo guardado por el daemon (esperas que ya terminaron) más las que siguen abiertas ahora.
+function waitDays() {
+  const days = (st.config?.stats?.waits || []).map(w => ({...w, by: {...w.by}, kinds: {...w.kinds}}));
+  const todayKey = new Date().toLocaleDateString('sv'), today = days.find(w => w.day === todayKey);
+  if (today) {
+    const start = new Date(todayKey + 'T00:00:00').getTime();
+    for (const a of st.robots.values()) {
+      const d = a.data; if (d.state !== 'input' || !d.inputAt) continue;
+      const ms = Date.now() - Math.max(start, Date.parse(d.inputAt) || Date.now()); if (ms <= 0) continue;
+      const kind = d.hold || d.needsPermission ? 'permiso' : d.ask ? 'pregunta' : 'respuesta';
+      today.total += ms; today.by[d.name] = (today.by[d.name] || 0) + ms; today.kinds[kind] = (today.kinds[kind] || 0) + ms;
+    }
+  }
+  return {days, today};
+}
+const WAIT_KINDS = [['permiso', 'permisos'], ['pregunta', 'preguntas'], ['respuesta', 'respuestas']];
+const topWaiter = w => Object.entries(w?.by || {}).sort((x, y) => y[1] - x[1])[0];
+const fmtDurHtml = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? `${m}<small>min</small>` : `${Math.floor(m / 60)}<small>h</small>${String(m % 60).padStart(2, '0')}`; };
+function waitKpi() {
+  const {today} = waitDays(); if (!today) return '';
+  const top = topWaiter(today), kinds = WAIT_KINDS.filter(([k]) => today.kinds[k]).map(([k, l]) => `${l}: ${fmtDur(today.kinds[k])}`).join(' · ');
+  const title = today.total ? `Tiempo que tus robots pasaron hoy esperándote (permisos, preguntas o tu respuesta).${top ? ` El que más esperó: ${top[0]} (${fmtDur(top[1])}).` : ''}${kinds ? ` ${kinds}.` : ''} Clic: el detalle de la semana.` : 'Hoy ningún robot ha tenido que esperarte. Clic: el detalle de la semana.';
+  const hot = today.total >= 3600e3 ? ' hot' : today.total >= 1200e3 ? ' warm' : '';
+  return `<button type="button" class="kpi k-wait${today.total ? ' on' : ''}${hot}" data-kpi="usage" title="${esc(title)}"><b>${fmtDurHtml(today.total)}</b><span>esperándote hoy</span></button>`;
+}
+setInterval(() => { if (!document.hidden) renderKpis(); }, 30e3); // las esperas abiertas siguen sumando
 function renderKpis() {
   const ds = [...st.robots.values()].map(a => a.data);
   const count = g => ds.filter(d => groupOf(d) === g).length;
@@ -119,6 +145,7 @@ function renderKpis() {
     k(`k-need${need ? ' on' : ''}`, need, need === 1 ? 'te necesita' : 'te necesitan', '', 'need') +
     k(`k-subs${subs ? ' on' : ''}`, subs, 'subagentes activos', '', 'work') +
     k(`k-done${done ? ' on' : ''}`, done, done === 1 ? 'listo' : 'listos', '', 'done') +
+    waitKpi() +
     k(`k-inbox${unseen() ? ' on' : ''}`, unseen(), 'nuevos en bandeja', '', 'inbox') +
     k('k-tok', fmtTok(live), 'tokens en curso', '', 'usage') +
     k('k-tok', week ? fmtTok(weekTok) : '–', 'tokens esta semana', '', 'usage') +
