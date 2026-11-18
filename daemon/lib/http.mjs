@@ -18,6 +18,7 @@ import { validAttachments } from './adjuntos.mjs';
 import { listSkills, openConsole, pane, pressKey, say } from './tmux.mjs';
 import { resetRepoIndex, routines, routineView, rutinasApi } from './rutinas.mjs';
 import { salas, salasApi, salaView } from './salas.mjs';
+import { mantenimientoApi } from './mantenimiento.mjs';
 
 /* ---------- http ---------- */
 
@@ -156,6 +157,7 @@ const server = http.createServer(async (req, res) => {
         if (!MAP_THEMES.includes(body.mapTheme)) return send(res, 400, { error: 'Estilo de oficina desconocido.' });
         saveConfig({ mapTheme: body.mapTheme }); // estilo del mapa: es de la oficina, no del navegador
       }
+      if (body.hoursOn !== undefined) saveConfig({ hoursOn: !!body.hoursOn }); // 6 · registrar las horas de trabajo
       if (body.maxRobots !== undefined) {
         const n = Number(body.maxRobots);
         if (!Number.isInteger(n) || n < 1 || n > MAX_ROBOTS_LIMIT) return send(res, 400, { error: `El tope debe estar entre 1 y ${MAX_ROBOTS_LIMIT}.` });
@@ -177,6 +179,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { repos });
     }
     if (await rutinasApi(req, res, url, parts)) return;
+    if (await mantenimientoApi(req, res, url)) return;
     if (await salasApi(req, res, url, parts)) return;
     if (await frecuentesApi(req, res, url, parts)) return;
     if (await despedidosApi(req, res, url, parts)) return;

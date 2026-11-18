@@ -20,7 +20,7 @@ function registerSession(e) {
   if (e.session_id && e.transcript_path && !officeSessions.has(e.session_id)) officeSessions.set(e.session_id, { transcript: e.transcript_path, robot: e.robot });
 }
 function loadSessions() {
-  for (const f of fs.readdirSync(RUNS).filter(f => /^events.*\.jsonl$/.test(f))) {
+  for (const f of fs.readdirSync(RUNS).filter(f => /^(events.*|sesiones)\.jsonl$/.test(f))) { // sesiones.jsonl: lo rescatado de los eventos limpiados
     for (const line of fs.readFileSync(path.join(RUNS, f), 'utf8').split('\n')) {
       if (!line.includes('"SessionStart"')) continue;
       try { registerSession(JSON.parse(line)); } catch { /* linea cortada */ }

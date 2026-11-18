@@ -25,7 +25,7 @@ function saveState() {
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
         leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, inputKind: r.inputKind || null, inputPerm: r.inputPerm || null, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt,
-        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported, note: r.note || '', salaNote: r.salaNote || ''
+        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported, note: r.note || '', salaNote: r.salaNote || '', repo: r.repo || null
       })),
       spawnQueue,
       pendingResults: [...pendingResults]

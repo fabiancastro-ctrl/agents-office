@@ -2,7 +2,8 @@
 // Parte de daemon/daemon.mjs, que carga los módulos de daemon/lib/ en orden y arranca la oficina.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, describeTool, EVENTS_FILE, HOLD_TOOLS, NEVER_ALLOW, now, pending, robots, trunc } from './base.mjs';
+import path from 'node:path';
+import { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, describeTool, EVENTS_FILE, HOLD_TOOLS, NEVER_ALLOW, now, pending, robots, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { registerSession } from './uso.mjs';
 import { log, setState, taskNote } from './persistencia.mjs';
@@ -10,6 +11,24 @@ import { finishTurn, trackDoc } from './turno.mjs';
 import { pumpTranscript } from './transcript.mjs';
 
 /* ---------- hooks ---------- */
+
+// 2 · En qué repo trabaja cada robot (para el filtro de las tarjetas): sale de lo que edita o crea y, si no, de la carpeta
+// donde está su consola. Repo = carpeta de primer nivel del workspace con .git, o <repo> en worktrees/<tarea>/<repo>.
+const isRepo = new Map();
+function repoOf(p) {
+  if (!p || !WORKSPACE) return null;
+  const rel = path.relative(WORKSPACE, path.resolve(WORKSPACE, String(p)));
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  const seg = rel.split(path.sep);
+  if (seg[0] === 'worktrees' && seg.length >= 3) return seg[2];
+  if (!isRepo.has(seg[0])) isRepo.set(seg[0], fs.existsSync(path.join(WORKSPACE, seg[0], '.git')));
+  return isRepo.get(seg[0]) ? seg[0] : null;
+}
+function trackRepo(r, body) {
+  const edit = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(body.tool_name) && body.hook_event_name === 'PreToolUse';
+  const repo = (edit && repoOf(body.tool_input?.file_path || body.tool_input?.notebook_path)) || repoOf(body.cwd);
+  if (repo && repo !== r.repo) { r.repo = repo; emit(r); }
+}
 
 function hold(r, body, closers = []) {
   const id = crypto.randomBytes(3).toString('hex');
@@ -131,6 +150,7 @@ async function onHook(name, body, via = '', closers = []) {
   const r = robots.get(name);
   if (!r) return null; // robot que la oficina no lanzo: no se toca
   r.lastEventAt = now(); // la UI marca «sin actividad» a un robot ocupado que lleva mucho sin eventos
+  trackRepo(r, body);
   if (body.session_id) r.sessionId = body.session_id;
   if (body.transcript_path && r.transcript !== body.transcript_path) {
     r.transcript = body.transcript_path;

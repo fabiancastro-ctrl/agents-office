@@ -737,3 +737,56 @@ test('salas: el avance cuenta a los que entregaron (también despedidos) y tus n
     assert.equal(o.claudeCalls().length, calls, 'ni se le escriben a los robots');
   } finally { await o.stop(); }
 });
+
+test('mantenimiento: repo del robot, salud, limpieza a la Papelera (sin perder sesiones), respaldo y horas', async () => {
+  const viejo = '2020-01-01', hoy = new Date().toISOString().slice(0, 10);
+  const ses = JSON.stringify({ at: `${viejo}T10:00:00Z`, robot: 'x', hook_event_name: 'SessionStart', session_id: 'ses-vieja', transcript_path: '/no/existe.jsonl' });
+  const o = await startOffice({ env: { OFFICE_HOURS_TICK_MS: '200' }, files: { [`events-${viejo}.jsonl`]: ses + '\n{"hook_event_name":"Stop"}\n' } });
+  try {
+    fs.mkdirSync(path.join(o.ws, 'nr-orders', '.git'), { recursive: true });
+    fs.mkdirSync(path.join(o.ws, 'worktrees', 'T-1', 'nr-kit'), { recursive: true });
+    const viejoT = new Date('2020-01-02');
+    fs.mkdirSync(path.join(o.data, 'conversaciones'), { recursive: true });
+    fs.writeFileSync(path.join(o.data, 'conversaciones', 'fantasma.json'), '{}'); fs.utimesSync(path.join(o.data, 'conversaciones', 'fantasma.json'), viejoT, viejoT);
+    await o.api('POST', '/api/robots', libre('uno'));
+    // 2 · repo: por la carpeta de su consola y, si edita, por el archivo (también en worktrees/<tarea>/<repo>).
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: 'x', cwd: path.join(o.ws, 'nr-orders', 'internal') });
+    assert.equal((await o.robot('uno')).repo, 'nr-orders');
+    await o.hook('uno', { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_use_id: 'e1', tool_input: { file_path: path.join(o.ws, 'worktrees', 'T-1', 'nr-kit', 'a.go') }, cwd: o.ws });
+    assert.equal((await o.robot('uno')).repo, 'nr-kit');
+    await o.hook('uno', { hook_event_name: 'PreToolUse', tool_name: 'Read', tool_use_id: 'r1', tool_input: { file_path: '/etc/hosts' }, cwd: '/tmp' });
+    assert.equal((await o.robot('uno')).repo, 'nr-kit', 'fuera del workspace no lo cambia');
+    // 3 · salud
+    const h = (await o.api('GET', '/api/salud')).body;
+    assert.ok(h.checks.some(c => c.label === 'Sesión de tmux' && c.ok), JSON.stringify(h.checks));
+    assert.ok(h.robots.some(r => r.name === 'uno' && r.console));
+    const kinds = h.candidates.map(c => c.kind).sort();
+    assert.deepEqual(kinds, ['conversaciones', 'eventos'], 'solo lo viejo y suelto, nunca lo de hoy');
+    // 4 · limpieza: va a la Papelera y el SessionStart queda en sesiones.jsonl
+    const c = (await o.api('POST', '/api/limpieza', { run: true, days: 7 })).body;
+    assert.equal(c.moved, 2, JSON.stringify(c));
+    assert.ok(!fs.existsSync(path.join(o.data, `events-${viejo}.jsonl`)) && fs.existsSync(path.join(o.data, `events-${hoy}.jsonl`)));
+    assert.match(fs.readFileSync(path.join(o.data, 'sesiones.jsonl'), 'utf8'), /ses-vieja/);
+    assert.ok(fs.readdirSync(path.join(o.base, 'papelera')).some(f => f.startsWith(`oficina-events-${viejo}`)));
+    assert.equal((await o.api('POST', '/api/limpieza', { days: 14, auto: true })).body.clean.auto, true);
+    // 7 · respaldo: exporta y, al importar, suma sin duplicar; las rutinas llegan en pausa.
+    await o.api('POST', '/api/config', { name: 'Mi oficina' });
+    await o.api('POST', '/api/favorites', { name: 'Review', kind: 'libre', text: 'revisa' });
+    const bk = await (await fetch(`${o.url}/api/respaldo`)).json();
+    assert.equal(bk.app, 'agent-office'); assert.equal(bk.office.name, 'Mi oficina'); assert.equal(bk.favorites.length, 1);
+    bk.routines = [{ id: 'r-importada', type: 'watch', name: 'Vigilar', source: { scope: 'repo', repo: 'nr-orders', query: '' }, schedule: { mode: 'every', everyMin: 30 } }];
+    bk.office.name = 'Otra'; bk.looks = { uno: { look: { ant: 1, visor: 2, acc: 3 }, color: 5 } };
+    const imp = (await o.api('POST', '/api/respaldo', { data: bk, parts: ['routines', 'favorites', 'looks'] })).body;
+    assert.deepEqual([imp.routines, imp.favorites, imp.looks, imp.office], [1, 0, 1, false]);
+    const snap = await o.snapshot();
+    assert.equal(snap.routines.find(r => r.id === 'r-importada').paused, true);
+    assert.equal(snap.config.name, 'Mi oficina', 'sin «office» no cambia el nombre');
+    assert.deepEqual((await o.robot('uno')).look, { ant: 1, visor: 2, acc: 3 });
+    assert.equal((await o.api('POST', '/api/respaldo', { data: { app: 'otra' } })).status, 400);
+    // 6 · horas: anota mientras hay robots trabajando; apagado, deja de anotar.
+    await waitFor(async () => (await o.snapshot()).config.stats.hours.w.some(n => n > 0) || (await sleep(300), false), { what: 'que anote horas' });
+    await o.api('POST', '/api/config', { hoursOn: false });
+    const off = (await o.snapshot()).config.stats.hours;
+    assert.equal(off.on, false);
+  } finally { await o.stop(); }
+});

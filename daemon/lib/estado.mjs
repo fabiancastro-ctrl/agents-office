@@ -53,7 +53,7 @@ function view(r, withLog = false) {
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
     parent: r.parent || null, reported: !!r.reported, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending, consoleLost: !!r.consoleLost,
-    permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null,
+    permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null, repo: r.repo || null,
     spend: r.spend || null, crown: crownOf(r.name), loop: r.loop || null
   };
   if (withLog) v.log = r.log.slice(-150);
@@ -112,7 +112,7 @@ function statsView() {
   const q = readConfig().quota || {}, measured = Number(q.weekPctAt) || 0;
   const quotaPct = Number.isFinite(q.weekPct) && measured ? (measured < per.weekFrom ? 0 : q.weekPct) : null;
   return { total: stats.total, reviews: stats.reviews, today: stats.day === localDay() ? stats.today : 0, week: stats.week.count, pot: stats.week.n, repotAt: stats.repotAt || null, weekTo: per.weekTo, days: week, quotaPct, quotaAt: measured || null,
-    quotaHistory: Object.entries(q.history || {}).sort().map(([end, pct]) => ({ end, pct })), waits: waitsView() };
+    quotaHistory: Object.entries(q.history || {}).sort().map(([end, pct]) => ({ end, pct })), waits: waitsView(), hours: hoursView() };
 }
 setInterval(() => { if (rollWeek()) broadcast({ type: 'config', config: configView() }); }, 60e3);
 function bumpStats(r) {
@@ -145,10 +145,34 @@ function addWait(name, startIso, kind, perm) {
   try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
   broadcast({ type: 'config', config: configView() });
 }
+// 6 · Horas de trabajo: minutos-robot trabajando y esperándote por hora del día (últimos 14 días). Se puede apagar
+// desde «Uso Claude» (config.hoursOn = false): deja de registrar y la sección se esconde.
+const HOURS_DAYS = 14;
+const hoursOn = () => readConfig().hoursOn !== false;
+let hoursDirty = 0;
+setInterval(() => {
+  if (!hoursOn() || !robots.size) return;
+  const t = new Date(), d = localDay(), h = t.getHours(), all = (stats.hours ||= {});
+  const day = (all[d] ||= { w: Array(24).fill(0), i: Array(24).fill(0) });
+  for (const r of robots.values()) {
+    if (['working', 'delegating', 'walking'].includes(r.state)) day.w[h]++;
+    else if (r.state === 'input') day.i[h]++;
+  }
+  for (const k of Object.keys(all).sort().slice(0, -HOURS_DAYS)) delete all[k];
+  if (++hoursDirty >= 10) { hoursDirty = 0; try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco */ } broadcast({ type: 'config', config: configView() }); }
+}, Number(process.env.OFFICE_HOURS_TICK_MS) || 60e3);
+function hoursView() {
+  const all = stats.hours || {}, days = Object.keys(all).sort().slice(-HOURS_DAYS);
+  const w = Array(24).fill(0), i = Array(24).fill(0);
+  for (const k of days) for (let h = 0; h < 24; h++) { w[h] += all[k].w[h] || 0; i[h] += all[k].i[h] || 0; }
+  return { on: hoursOn(), days: days.length, w, i };
+}
 function waitsView() {
   const all = stats.waits || {};
   return Array.from({ length: 7 }, (_, i) => { const day = new Date(Date.now() - (6 - i) * 86400e3).toLocaleDateString('sv'); const w = all[day]; return { day, total: w?.total || 0, by: w?.by || {}, kinds: w?.kinds || {}, perms: w?.perms || {} }; });
 }
-function configView() { return { maxRobots, maxRobotsLimit: MAX_ROBOTS_LIMIT, approval: APPROVAL, name: officeName, session: SESSION, stats: statsView(), mapTheme: MAP_THEMES.includes(readConfig().mapTheme) ? readConfig().mapTheme : 'moderna' }; }
+// Fecha en que se creó la oficina (bin/office la deja en office.json): para el aniversario del mapa.
+let createdAt; try { createdAt = JSON.parse(fs.readFileSync(path.join(RUNS, 'office.json'), 'utf8')).createdAt || null; } catch { createdAt = null; }
+function configView() { return { createdAt, maxRobots, maxRobotsLimit: MAX_ROBOTS_LIMIT, approval: APPROVAL, name: officeName, session: SESSION, stats: statsView(), mapTheme: MAP_THEMES.includes(readConfig().mapTheme) ? readConfig().mapTheme : 'moderna' }; }
 
 export { addWait, broadcast, bumpStats, configView, emit, fmtK, knownDoc, MAP_THEMES, TEXT_DOC, usage, view };
