@@ -790,3 +790,37 @@ test('mantenimiento: repo del robot, salud, limpieza a la Papelera (sin perder s
     assert.equal(off.on, false);
   } finally { await o.stop(); }
 });
+
+test('en espera: una shell o un Monitor de fondo lo dejan en espera hasta que llega su aviso de fin', async () => {
+  const o = await startOffice();
+  try {
+    await o.api('POST', '/api/robots', libre('uno'));
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: 'vigila el CI' });
+    await o.hook('uno', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'toolu_shell', tool_input: { command: 'until gh run view 1; do sleep 30; done', description: 'Esperar el CI de nr-qa', run_in_background: true } });
+    await o.hook('uno', { hook_event_name: 'PreToolUse', tool_name: 'Monitor', tool_use_id: 'toolu_mon', tool_input: { description: 'Estado cada 10 min', command: 'x', timeout_ms: 1800000 } });
+    await o.hook('uno', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'toolu_normal', tool_input: { command: 'ls' } });
+    await o.hook('uno', { hook_event_name: 'Stop', last_assistant_message: 'Lo dejo vigilando.' });
+    let r = await o.robot('uno');
+    assert.equal(r.state, 'done');
+    assert.deepEqual(r.bg.map(e => [e.kind, e.what]), [['shell', 'Esperar el CI de nr-qa'], ['monitor', 'Estado cada 10 min']]);
+    const aviso = (id, status, extra = '') => `<task-notification>\n<task-id>b1</task-id>\n${id ? `<tool-use-id>${id}</tool-use-id>\n` : ''}${status ? `<status>${status}</status>\n` : ''}<summary>x</summary>${extra}\n</task-notification>`;
+    // Un evento intermedio del Monitor (sin tool-use-id) no lo saca de la espera.
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: aviso(null, null, '<event>11:13 pendiente</event>') });
+    await o.hook('uno', { hook_event_name: 'Stop', last_assistant_message: 'Sigue pendiente.' });
+    assert.equal((await o.robot('uno')).bg.length, 2);
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: aviso('toolu_shell', 'completed') });
+    await o.hook('uno', { hook_event_name: 'Stop', last_assistant_message: 'El CI pasó.' });
+    r = await o.robot('uno');
+    assert.deepEqual(r.bg.map(e => e.kind), ['monitor']);
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: aviso('toolu_mon', 'killed') });
+    assert.deepEqual((await o.robot('uno')).bg, [], 'con todo terminado vuelve a quedar LISTO al cerrar el turno');
+    // Despertador de /loop: se va cuando suena (le llega su prompt); una sesión nueva limpia lo de antes.
+    await o.hook('uno', { hook_event_name: 'PreToolUse', tool_name: 'ScheduleWakeup', tool_use_id: 'toolu_w', tool_input: { delaySeconds: 600, reason: 'revisar el deploy' } });
+    assert.equal((await o.robot('uno')).bg[0].kind, 'despertador');
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: '/loop revisa el deploy' });
+    assert.deepEqual((await o.robot('uno')).bg, []);
+    await o.hook('uno', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'toolu_s2', tool_input: { command: 'sleep 999', run_in_background: true } });
+    await o.hook('uno', { hook_event_name: 'SessionStart', source: 'clear', session_id: 'nueva' });
+    assert.deepEqual((await o.robot('uno')).bg, []);
+  } finally { await o.stop(); }
+});

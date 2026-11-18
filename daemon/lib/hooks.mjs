@@ -24,6 +24,30 @@ function repoOf(p) {
   if (!isRepo.has(seg[0])) isRepo.set(seg[0], fs.existsSync(path.join(WORKSPACE, seg[0], '.git')));
   return isRepo.get(seg[0]) ? seg[0] : null;
 }
+// En espera: lo que el robot dejó corriendo en segundo plano al cerrar su turno (una shell que vigila un CI, un Monitor
+// que revisa algo cada X min, un despertador de /loop o un cron). Mientras tenga algo así no está LISTO: está en espera.
+// Cada tarea sale cuando Claude Code avisa que terminó (la notificación trae el mismo tool_use_id), cuando vence o
+// cuando empieza una sesión nueva. Los subagentes de fondo ya se cuentan aparte (delegando).
+const BG_MAX_MS = Number(process.env.OFFICE_BG_MAX_MS) || 12 * 3600e3; // por si nunca llega el aviso
+function trackBg(r, body) {
+  const t = body.tool_name, i = body.tool_input || {}, id = body.tool_use_id || crypto.randomBytes(4).toString('hex'), at = Date.now();
+  let e = null;
+  if (t === 'Bash' && i.run_in_background) e = { kind: 'shell', what: trunc(i.description || i.command, 90), until: at + BG_MAX_MS };
+  else if (t === 'Monitor') e = { kind: 'monitor', what: trunc(i.description || i.command, 90), until: at + (Number(i.timeout_ms) > 0 ? Number(i.timeout_ms) + 60e3 : BG_MAX_MS) };
+  else if (t === 'ScheduleWakeup') e = { kind: 'despertador', what: trunc(i.reason || 'vuelve a revisar', 90), until: at + (Number(i.delaySeconds) || 60) * 1000 + 120e3 };
+  else if (t === 'CronCreate') e = { kind: 'cron', what: trunc(i.prompt || i.description || i.schedule || 'tarea programada', 90), until: at + BG_MAX_MS };
+  else if (t === 'CronDelete') { for (const [k, v] of Object.entries(r.bg || {})) if (v.kind === 'cron') delete r.bg[k]; return; }
+  if (!e) return;
+  (r.bg ||= {})[id] = { ...e, at: new Date(at).toISOString() };
+}
+function bgDone(r, prompt) {
+  if (!r.bg) return;
+  const id = /<tool-use-id>([^<]+)<\/tool-use-id>/.exec(prompt)?.[1], status = /<status>([^<]+)<\/status>/.exec(prompt)?.[1];
+  if (id && status && r.bg[id]) delete r.bg[id]; // «Monitor event» (sin tool-use-id) es un aviso intermedio: sigue en espera
+}
+const bgList = r => Object.values(r.bg || {}).filter(e => e.until > Date.now());
+// Lo que vence (un despertador que no sonó, un Monitor que pasó su tiempo) sale solo: se avisa a la página.
+setInterval(() => { for (const r of robots.values()) { const n = Object.keys(r.bg || {}).length; if (!n) continue; for (const [k, v] of Object.entries(r.bg)) if (v.until <= Date.now()) delete r.bg[k]; if (Object.keys(r.bg).length !== n) emit(r); } }, 60e3);
 function trackRepo(r, body) {
   const edit = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(body.tool_name) && body.hook_event_name === 'PreToolUse';
   const repo = (edit && repoOf(body.tool_input?.file_path || body.tool_input?.notebook_path)) || repoOf(body.cwd);
@@ -166,14 +190,15 @@ async function onHook(name, body, via = '', closers = []) {
   switch (body.hook_event_name) {
     case 'SessionStart':
       log(r, 'sys', `Sesión ${body.source ?? ''} · modelo ${body.model ?? ''}`);
+      if (body.source !== 'resume') r.bg = {}; // sesión nueva (o /clear): lo de fondo de antes ya no es suyo
       break;
 
     case 'UserPromptSubmit': {
       const p = String(body.prompt ?? '');
       if (p.startsWith('<agent-message')) log(r, 'sub', 'Un subagente entregó su resultado');
       // Claude Code le avisa al robot cuando termina algo que dejó en segundo plano: no lo escribiste tú.
-      else if (/^\s*<task-notification>/.test(p)) log(r, 'bg', taskNote(p));
-      else log(r, 'user', p);
+      else if (/^\s*<task-notification>/.test(p)) { log(r, 'bg', taskNote(p)); bgDone(r, p); }
+      else { log(r, 'user', p); if (r.bg) for (const [k, v] of Object.entries(r.bg)) if (v.kind === 'despertador') delete r.bg[k]; } // un despertador que sonó
       r.needsPermission = false;
       if (r.loop) { r.loop = null; r.loopTrack = {}; } // le escribiste o le llegó algo: arranca de cero
       setState(r, 'working');
@@ -184,6 +209,7 @@ async function onHook(name, body, via = '', closers = []) {
       if (internalHelper) break;
       const what = describeTool(body.tool_name, body.tool_input);
       trackLoop(r, sub, body, what);
+      if (!sub) trackBg(r, body);
       if (sub) {
         sub.activity = what;
         emit(r);
@@ -248,4 +274,4 @@ async function onHook(name, body, via = '', closers = []) {
   return null; // sin salida: Claude Code sigue su flujo normal
 }
 
-export { answerAsk, decide, onHook };
+export { answerAsk, decide, onHook, bgList };
