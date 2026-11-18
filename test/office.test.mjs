@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { startOffice, waitFor, sleep, turn } from './helpers.mjs';
 
@@ -823,4 +824,44 @@ test('en espera: una shell o un Monitor de fondo lo dejan en espera hasta que ll
     await o.hook('uno', { hook_event_name: 'SessionStart', source: 'clear', session_id: 'nueva' });
     assert.deepEqual((await o.robot('uno')).bg, []);
   } finally { await o.stop(); }
+});
+
+test('en espera tras reiniciar: lo de fondo lanzado antes se reconstruye desde el transcript', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-')), tr = path.join(dir, 's.jsonl'), at = new Date().toISOString();
+  const tu = (id, name, input) => JSON.stringify({ type: 'assistant', timestamp: at, message: { id: 'm' + id, content: [{ type: 'tool_use', id, name, input }] } });
+  const aviso = id => JSON.stringify({ type: 'user', timestamp: at, message: { role: 'user', content: `<task-notification>\n<tool-use-id>${id}</tool-use-id>\n<status>completed</status>\n</task-notification>` } });
+  fs.writeFileSync(tr, [tu('t1', 'Bash', { command: 'gh pr checks 502 --watch', description: 'Wait for PR 502 CI', run_in_background: true }), tu('t2', 'Bash', { command: 'sleep 9', description: 'Ya terminó', run_in_background: true }), aviso('t2'),
+    JSON.stringify({ type: 'assistant', timestamp: '2020-01-01T00:00:00Z', message: { id: 'viejo', content: [{ type: 'tool_use', id: 't0', name: 'Bash', input: { command: 'x', run_in_background: true } }] } })].join('\n') + '\n');
+  const o = await startOffice({ robots: [{ name: 'vigia', state: 'done', transcript: tr }] });
+  try {
+    const r = await o.robot('vigia');
+    assert.deepEqual(r.bg.map(e => e.what), ['Wait for PR 502 CI'], 'la terminada y la vencida (de 2020) no cuentan');
+  } finally { await o.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('en espera: el aviso de fin que llega a mitad de turno (entrada interna del transcript) también cuenta', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-')), tr = path.join(dir, 's.jsonl'), at = new Date().toISOString();
+  fs.writeFileSync(tr, [
+    JSON.stringify({ type: 'assistant', timestamp: at, message: { id: 'm1', content: [{ type: 'tool_use', id: 't9', name: 'Bash', input: { command: 'x', description: 'Esperar CI', run_in_background: true } }] } }),
+    JSON.stringify({ type: 'attachment', timestamp: at, attachment: { type: 'queued_command', prompt: '<task-notification>\n<task-id>b9</task-id>\n<tool-use-id>t9</tool-use-id>\n<status>completed</status>\n</task-notification>' } })
+  ].join('\n') + '\n');
+  const o = await startOffice({ robots: [{ name: 'vigia', state: 'done', transcript: tr }] });
+  try { assert.deepEqual((await o.robot('vigia')).bg, []); } finally { await o.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('en espera: una shell de fondo que murió sin aviso (nadie tiene abierta su salida) deja de contar', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tr-')), tr = path.join(dir, 's.jsonl'), at = new Date(Date.now() - 5 * 60e3).toISOString();
+  const viva = path.join(dir, 'viva.output'), muerta = path.join(dir, 'muerta.output');
+  fs.writeFileSync(muerta, '');
+  const { spawn } = await import('node:child_process');
+  const p = spawn('sh', ['-c', `exec sleep 60 > '${viva}'`], { stdio: 'ignore' });
+  await sleep(300);
+  const tu = (id, d) => JSON.stringify({ type: 'assistant', timestamp: at, message: { id: 'm' + id, content: [{ type: 'tool_use', id, name: 'Bash', input: { command: 'x', description: d, run_in_background: true } }] } });
+  const res = (id, f) => JSON.stringify({ type: 'user', timestamp: at, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: `Command running in background with ID: b${id}. Output is being written to: ${f}. You will be notified when it completes.` }] } });
+  fs.writeFileSync(tr, [tu('t1', 'Viva'), res('t1', viva), tu('t2', 'Muerta'), res('t2', muerta)].join('\n') + '\n');
+  const o = await startOffice({ robots: [{ name: 'vigia', state: 'done', transcript: tr }], env: { OFFICE_BG_CHECK_MS: '500' } });
+  try {
+    await waitFor(async () => (await o.robot('vigia')).bg.length === 1, { what: 'que descarte la muerta' });
+    assert.deepEqual((await o.robot('vigia')).bg.map(e => e.what), ['Viva']);
+  } finally { p.kill(); await o.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });

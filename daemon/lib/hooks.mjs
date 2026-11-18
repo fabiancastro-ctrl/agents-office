@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, describeTool, EVENTS_FILE, HOLD_TOOLS, NEVER_ALLOW, now, pending, robots, trunc, WORKSPACE } from './base.mjs';
+import { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, describeTool, EVENTS_FILE, HOLD_TOOLS, NEVER_ALLOW, now, pending, robots, run, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { registerSession } from './uso.mjs';
 import { log, setState, taskNote } from './persistencia.mjs';
@@ -29,8 +29,12 @@ function repoOf(p) {
 // Cada tarea sale cuando Claude Code avisa que terminó (la notificación trae el mismo tool_use_id), cuando vence o
 // cuando empieza una sesión nueva. Los subagentes de fondo ya se cuentan aparte (delegando).
 const BG_MAX_MS = Number(process.env.OFFICE_BG_MAX_MS) || 12 * 3600e3; // por si nunca llega el aviso
-function trackBg(r, body) {
-  const t = body.tool_name, i = body.tool_input || {}, id = body.tool_use_id || crypto.randomBytes(4).toString('hex'), at = Date.now();
+function trackBg(r, body) { addBg(r, body.tool_use_id || crypto.randomBytes(4).toString('hex'), body.tool_name, body.tool_input, Date.now()); }
+// También la usa transcript.mjs: al reiniciar la oficina, lo pendiente se reconstruye leyendo el transcript (así cuentan
+// las tareas lanzadas antes del reinicio). Si ya estaba anotada, no se toca.
+function addBg(r, id, t, input, at) {
+  const i = input || {};
+  if (r.bg?.[id]) return;
   let e = null;
   if (t === 'Bash' && i.run_in_background) e = { kind: 'shell', what: trunc(i.description || i.command, 90), until: at + BG_MAX_MS };
   else if (t === 'Monitor') e = { kind: 'monitor', what: trunc(i.description || i.command, 90), until: at + (Number(i.timeout_ms) > 0 ? Number(i.timeout_ms) + 60e3 : BG_MAX_MS) };
@@ -42,11 +46,38 @@ function trackBg(r, body) {
 }
 function bgDone(r, prompt) {
   if (!r.bg) return;
-  const id = /<tool-use-id>([^<]+)<\/tool-use-id>/.exec(prompt)?.[1], status = /<status>([^<]+)<\/status>/.exec(prompt)?.[1];
-  if (id && status && r.bg[id]) delete r.bg[id]; // «Monitor event» (sin tool-use-id) es un aviso intermedio: sigue en espera
+  for (const m of String(prompt).matchAll(/<task-notification>([\s\S]*?)<\/task-notification>/g)) {
+    const id = /<tool-use-id>([^<]+)<\/tool-use-id>/.exec(m[1])?.[1], status = /<status>([^<]+)<\/status>/.exec(m[1])?.[1];
+    if (id && status && r.bg[id]) delete r.bg[id]; // «Monitor event» (sin tool-use-id ni status) es un aviso intermedio: sigue en espera
+  }
 }
 const bgList = r => Object.values(r.bg || {}).filter(e => e.until > Date.now());
 // Lo que vence (un despertador que no sonó, un Monitor que pasó su tiempo) sale solo: se avisa a la página.
+// Una shell de fondo puede morir sin aviso de fin (la consola se reinició, se mató el proceso). Cada una escribe su
+// salida en un archivo (transcript: «Output is being written to: …»): si ningún proceso lo tiene abierto, ya terminó.
+function bgOutput(r, toolUseId, text) {
+  const out = /Output is being written to: (\S+?\.output)/.exec(String(text))?.[1];
+  if (out && r.bg?.[toolUseId] && !r.bg[toolUseId].out) r.bg[toolUseId].out = out;
+}
+const LSOF = fs.existsSync('/usr/sbin/lsof') ? '/usr/sbin/lsof' : 'lsof';
+async function checkBgAlive() {
+  const files = new Map(); // archivo -> [robot, id]
+  for (const r of robots.values()) for (const [id, e] of Object.entries(r.bg || {})) if (e.out && Date.now() - Date.parse(e.at) > 60e3) files.set(e.out, [r, id]);
+  if (!files.size) return;
+  const touched = new Set();
+  for (const [f, [r, id]] of files) {
+    let alive;
+    if (!fs.existsSync(f)) alive = false; // se borró (p. ej. al reiniciar el computador)
+    else {
+      try { alive = !!(await run(LSOF, ['-t', '--', f])).stdout.trim(); }
+      catch (err) { if (err.code === 'ENOENT') return; alive = !!String(err.stdout || '').trim(); } // sin lsof: solo queda el vencimiento; lsof sale con 1 si nadie lo tiene abierto
+    }
+    if (!alive && r.bg?.[id]) { delete r.bg[id]; touched.add(r); }
+  }
+  for (const r of touched) { log(r, 'bg', 'Una tarea de fondo terminó sin aviso (su proceso ya no existe)'); emit(r); }
+}
+setInterval(() => { checkBgAlive().catch(() => {}); }, Number(process.env.OFFICE_BG_CHECK_MS) || 120e3);
+setTimeout(() => { checkBgAlive().catch(() => {}); }, 15e3); // al arrancar: lo reconstruido del transcript que ya murió
 setInterval(() => { for (const r of robots.values()) { const n = Object.keys(r.bg || {}).length; if (!n) continue; for (const [k, v] of Object.entries(r.bg)) if (v.until <= Date.now()) delete r.bg[k]; if (Object.keys(r.bg).length !== n) emit(r); } }, 60e3);
 function trackRepo(r, body) {
   const edit = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(body.tool_name) && body.hook_event_name === 'PreToolUse';
@@ -274,4 +305,4 @@ async function onHook(name, body, via = '', closers = []) {
   return null; // sin salida: Claude Code sigue su flujo normal
 }
 
-export { answerAsk, decide, onHook, bgList };
+export { addBg, answerAsk, bgDone, bgList, bgOutput, checkBgAlive, decide, onHook };

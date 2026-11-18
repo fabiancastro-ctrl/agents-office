@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { now, robots, trunc } from './base.mjs';
 import { emit, fmtK } from './estado.mjs';
 import { log, setState } from './persistencia.mjs';
+import { addBg, bgDone, bgOutput } from './hooks.mjs';
 
 /* ---------- transcript ---------- */
 
@@ -24,6 +25,9 @@ function pumpTranscript(r) {
     pos += Buffer.byteLength(line) + 1;
     r.linePos = pos; // log() no repite lo que ya estaba en la conversación guardada
     if (!line.trim()) continue;
+    // Un aviso de fin de tarea de fondo puede llegar en medio de un turno: Claude Code lo guarda como entrada interna
+    // (attachment o queue-operation) y no pasa por el hook de tus mensajes. Se busca en cualquier línea.
+    if (r.bg && line.includes('<task-notification>')) { const n = Object.keys(r.bg).length; bgDone(r, line.replace(/\\n/g, '\n').replace(/\\\//g, '/')); if (!r.restoring && Object.keys(r.bg).length !== n) emit(r); }
     let e;
     try { e = JSON.parse(line); } catch { continue; }
     onTranscript(r, e);
@@ -70,6 +74,8 @@ function onTranscript(r, e) {
     if (e.message.id && e.message.usage) { r.msgUsage.set(e.message.id, e.message.usage); r.ctxPost = null; }
     if (e.message.model && e.message.model !== '<synthetic>') r.model = e.message.model;
     for (const c of e.message.content || []) {
+      // Tareas de fondo (shell, Monitor, despertador, cron): quedan anotadas aunque se hayan lanzado antes de reiniciar.
+      if (c.type === 'tool_use') addBg(r, c.id, c.name, c.input, Date.parse(e.timestamp) || Date.now());
       if (c.type === 'text' && c.text.trim()) {
         log(r, 'agent', c.text.trim(), { at: e.timestamp });
         r.bubble = trunc(c.text, 140);
@@ -80,6 +86,7 @@ function onTranscript(r, e) {
   if (e.type === 'user' && e.message) {
     const content = e.message.content;
     const text = typeof content === 'string' ? content : (content || []).map(c => c.text || '').join(' ');
+    if (r.bg && Array.isArray(content)) for (const c of content) if (c.type === 'tool_result' && r.bg[c.tool_use_id]) bgOutput(r, c.tool_use_id, typeof c.content === 'string' ? c.content : JSON.stringify(c.content));
     if (/<bash-(input|stdout|stderr)>/.test(text)) { shellLog(r, text); r.lastEventAt = now(); emit(r); return; }
     // Esc no dispara Stop: la interrupcion solo se ve en el transcript.
     if (/\[Request interrupted/.test(text) && !r.restoring) {
