@@ -23,11 +23,11 @@ function soundOn(prev, d) {
   if ((prev.state !== 'input' && d.state === 'input') || (!prev.spawnReq && d.spawnReq)) SFX.need();
 }
 const soundBtn = document.createElement('button');
-soundBtn.className = 'btn'; soundBtn.id = 'btn-sound'; soundBtn.title = 'Sonidos cortos de la oficina: un «pop» al llegar un documento, una campanita cuando alguien te necesita (si «Avisos» está apagado) y una fanfarria cuando un equipo termina. Se guarda en este navegador.';
+soundBtn.className = 'btn sm'; soundBtn.id = 'btn-sound'; soundBtn.type = 'button'; soundBtn.title = 'Sonidos cortos de la oficina: un «pop» al llegar un documento, una campanita cuando alguien te necesita (si «Avisos» está apagado) y una fanfarria cuando un equipo termina. Se guarda en este navegador.';
 const paintSound = () => { soundBtn.textContent = sound.on ? '🔊 Sonido' : '🔈 Sonido: no'; soundBtn.setAttribute('aria-pressed', String(sound.on)); };
 paintSound();
 soundBtn.addEventListener('click', () => { sound.on = !sound.on; prefSet('sound', sound.on ? '1' : '0'); paintSound(); SFX.deliver(); });
-$('#btn-notify')?.after(soundBtn);
+($('#vm-sound') || $('#btn-notify')?.parentElement)?.appendChild(soundBtn); // en el menú «🎛 Vista»
 
 // X · Modo cine (tecla C): solo el mapa, a pantalla completa, sin barra, métricas ni tarjetas. C o Esc salen.
 function cinema(on = !document.body.classList.contains('cine')) {

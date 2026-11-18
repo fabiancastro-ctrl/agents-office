@@ -40,6 +40,7 @@ document.addEventListener('keydown', async e => {
   else if (e.key === '/') { select('@search'); setTimeout(() => $('#search-in')?.focus(), 0); }
   else if (k === 'p') select('@pins');
   else if (k === 'h') select('@archivo');
+  else if (k === 'v') toggleVista();
   else if (e.key === '+' || e.key === '=') setZoom(zoom.z * 1.35);
   else if (e.key === '-' || e.key === '_') setZoom(zoom.z / 1.35);
   else if (e.key === '0') setZoom(1);

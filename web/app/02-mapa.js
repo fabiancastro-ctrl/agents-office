@@ -110,7 +110,7 @@ function drawRooms() {
         const s = st.salas.find(x => x.id === r.sala);
         el.className = 'room r-rt r-sala sv in-sala';
         if (Number.isInteger(s?.color)) el.style.setProperty('--sala-c', COLORS[s.color % COLORS.length]); // el piso, del color de quien la armó
-        el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span>Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm" data-sala-dismiss="${esc(r.sala)}" hidden title="Da de baja (sin resumen) a los hijos que ya entregaron su resultado. Dos clics.">👋 Despedir a los que entregaron</button><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
+        el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span title="Sala «${esc(r.name)}»">Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm out-need" data-out-need hidden></button><button type="button" class="btn sm" data-sala-dismiss="${esc(r.sala)}" hidden title="Da de baja (sin resumen) a los hijos que ya entregaron su resultado. Dos clics.">👋 Despedir a los que entregaron</button><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
         MAP.appendChild(el);
         const prop = (cls, html, x, y0, w, h) => { const p = document.createElement('div'); p.className = `sv ${cls}`; p.innerHTML = html; MAP.appendChild(p); setRect(p, x, y0, w, h); return p; };
         const board = prop('sala-board', '', SV.board.x, SV.board.y, SV.board.w, SV.board.h);
@@ -121,6 +121,7 @@ function drawRooms() {
         const wb = prop('sala-wb', '<b>PIZARRA</b><svg viewBox="0 0 320 60" preserveAspectRatio="none" aria-hidden="true"></svg>', 51, 9.9, 34, 7.6);
         geo.roomEls.set(r.id, re = {el, seats: [], props: [board, table, dr, wb]});
         renderBoard();
+        renderOutsideNeed();
       } else {
         el.className = 'room r-rt';
         el.dataset.room = 'cron';
@@ -179,7 +180,7 @@ const restPos = a => a.queueSlot != null && !st.view ? queuePos(a.queueSlot) : s
 /* ---------- vista de una sala ---------- */
 // Geometría de la sala por dentro (unidades del mapa): tablero a la izquierda, mesa común a la derecha con los robots
 // alrededor (mitad arriba, mitad abajo), pasillos por arriba, abajo y a la derecha de la mesa, y la puerta abajo.
-const SV = {H: 74, board: {x: 3.5, y: 11, w: 35, h: 58}, table: {x: 47, y: 35, w: 42, h: 11}, door: {x: 84, y: 71.5}, aisleTop: 20, aisleBottom: 64, aisleRight: 94};
+const SV = {H: 74, board: {x: 2.5, y: 10, w: 40, h: 61}, table: {x: 47, y: 35, w: 42, h: 11}, door: {x: 84, y: 71.5}, aisleTop: 20, aisleBottom: 64, aisleRight: 94};
 function tableSeat(k = 0) {
   const n = Math.max(6, (geo.rooms[0]?.maxSlot ?? 0) + 1), per = Math.ceil(n / 2), col = Math.floor(k / 2);
   return {x: SV.table.x + SV.table.w * (col + 0.5) / per, y: k % 2 ? SV.table.y + SV.table.h + 12 : SV.table.y - 4}; // los de arriba, detrás del borde de la mesa con el nombre a la vista
@@ -201,7 +202,7 @@ function salaRoute(f, t) {
   return pts;
 }
 // Tablero de la sala: por qué se creó, su CONTEXT.md y las últimas notas del hilo.
-const board = {ctx: '', at: 0, for: null, loading: false, noteFor: null};
+const board = {ctx: '', at: 0, for: null, loading: false, noteFor: null, whyOpen: false};
 async function loadBoard(force) {
   const s = st.salas.find(x => x.id === st.view);
   if (!s || board.loading || (!force && board.for === s.id && Date.now() - board.at < 15000)) return renderBoard();
@@ -220,25 +221,28 @@ function renderBoard() {
   const db = MAP.querySelector('[data-sala-dismiss]');
   if (db && !db.classList.contains('armed')) { db.hidden = !ready; db.textContent = `👋 Despedir a los que entregaron (${ready})`; }
   const ctx = board.for === s.id ? board.ctx.replace(/^# .*\n+/, '').replace(/^_Sala creada por la oficina.*_\n+/m, '') : '';
-  // 5 · Tus notas primero (📌, solo para ti); el resto del corcho, las últimas del hilo (al menos 2).
-  const mine = s.notes || [], notes = s.thread.slice(-Math.max(2, 4 - mine.length)).reverse();
-  const keep = el.querySelector('.sb-ctx')?.scrollTop || 0;
+  // Corcho: tus notas (📌, solo para ti) y las últimas 8 del hilo, en una franja que se desplaza: ninguna queda tapada.
+  const mine = s.notes || [], base = Math.max(0, s.thread.length - 8);
+  const notes = s.thread.slice(base).map((m, k) => ({m, i: base + k})).reverse();
+  const keep = el.querySelector('.sb-ctx')?.scrollTop || 0, keepX = el.querySelector('.sb-notes')?.scrollLeft || 0;
   // Si estabas escribiendo una nota, el tablero se redibuja sin perder lo escrito ni el foco.
   const ta = el.querySelector('.sb-nf textarea'), draft = ta ? {v: ta.value, f: document.activeElement === ta, a: ta.selectionStart, b: ta.selectionEnd} : null;
   const prog = salaProgress(s);
   el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><span><button type="button" class="btn sm ghost" data-sala-note-add ${mine.length >= 4 ? 'disabled title="Ya hay 4 notas tuyas: quita una con su ×"' : 'title="Pega una nota tuya en el tablero: es solo para ti, no se manda a los robots ni gasta tokens"'}>📌 Nota</button> <button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></span></div>
-    <div class="sb-why" title="Por qué se creó esta sala">${esc(why)}</div>
-    ${s.spend ? `<div class="sb-spend" title="Lo que gastaron todos los que pasaron por esta sala (padre e hijos, también los que ya se fueron, con sus subagentes) desde que se armó. Entrada + salida + caché escrita, como los KPI. Se recalcula cada minuto y no gasta cuota.">💸 Gasto del equipo: <b>${fmtTok(s.spend)}</b> tokens desde que se armó</div>` : ''}
+    <div class="sb-why${board.whyOpen ? ' open' : ''}" data-sala-why title="${board.whyOpen ? 'Clic para resumir' : `Por qué se creó esta sala. Clic para verlo completo.`}">${esc(why)}</div>
+    ${s.spend && !s.roster?.length ? spendHtml(s) : ''}
     ${board.noteFor === s.id ? `<form class="sb-nf" data-sala-note-form><textarea rows="2" maxlength="240" placeholder="Tu nota (Enter pega, Esc cancela)…"></textarea><button class="btn sm">Pegar</button></form>` : ''}
-    ${s.roster?.length ? `<div class="sb-team"><b>Reparto${prog ? ` · ${prog.ok}/${prog.n} entregaron` : ''}</b>${prog ? `<i class="sb-prog${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%"></i>` : ''}${s.roster.map(e => `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}"><code>${esc(e.name)}</code> ${esc(e.title || '')} <i>${esc(e.state)}</i></span>`).join('')}</div>` : ''}
+    ${s.roster?.length ? `<div class="sb-team"><b>Reparto${prog ? ` · ${prog.ok}/${prog.n} entregaron` : ''}</b>${s.spend ? spendHtml(s) : ''}${prog ? `<i class="sb-prog${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%"></i>` : ''}<span class="sb-chips">${s.roster.map(e => `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}" title="${esc(`${e.name}${e.title ? ' · ' + e.title : ''} · ${e.state}`)}"><i class="sb-dot"></i><code>${esc(e.name)}</code></span>`).join('')}</span></div>` : ''}
     <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
-    <div class="sb-notes">${mine.map(n => `<div class="sb-note mine" title="Tu nota (${esc(new Date(n.at).toLocaleString('es', {day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'}))}): solo la ves tú"><button type="button" class="sb-nx" data-sala-note-del="${esc(n.id)}" title="Quitar la nota" aria-label="Quitar la nota">×</button><b>📌 Tú</b>${esc(n.text)}</div>`).join('')}${notes.length ? notes.map((m, i) => `<div class="sb-note n${i}${salaMail.flying.has(m.id) ? ' arriving' : ''}" data-mid="${esc(m.id)}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 110))}</div>`).join('') : mine.length ? '' : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
+    <div class="sb-notes">${mine.map(n => `<div class="sb-note mine" title="Tu nota (${esc(new Date(n.at).toLocaleString('es', {day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'}))}): solo la ves tú"><button type="button" class="sb-nx" data-sala-note-del="${esc(n.id)}" title="Quitar la nota" aria-label="Quitar la nota">×</button><b>📌 Tú</b>${esc(n.text)}</div>`).join('')}${notes.length ? notes.map(({m, i}, k) => `<div class="sb-note n${k % 4}${salaMail.flying.has(m.id) ? ' arriving' : ''}" data-mid="${esc(m.id)}" data-note-i="${i}" role="button" tabindex="0" title="${esc(`${m.from} · ${hhmm(m.at)}\n${plainMd(m.text).slice(0, 500)}${m.text.length > 500 ? '…' : ''}\n\nClic: abrir el mensaje completo en el hilo`)}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 160))}</div>`).join('') : mine.length ? '' : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
   el.querySelector('.sb-ctx').scrollTop = keep;
+  el.querySelector('.sb-notes').scrollLeft = keepX;
   const nta = el.querySelector('.sb-nf textarea');
   if (nta && draft) { nta.value = draft.v; if (draft.f) { nta.focus(); nta.setSelectionRange(draft.a, draft.b); } } else if (nta && !draft) nta.focus();
   drawDoodles(s);
   flyNewMail(s);
 }
+const spendHtml = s => `<span class="sb-spend" title="Gasto del equipo: lo que gastaron todos los que pasaron por esta sala (padre e hijos, también los que ya se fueron, con sus subagentes) desde que se armó. Entrada + salida + caché escrita, como los KPI. Se recalcula cada minuto y no gasta cuota.">💸 <b>${fmtTok(s.spend)}</b></span>`;
 // 3 · Avance del equipo: cuántos hijos ya entregaron su resultado (aunque después los hayas despedido).
 function salaProgress(s) {
   const kids = (s.roster || []).filter(e => !e.owner && e.state !== 'no se lanzó');
@@ -259,7 +263,9 @@ function flyNewMail(s) {
     const note = MAP.querySelector(`.sb-note[data-mid="${CSS.escape(m.id)}"]`); if (!note) return;
     const bot = st.robots.get(m.from), from = bot && !bot.el.classList.contains('offview') ? bot.el.querySelector('svg') || bot.el : MAP.querySelector('.sala-door');
     if (!from) return;
-    const a = pct(from.getBoundingClientRect()), b = pct(note.getBoundingClientRect());
+    const a = pct(from.getBoundingClientRect()), b = pct(MAP.querySelector(`.sb-note[data-mid="${CSS.escape(m.id)}"]`).getBoundingClientRect());
+    const strip = note.parentElement; // la franja se corre para que se vea dónde aterriza
+    if (strip && (note.offsetLeft < strip.scrollLeft || note.offsetLeft + note.offsetWidth > strip.scrollLeft + strip.clientWidth)) strip.scrollLeft = note.offsetLeft - strip.offsetLeft - 4;
     salaMail.flying.add(m.id); note.classList.add('arriving');
     const env = document.createElement('div');
     env.className = 'sv sala-mail'; /* sv: en la vista de sala solo se ve lo que la lleva */ env.textContent = '✉️'; env.setAttribute('aria-hidden', 'true');

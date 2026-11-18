@@ -6,7 +6,22 @@ function salaFace(s) {
   const live = st.robots.get(s.owner)?.data;
   return robotHead(COLORS[(live?.color ?? s.color ?? 0) % COLORS.length], lookOf(s.owner, null, {look: live?.look ?? s.ownerLook}));
 }
+// Dentro de una sala no se ven los demás robots: si alguno de afuera (en la oficina o en otra sala) te necesita, la sala
+// brilla en rojo y la cabecera dice quién; clic abre al que más lleva esperando, sin salir de la sala.
+function renderOutsideNeed() {
+  const room = st.view && MAP.querySelector('.r-sala.in-sala'), btn = room?.querySelector('[data-out-need]');
+  if (!room || !btn) return;
+  const out = [...st.robots.values()].map(a => a.data).filter(d => d.place?.sala !== st.view && (d.state === 'input' || d.spawnReq || d.consoleLost))
+    .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0));
+  room.classList.toggle('outside-need', !!out.length);
+  btn.hidden = !out.length;
+  if (!out.length) return;
+  btn.dataset.outNeed = out[0].name;
+  btn.textContent = out.length === 1 ? `🔴 ${out[0].name} te necesita afuera` : `🔴 ${out.length} te necesitan afuera`;
+  btn.title = `Fuera de esta sala te esperan: ${out.map(d => d.name + (d.place?.sala ? ` (en la sala «${st.salas.find(s => s.id === d.place.sala)?.name || 'otra'}»)` : '')).join(', ')}. Clic: abrir a ${out[0].name} (el que más lleva esperando) sin salir de la sala.`;
+}
 function renderSalaChips() {
+  renderOutsideNeed();
   $('#sala-count').textContent = `${st.salas.length} sala${st.salas.length === 1 ? '' : 's'}`;
   $('#sala-chips').innerHTML = st.salas.map(s => { // lista completa: la sala es chica y hace scroll
     const bots = salaRobots(s.id), n = bots.length;

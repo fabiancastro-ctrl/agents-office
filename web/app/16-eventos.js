@@ -12,6 +12,7 @@ async function quickKill(btn, name) {
 
 MAP.addEventListener('click', e => {
   if (e.target.closest('[data-sala-exit]')) return leaveSala();
+  const on = e.target.closest('[data-out-need]'); if (on?.dataset.outNeed) return select(on.dataset.outNeed);
   const sdm = e.target.closest('[data-sala-dismiss]');
   if (sdm) { // dos clics: el primero arma, el segundo (en 3 s) despide
     if (!sdm.classList.contains('armed')) { sdm.classList.add('armed'); const t = sdm.textContent; sdm.textContent = '¿Seguro? Clic otra vez'; setTimeout(() => { sdm.classList.remove('armed'); sdm.textContent = t; renderBoard(); }, 3000); return; }
@@ -24,6 +25,9 @@ MAP.addEventListener('click', e => {
   const nd = e.target.closest('[data-sala-note-del]');
   if (nd) { nd.disabled = true; api('DELETE', `/api/salas/${st.view}/notas/${nd.dataset.salaNoteDel}`).catch(() => { nd.disabled = false; }); return; }
   if (e.target.closest('[data-sala-note-form]')) return;
+  if (e.target.closest('[data-sala-why]')) { board.whyOpen = !board.whyOpen; return renderBoard(); }
+  const ni = e.target.closest('[data-note-i]');
+  if (ni && st.view) { st.jump = {sel: '@sala:' + st.view, i: +ni.dataset.noteI}; return select('@sala:' + st.view); } // abre el hilo en ese mensaje
   if (e.target.closest('[data-sala-ctx]')) { const s = st.salas.find(x => x.id === st.view); if (s) showDoc(s.context); return; }
   const so = e.target.closest('[data-sala-open]'); if (so) return select('@sala:' + so.dataset.salaOpen);
   const kx = e.target.closest('.kill-x'); if (kx) { e.stopPropagation(); return quickKill(kx, kx.closest('.robot').dataset.name); }
@@ -50,6 +54,7 @@ MAP.addEventListener('keydown', e => {
     if (e.key === 'Escape') { e.preventDefault(); board.noteFor = null; renderBoard(); }
     return;
   }
+  if (e.key === 'Enter' && e.target.matches?.('[data-note-i]')) { e.preventDefault(); e.target.click(); return; }
   if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.classList.contains('robot')) return;
   e.preventDefault();
   if (e.target.classList.contains('on-break')) assignFromBreak(e.target.dataset.name); else select(e.target.dataset.name);

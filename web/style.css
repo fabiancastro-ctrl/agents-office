@@ -1639,3 +1639,46 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .rchip.need .sala-face{animation:sfneed 1.8s ease-in-out infinite}
 @keyframes sfneed{50%{box-shadow:0 0 0 2px var(--st),0 0 0 5px color-mix(in srgb,var(--amber) 35%,transparent)}}
 @media (prefers-reduced-motion:reduce){.rchip.need .sala-face{animation:none}}
+
+/* Tablero de la sala, compacto: el porqué en 1 línea (clic lo abre), reparto y gasto en una fila de chips (el detalle al
+   pasar el mouse), el contexto siempre con espacio y las notas en una franja que se desplaza: nada queda tapado. */
+.sala-board .sb-why{cursor:pointer;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 8px}
+.sala-board .sb-why.open{white-space:normal;max-height:9.5em;overflow:auto}
+.sala-board .sb-spend{white-space:nowrap;font-size:11px}
+.sala-board div.sb-spend{flex:none}
+.sala-board .sb-team{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px}
+.sala-board .sb-team>b{flex:0 1 auto;font-size:11.5px}
+.sala-board .sb-team .sb-prog{flex-basis:100%;margin:0}
+.sala-board .sb-chips{flex-basis:100%;display:flex;flex-wrap:nowrap;gap:4px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
+.sala-board .sb-chips::-webkit-scrollbar{display:none}
+.sala-board .sb-mem{flex:none;display:inline-flex;align-items:center;gap:3px;background:#efe6d2;border-radius:10px;padding:0 6px 0 4px;cursor:default}
+.sala-board .sb-mem code{background:none;padding:0;font-size:10.5px}
+.sb-dot{width:7px;height:7px;border-radius:50%;background:#a89c88;flex:none}
+.sb-mem.st-entregó .sb-dot{background:#4f7a55} .sb-mem.st-trabajando .sb-dot{background:#3f6fc9} .sb-mem.st-coordina .sb-dot{background:#c9a227} .sb-mem.st-esperando-cupo .sb-dot{background:#b06a10}
+.sala-board .sb-ctx{flex:1 1 50px;min-height:44px}
+.sala-board .sb-notes{flex:none;display:flex;gap:7px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 4px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.sala-board .sb-note{flex:0 0 calc(50% - 4px);scroll-snap-align:start;max-height:none;display:-webkit-box;-webkit-line-clamp:5;line-height:1.3;-webkit-box-orient:vertical;overflow:hidden;padding:4px 6px}
+.sala-board .sb-note b{display:inline;margin-right:4px}
+.sala-board .sb-note[data-note-i]{cursor:pointer}
+.sala-board .sb-note[data-note-i]:hover,.sala-board .sb-note[data-note-i]:focus-visible{outline:2px solid #8a6c50;outline-offset:1px}
+.sala-board .sb-note.mine{white-space:normal;padding-right:14px}
+/* Cabecera de la sala: el título largo se corta con «…» (completo al pasar el mouse) y no se monta sobre los botones. */
+.r-sala.in-sala>.room-h>span{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.r-sala.in-sala>.room-h>.btn,.r-sala.in-sala>.room-h>small{flex:none}
+
+/* Menú «🎛 Vista» */
+.vista-wrap{position:relative}
+#btn-vista.on{border-color:var(--amber);color:var(--amber)}
+.vista-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:60;min-width:330px;display:grid;gap:6px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+.vista-menu[hidden]{display:none}
+.vm-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted)}
+.vm-row>.btn,.vm-row>select{flex:none;min-width:118px;justify-content:center;text-align:center}
+.vm-note{margin:4px 0 0;font-size:11.5px;color:var(--muted)}
+@media (max-width:1380px){.toolbar .stepper>span{display:none}.toolbar>.btn,.toolbar>.vista-wrap>.btn{padding-inline:8px}}
+
+/* En una sala, si un robot de afuera te necesita: la sala brilla en rojo y la cabecera dice quién. */
+.r-sala.in-sala.outside-need{animation:outneed 1.6s ease-in-out infinite}
+@keyframes outneed{0%,100%{box-shadow:inset 0 0 0 3px rgba(239,90,100,.7),inset 0 0 24px rgba(239,90,100,.15),0 0 0 0 rgba(239,90,100,0)}50%{box-shadow:inset 0 0 0 5px rgba(239,90,100,1),inset 0 0 46px rgba(239,90,100,.35),0 0 26px 6px rgba(239,90,100,.5)}}
+.room-h .out-need{background:#c93f50;border-color:#ef7f8a;color:#fff;font-family:var(--body);font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:outbtn 1.6s ease-in-out infinite}
+@keyframes outbtn{50%{background:#e2566a}}
+@media (prefers-reduced-motion:reduce){.r-sala.in-sala.outside-need{animation:none;box-shadow:inset 0 0 0 3px rgba(239,90,100,.9)}.room-h .out-need{animation:none}}

@@ -13,7 +13,7 @@
 <body>
 <header class="top">
   <div class="brand">Oficina de Agentes <button class="office-name" id="office-name" type="button" title="Nombre de esta oficina, para distinguirla de otras en el navegador. Clic para cambiarlo.">ponle nombre</button><span class="tag" id="conn">conectando…</span></div>
-  <div class="meta"><span id="meta"></span><button class="weekchip" id="btn-theme" type="button" title="Alterna tema claro y oscuro (el mapa sigue de noche)">tema claro</button><button class="weekchip" id="btn-fz" type="button" title="Tamaño del texto de las tarjetas, las métricas, los paneles y los globos del mapa. Clic para cambiarlo; se guarda en este navegador." aria-label="Tamaño del texto">Aa 100 %</button><button class="weekchip" id="btn-hc" type="button" aria-pressed="false" title="Alto contraste: textos y bordes más marcados, y globos blancos con letra negra en el mapa. Se guarda en este navegador.">contraste</button><button class="weekchip" id="btn-salud" type="button" title="Salud, limpieza y respaldo de esta oficina (no gasta tokens)">🩺 oficina</button><button class="weekchip" id="ws-chip" title="Carpeta de trabajo de los robots. Clic para verla o cambiarla."></button><button class="weekchip" id="week-chip" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button></div>
+  <div class="meta"><span id="meta"></span><button class="weekchip" id="btn-salud" type="button" title="Salud, limpieza y respaldo de esta oficina (no gasta tokens)">🩺 oficina</button><button class="weekchip" id="ws-chip" title="Carpeta de trabajo de los robots. Clic para verla o cambiarla."></button><button class="weekchip" id="week-chip" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button></div>
 </header>
 
 <div class="toolbar">
@@ -25,11 +25,21 @@
   <button class="btn" id="btn-pins" title="Mensajes que guardaste con 📌 para pegarlos después en Google Chat o Slack (tecla P)">📌 Para enviar <b class="pins-n" id="pins-n" hidden></b></button>
   <button class="btn" id="btn-search" title="Buscar en todas las conversaciones de la oficina (tecla /)">🔎 Buscar</button>
   <button class="btn" id="btn-usage" title="Uso y estado de Claude: límites de tu suscripción y tokens de la oficina">Uso Claude</button>
-  <button class="btn" id="btn-compact" aria-pressed="false" title="Esconde el mapa y deja métricas y tarjetas (en columnas): para el portátil o media pantalla">Compacta</button>
-  <select class="mt-sel" id="map-theme" title="Estilo de esta oficina: se guarda en la oficina, así se ve igual en cualquier navegador" aria-label="Estilo de la oficina"><option value="moderna">Estilo: Moderna</option><option value="garaje">Estilo: Garaje</option><option value="nave">Estilo: Nave</option><option value="biblioteca">Estilo: Biblioteca</option><option value="cafeteria">Estilo: Cafetería</option><option value="bosque">Estilo: Bosque</option></select>
-  <button class="btn" id="btn-hd" aria-pressed="false" title="Robots en alta definición: volumen, brillo en el visor y microanimaciones. Se guarda en este navegador.">HD</button>
-  <button class="btn" id="btn-view" aria-pressed="false" title="Alterna entre el plano 2D y la vista en perspectiva 2.5D">2.5D</button>
-  <button class="btn" id="btn-notify" aria-pressed="false" title="Sonido y notificación del sistema cuando un robot te necesita o se queda sin actividad. El título de la pestaña siempre muestra cuántos te necesitan.">Avisos: no</button>
+  <div class="vista-wrap">
+    <button class="btn" id="btn-vista" type="button" aria-expanded="false" aria-controls="vista-menu" title="Cómo se ve la oficina: estilo, tema, tamaño del texto, contraste, HD, 2.5D, compacta, avisos y sonido (tecla V)">🎛 Vista</button>
+    <div class="vista-menu" id="vista-menu" role="group" aria-label="Opciones de vista" hidden>
+      <div class="vm-row"><span>Estilo de la oficina</span><select class="mt-sel" id="map-theme" title="Estilo de esta oficina: se guarda en la oficina, así se ve igual en cualquier navegador" aria-label="Estilo de la oficina"><option value="moderna">Estilo: Moderna</option><option value="garaje">Estilo: Garaje</option><option value="nave">Estilo: Nave</option><option value="biblioteca">Estilo: Biblioteca</option><option value="cafeteria">Estilo: Cafetería</option><option value="bosque">Estilo: Bosque</option></select></div>
+      <div class="vm-row"><span>Tema de la página</span><button class="btn sm" id="btn-theme" type="button" title="Alterna tema claro y oscuro (el mapa sigue de noche)">tema claro</button></div>
+      <div class="vm-row"><span>Tamaño del texto</span><button class="btn sm" id="btn-fz" type="button" title="Tamaño del texto de las tarjetas, las métricas, los paneles y los globos del mapa. Clic para cambiarlo; se guarda en este navegador." aria-label="Tamaño del texto">Aa 100 %</button></div>
+      <div class="vm-row"><span>Contraste</span><button class="btn sm" id="btn-hc" type="button" aria-pressed="false" title="Alto contraste: textos y bordes más marcados, y globos blancos con letra negra en el mapa. Se guarda en este navegador.">contraste</button></div>
+      <div class="vm-row"><span>Robots en alta definición</span><button class="btn sm" id="btn-hd" aria-pressed="false" title="Robots en alta definición: volumen, brillo en el visor y microanimaciones. Se guarda en este navegador.">HD</button></div>
+      <div class="vm-row"><span>Vista del mapa</span><button class="btn sm" id="btn-view" aria-pressed="false" title="Alterna entre el plano 2D y la vista en perspectiva 2.5D">2.5D</button></div>
+      <div class="vm-row"><span>Sin mapa (portátil o media pantalla)</span><button class="btn sm" id="btn-compact" aria-pressed="false" title="Esconde el mapa y deja métricas y tarjetas (en columnas): para el portátil o media pantalla">Compacta</button></div>
+      <div class="vm-row"><span>Avisos del sistema</span><button class="btn sm" id="btn-notify" aria-pressed="false" title="Sonido y notificación del sistema cuando un robot te necesita o se queda sin actividad. El título de la pestaña siempre muestra cuántos te necesitan.">Avisos: no</button></div>
+      <div class="vm-row" id="vm-sound"><span>Sonidos de la oficina</span></div>
+      <p class="vm-note">Modo cine: tecla C. Todo esto se guarda en este navegador, salvo el estilo, que es de la oficina.</p>
+    </div>
+  </div>
   <button class="btn" id="btn-dismiss" hidden></button>
   <div class="stepper" title="Robots trabajando a la vez. Todos gastan de la misma cuota de tu suscripción.">
     <span>Robots a la vez</span>
