@@ -36,7 +36,7 @@ function addBg(r, id, t, input, at) {
   const i = input || {};
   if (r.bg?.[id]) return;
   let e = null;
-  if (t === 'Bash' && i.run_in_background) e = { kind: 'shell', what: trunc(i.description || i.command, 90), until: at + BG_MAX_MS };
+  if (t === 'Bash' && i.run_in_background) e = { kind: 'shell', what: trunc(i.description || i.command, 90), cmd: trunc(i.command, 300), until: at + BG_MAX_MS };
   else if (t === 'Monitor') e = { kind: 'monitor', what: trunc(i.description || i.command, 90), until: at + (Number(i.timeout_ms) > 0 ? Number(i.timeout_ms) + 60e3 : BG_MAX_MS) };
   else if (t === 'ScheduleWakeup') e = { kind: 'despertador', what: trunc(i.reason || 'vuelve a revisar', 90), until: at + (Number(i.delaySeconds) || 60) * 1000 + 120e3 };
   else if (t === 'CronCreate') e = { kind: 'cron', what: trunc(i.prompt || i.description || i.schedule || 'tarea programada', 90), until: at + BG_MAX_MS };

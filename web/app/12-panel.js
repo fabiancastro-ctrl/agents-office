@@ -307,6 +307,15 @@ const canSummary = d => !d.summaryPending && (d.state === 'done' || (d.state ===
 async function sumKill(name) {
   try { await api('POST', `/api/robots/${name}/despedir-con-resumen`); toast(`${name} está escribiendo su resumen; al terminar se va`); } catch { /* toast ya mostrado */ }
 }
+// Relevo por contexto: con mucho contexto la oficina ofrece «🔁 Relevar» (escribe su resumen y sigue otro robot con su
+// mismo nombre y solo ese resumen) o «Seguir así» (no vuelve a ofrecer hasta que suba 100 k más).
+const relevoLabel = d => `🔁 Relevar (${Math.round(d.relevo.tokens / 1000)} k)`;
+const relevoBtns = (d, card) => d.relevo && !d.relevoPending && canSummary(d)
+  ? `<button class="btn sm primary" data-${card ? 'card-' : ''}act="relevar" title="Mucho contexto: cada turno lo relee entero. Escribe su resumen, se va y entra otro robot con su mismo nombre que sigue solo con ese resumen.">${relevoLabel(d)}</button><button class="btn sm" data-${card ? 'card-' : ''}act="seguir-sin-relevo" title="No vuelve a ofrecer el relevo hasta que el contexto suba 100 k más">Seguir así</button>` : '';
+async function relevar(name) {
+  try { await api('POST', `/api/robots/${name}/relevar`); toast(`${name} escribe su relevo; sigue otro robot con su mismo nombre`); } catch { /* toast ya mostrado */ }
+}
+async function seguirSinRelevo(name) { try { await api('POST', `/api/robots/${name}/seguir-sin-relevo`); } catch { /* toast ya mostrado */ } }
 async function revive(name, btn) {
   if (btn) btn.disabled = true;
   try { await api('POST', `/api/robots/${name}/revivir`); toast(`${name} volvió con su sesión`); } catch { if (btn) btn.disabled = false; }

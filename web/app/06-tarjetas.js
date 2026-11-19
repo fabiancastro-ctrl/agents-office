@@ -212,7 +212,7 @@ function cardHtml(a) {
   else if (d.hold) actions = `<button class="btn primary sm" data-card-act="hold-allow">Aprobar</button><button class="btn danger sm" data-card-act="hold-deny">Denegar</button><button class="btn sm" data-card-act="open">Ver</button>`;
   else if (d.needsPermission) actions = `<button class="btn primary sm" data-card-act="perm-approve">Aprobar</button><button class="btn danger sm" data-card-act="perm-reject">Rechazar</button><button class="btn sm" data-card-act="open">Ver consola</button>`;
   else if (d.state === 'input') actions = `<form class="rc-reply" data-card-reply><input id="reply-${esc(d.name)}" placeholder="Responder a ${esc(d.name)}…" autocomplete="off"><button class="btn primary sm">Enviar</button></form>`;
-  else if (d.state === 'done') actions = `${isSleepy(d) ? `<span class="rc-sleep" title="Sin actividad hace ${fmtDur(sleepMs(d))}. Despídelo con su resumen y retoma la tarea cuando vuelva lo que espera.">💤 ${fmtDur(sleepMs(d))}</span>${canSummary(d) ? '<button class="btn sm" data-card-act="sumkill">📝 Resumen y despedir</button>' : ''}` : ''}${canCompact(d) ? `<button class="btn sm" data-card-act="compact" title="Contexto al ${d.ctx.pct} %">🧹 Compactar</button>` : ''}<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
+  else if (d.state === 'done') actions = `${relevoBtns(d, true)}${isSleepy(d) ? `<span class="rc-sleep" title="Sin actividad hace ${fmtDur(sleepMs(d))}. Despídelo con su resumen y retoma la tarea cuando vuelva lo que espera.">💤 ${fmtDur(sleepMs(d))}</span>${canSummary(d) ? '<button class="btn sm" data-card-act="sumkill">📝 Resumen y despedir</button>' : ''}` : ''}${canCompact(d) ? `<button class="btn sm" data-card-act="compact" title="Contexto al ${d.ctx.pct} %">🧹 Compactar</button>` : ''}<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
   const stuck = isStuck(d), urg = urgency(d);
   const cls = ['rc', `g-${g}`, `s-${d.state}`, urg ? `urg-${urg}` : '', stuck ? 'stuck' : '', d.state === 'done' && d.critical > 0 ? 'crit' : '', st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : ''].filter(Boolean).join(' ');
   return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % COLORS.length]}">
@@ -309,6 +309,8 @@ CARDS.addEventListener('click', async e => {
       case 'compact': return a && compact(a.data.name);
       case 'revive': return a && revive(a.data.name, b);
       case 'sumkill': return a && sumKill(a.data.name);
+      case 'relevar': return a && relevar(a.data.name);
+      case 'seguir-sin-relevo': return a && seguirSinRelevo(a.data.name);
       case 'docs': return a?.data.docs.length && showDoc(a.data.docs[a.data.docs.length - 1].path);
       case 'perm-approve': return await api('POST', `/api/robots/${name}/permission`, {decision: 'approve'});
       case 'perm-reject': return await api('POST', `/api/robots/${name}/permission`, {decision: 'reject'});

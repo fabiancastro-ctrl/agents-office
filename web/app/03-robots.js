@@ -187,7 +187,7 @@ function paint(a) {
   if (a.wasLost && !d.consoleLost) { a.el.classList.add('poweron'); setTimeout(() => a.el.classList.remove('poweron'), 1600); }
   a.wasLost = !!d.consoleLost;
   a.sign.textContent = d.consoleLost ? '⚠ sin consola' : d.spawnReq ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?` : onHold(d) ? `⏳${d.bg.length > 1 ? ' ' + d.bg.length : ''}` : d.state === 'done' ? (d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : 'LISTO') : d.state === 'input' ? (d.inputAt ? `? ${fmtWait(Date.now() - Date.parse(d.inputAt))}` : '?') : '';
-  const text = d.consoleLost ? 'Se cerró mi consola: revíveme' : d.summaryPending ? 'Escribo mi resumen y me voy' : d.spawnReq ? `Quiero lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: apruébalo en mi ventana` : d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
+  const text = d.consoleLost ? 'Se cerró mi consola: revíveme' : d.relevoPending ? 'Escribo mi relevo y me sigue otro yo' : d.summaryPending ? 'Escribo mi resumen y me voy' : d.spawnReq ? `Quiero lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: apruébalo en mi ventana` : d.state === 'input' && (d.needsPermission || d.hold) ? 'Necesito permiso' : plainMd(d.bubble);
   if (text && text !== a.lastBubble) {
     a.lastBubble = text;
     a.bubble.textContent = text; a.bubble.title = text; a.bubble.hidden = false; a.bubble.dataset.at = Date.now();

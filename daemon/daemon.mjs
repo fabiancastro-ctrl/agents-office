@@ -18,6 +18,7 @@ import { migrateSummaries } from './lib/exportar.mjs';
 import './lib/consola.mjs';
 import './lib/transcript.mjs';
 import './lib/hooks.mjs';
+import './lib/relevo.mjs';
 import './lib/adjuntos.mjs';
 import { guardSession } from './lib/tmux.mjs';
 import './lib/rutinas.mjs';

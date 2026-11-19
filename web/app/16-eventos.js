@@ -220,6 +220,8 @@ PANEL.addEventListener('click', async e => {
     if (b.dataset.act === 'wake-arch' && st.archView) { st.rtDraft = wakeDraft({kind: 'retake', archId: st.archView.id}, st.archView.note); rtUi.edit = null; return select('@cron'); }
     if (b.dataset.act === 'revive' && a) return revive(name, b);
     if (b.dataset.act === 'sumkill' && a) return sumKill(name);
+    if (b.dataset.act === 'relevar' && a) return relevar(name);
+    if (b.dataset.act === 'seguir-sin-relevo' && a) return seguirSinRelevo(name);
     if (b.dataset.act === 'export' && a) return exportConv(`/api/robots/${name}/exportar`, b);
     if (b.dataset.act === 'export-arch' && st.archView) return exportConv(`/api/despedidos/${st.archView.id}/exportar`, b);
     if (b.dataset.act === 'arch-back') { select(st.archFrom || '@archivo'); return; }

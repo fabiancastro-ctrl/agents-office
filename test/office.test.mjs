@@ -865,3 +865,58 @@ test('en espera: una shell de fondo que murió sin aviso (nadie tiene abierta su
     assert.deepEqual((await o.robot('vigia')).bg.map(e => e.what), ['Viva']);
   } finally { p.kill(); await o.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// Transcript con un mensaje de Claude que reporta mucho contexto (y, si se pide, un despertador en segundo plano).
+function heavyTranscript(dir, name, tokens, wake) {
+  const file = path.join(dir, `${name}.jsonl`), at = new Date().toISOString();
+  const content = [{ type: 'text', text: 'trabajando' }, ...(wake ? [{ type: 'tool_use', id: 'w1', name: 'ScheduleWakeup', input: { delaySeconds: 3000, reason: 'revisar el CI' } }] : [])];
+  fs.writeFileSync(file, JSON.stringify({ type: 'assistant', timestamp: at, message: { id: `m-${name}`, model: 'claude-sonnet-5-5', usage: { input_tokens: 10, cache_read_input_tokens: tokens }, content } }) + '\n');
+  return file;
+}
+
+test('relevo por contexto: oferta, «seguir así» y relevo manual de punta a punta', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-relevo-'));
+  const o = await startOffice({
+    env: { OFFICE_RELEVO_TICK_MS: '300' }, maxRobots: 4,
+    robots: [{ name: 'pesado', idx: 0, title: 'PR 7', note: 'espera a Ana', transcript: heavyTranscript(dir, 'pesado', 320000) },
+      { name: 'terco', idx: 1, transcript: heavyTranscript(dir, 'terco', 320000) },
+      { name: 'ligero', idx: 2, transcript: heavyTranscript(dir, 'ligero', 90000) }]
+  });
+  try {
+    const offer = await waitFor(async () => (await o.robot('pesado'))?.relevo, { what: 'la oferta de relevo' });
+    assert.ok(offer.tokens >= 300000);
+    assert.equal((await o.robot('ligero')).relevo, null, 'con poco contexto no se ofrece');
+    // «Seguir así»: descarta la oferta y no vuelve a salir.
+    assert.equal((await o.api('POST', '/api/robots/terco/seguir-sin-relevo')).status, 200);
+    await sleep(900);
+    assert.equal((await o.robot('terco')).relevo, null);
+    // Relevo: pide su resumen y, al recibirlo, se va y entra otro con su mismo nombre, título y nota.
+    const oldSession = (await o.robot('pesado')).sessionId;
+    assert.equal((await o.api('POST', '/api/robots/pesado/relevar')).status, 200);
+    assert.equal((await o.api('POST', '/api/robots/pesado/relevar')).status, 409, 'ya está escribiendo su relevo');
+    assert.equal((await o.robot('pesado')).relevoPending, true);
+    await o.hook('pesado', { hook_event_name: 'Stop', last_assistant_message: '## Relevo\n- Falta mergear el PR 7.\n- Esperaba el CI: relánzalo con gh run watch.' });
+    const call = await waitFor(() => o.claudeCalls().find(c => c.includes('relevo por contexto')), { what: 'la llamada del robot de relevo' });
+    assert.match(call, /Falta mergear el PR 7/);
+    const nuevo = await waitFor(async () => { const r = await o.robot('pesado'); return r && r.sessionId !== oldSession ? r : null; }, { what: 'el robot nuevo con el mismo nombre' });
+    assert.equal(nuevo.title, 'PR 7');
+    assert.equal(nuevo.note, 'espera a Ana');
+    assert.equal(nuevo.relevoPending, false);
+    const arch = (await o.api('GET', '/api/despedidos?all=1')).body.recent;
+    assert.equal(arch[0].name, 'pesado');
+    assert.equal(arch.length, 1);
+  } finally { await o.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('relevo por contexto: en espera con más de 150 k se releva solo', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-relevo-'));
+  const o = await startOffice({
+    env: { OFFICE_RELEVO_TICK_MS: '300', OFFICE_RELEVO_ESPERA_MIN: '0' },
+    robots: [{ name: 'espera', idx: 0, transcript: heavyTranscript(dir, 'espera', 200000, true) }]
+  });
+  try {
+    await waitFor(async () => (await o.robot('espera'))?.relevoPending, { what: 'que la oficina pida el relevo' });
+    await o.hook('espera', { hook_event_name: 'Stop', last_assistant_message: 'Esperaba el CI del PR 9.' });
+    await waitFor(() => o.claudeCalls().find(c => c.includes('Esperaba el CI del PR 9')), { what: 'el robot de relevo' });
+  } finally { await o.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});

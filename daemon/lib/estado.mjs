@@ -53,7 +53,7 @@ function view(r, withLog = false) {
     state: r.state, place: r.place, subs: r.subs, pendingSubs: r.pendingSubs,
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
-    parent: r.parent || null, reported: !!r.reported, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending, consoleLost: !!r.consoleLost,
+    parent: r.parent || null, reported: !!r.reported, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending, relevo: r.relevo && ['done', 'input'].includes(r.state) ? r.relevo : null, relevoPending: !!r.relevoPending, consoleLost: !!r.consoleLost,
     bg: bgList(r), permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null, repo: r.repo || null,
     spend: r.spend || null, crown: crownOf(r.name), loop: r.loop || null
   };
@@ -176,4 +176,4 @@ function waitsView() {
 let createdAt; try { createdAt = JSON.parse(fs.readFileSync(path.join(RUNS, 'office.json'), 'utf8')).createdAt || null; } catch { createdAt = null; }
 function configView() { return { createdAt, maxRobots, maxRobotsLimit: MAX_ROBOTS_LIMIT, approval: APPROVAL, name: officeName, session: SESSION, stats: statsView(), mapTheme: MAP_THEMES.includes(readConfig().mapTheme) ? readConfig().mapTheme : 'moderna' }; }
 
-export { addWait, broadcast, bumpStats, configView, emit, fmtK, knownDoc, MAP_THEMES, TEXT_DOC, usage, view };
+export { addWait, broadcast, bumpStats, configView, ctxOf, emit, fmtK, knownDoc, MAP_THEMES, TEXT_DOC, usage, view };

@@ -8,6 +8,7 @@ import { broadcast, bumpStats, emit, view } from './estado.mjs';
 import { log, saveState, setState } from './persistencia.mjs';
 import { maybeFlush, pendingResults, reportToParent } from './equipo.mjs';
 import { removeRobot } from './consola.mjs';
+import { checkRelevo, finishRelevo } from './relevo.mjs';
 import { emitSalas, postThread, salas, saveSalas } from './salas.mjs';
 import { readBody, send } from './http.mjs';
 
@@ -18,6 +19,11 @@ const SUMMARY_ASK = '[Oficina] Te vamos a despedir. Responde SOLO con un super r
   + 'y repos, ramas, PRs, archivos y documentos clave con su ruta. Sin saludos ni preguntas. No uses herramientas.';
 function finishTurn(r, lastMessage) {
   if (lastMessage) r.bubble = trunc(lastMessage, 140);
+  if (r.relevoPending && r.pendingSubs <= 0 && String(lastMessage ?? '').trim()) { // su relevo: se guarda, se va y entra otro con su nombre
+    r.summaryPending = false; r.relevoPending = false;
+    finishRelevo(r, lastMessage).catch(e => log(r, 'sys', `No se pudo lanzar el robot de relevo: ${e.message}`));
+    return;
+  }
   if (r.summaryPending && r.pendingSubs <= 0 && String(lastMessage ?? '').trim()) { // su resumen: se guarda y se va
     r.summaryPending = false;
     removeRobot(r, 'despedido con su resumen', lastMessage);
@@ -34,6 +40,7 @@ function finishTurn(r, lastMessage) {
   // Un turno que termina en pregunta queda esperando tu respuesta: no se va.
   if (/\?\s*[`*_)\]]*\s*$/.test(String(lastMessage ?? '').trim())) {
     setState(r, 'input');
+    checkRelevo(r);
     emit(r);
     return;
   }
@@ -41,6 +48,7 @@ function finishTurn(r, lastMessage) {
   if (r.state !== 'done') bumpStats(r);
   reportToParent(r, lastMessage);
   setState(r, 'done');
+  checkRelevo(r); // con mucho contexto, ofrece el relevo
   emit(r);
   // Cerró su turno: si le guardé resultados de sus hijos mientras trabajaba, le llegan ahora, todos juntos.
   if (pendingResults.has(r.name)) setTimeout(() => maybeFlush(r.name), 1500);

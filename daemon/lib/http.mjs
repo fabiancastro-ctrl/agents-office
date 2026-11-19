@@ -13,6 +13,7 @@ import { doorView, drainSpawnQueue, equipoRobotApi, launchOrQueue, puertaApi, re
 import { archive, cleanTitle, emitInbox, favorites, fijadosApi, frecuentesApi, pins, SUMMARY_ASK } from './turno.mjs';
 import { despedidosApi, exportConversation } from './exportar.mjs';
 import { removeRobot, revive } from './consola.mjs';
+import { blockedBy, snooze, startRelevo } from './relevo.mjs';
 import { answerAsk, decide, onHook } from './hooks.mjs';
 import { validAttachments } from './adjuntos.mjs';
 import { listSkills, openConsole, pane, pressKey, say } from './tmux.mjs';
@@ -241,6 +242,13 @@ const server = http.createServer(async (req, res) => {
         await say(r, SUMMARY_ASK);
         return send(res, 200, { ok: true });
       }
+      // Relevo por contexto: escribe su resumen, se da de baja y entra otro robot con su mismo nombre y solo ese resumen.
+      if (req.method === 'POST' && action === 'relevar') {
+        if (r.state !== 'done' && !(r.state === 'input' && !r.needsPermission && !r.hold && !r.ask) || blockedBy(r)) return send(res, 409, { error: 'Está en medio de algo: espera a que termine su turno.' });
+        await startRelevo(r, 'manual');
+        return send(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && action === 'seguir-sin-relevo') { snooze(r); return send(res, 200, { ok: true }); }
       // Nota tuya pegada al robot («esperando respuesta de Ramiro»): se ve en la tarjeta, el mapa y el archivo.
       if (req.method === 'POST' && action === 'note') {
         r.note = String((await readBody(req)).note ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
