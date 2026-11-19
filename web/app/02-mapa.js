@@ -47,12 +47,13 @@ function layout(incoming) {
   geo.roomOrder = [...geo.roomOrder.filter(id => byRoom.has(id)), ...[...byRoom.keys()].filter(id => !geo.roomOrder.includes(id))];
   const specs = geo.roomOrder.map(id => ({...byRoom.get(id), seatRows: Math.max(1, Math.ceil((byRoom.get(id).maxSlot + 1) / ROOM_COLS))}));
   for (const sp of specs) { const re = geo.roomEls.get(sp.id); if (re) { re.el.querySelector('small').textContent = `${sp.n} robot${sp.n === 1 ? '' : 's'}`; re.el.querySelector('.sala-empty')?.toggleAttribute('hidden', sp.n > 0); } }
-  const sig = (v || '') + '|' + rows + '|' + specs.map(sp => sp.id + ':' + (v ? sp.maxSlot : sp.seatRows)).join(',');
+  const sig = (v ? v + '@' + Math.round((MAP.clientWidth || 0) / 40) : '') + '|' + rows + '|' + specs.map(sp => sp.id + ':' + (v ? sp.maxSlot : sp.seatRows)).join(',');
   if (sig === geo.sig) return;
   geo.sig = sig;
   geo.rows = rows;
   // Dentro de una sala el mapa es solo ella, a todo lo ancho; en la oficina, las de rutina debajo de los escritorios.
   let y = 43 + rows * ROW_H;
+  if (v) salaGeom(Math.max(0, ...specs.map(sp => sp.maxSlot + 1)));
   geo.rooms = v ? specs.map(sp => ({...sp, top: 2, boxH: SV.H - 4, h: SV.H - 2}))
     : specs.map(sp => { const boxH = 6 + sp.seatRows * SEAT_ROW_H; const r = {...sp, top: y, boxH, h: boxH + 6}; y += r.h; return r; });
   geo.H = v ? SV.H : y + 5;
@@ -131,6 +132,13 @@ function drawRooms() {
     }
     if (re.props) {
       setRect(re.el, 1, r.top + 1, 98, r.boxH);
+      const round = SV.mode === 'round';
+      re.el.classList.toggle('round', round);
+      re.props[1].classList.toggle('round', round);
+      if (round) { setRect(re.props[1], (RT.cx - RT.a) / RT.xU, (RT.cy - RT.b) / RT.yU, 2 * RT.a / RT.xU, 2 * RT.b / RT.yU); re.props[1].style.zIndex = roundTableZ(); } // solo los de arriba quedan detrás; los de los costados, delante
+      else { setRect(re.props[1], SV.table.x, SV.table.y, SV.table.w, SV.table.h); re.props[1].style.zIndex = Math.round((SV.table.y + SV.table.h / 2) * 10); }
+      setRect(re.props[0], SV.board.x, SV.board.y, SV.board.w, SV.board.h); // el tablero y la puerta siguen el alto de la sala
+      setRect(re.props[2], SV.door.x - 4, SV.H - 4.2, 8, 2.6);
       re.props[1].querySelector('span').textContent = r.n ? '' : 'Nadie trabajando aquí ahora';
       // Un portátil por puesto, sobre la mesa frente a su robot: aparece cuando llega y se sienta, y se va con él.
       // Hace de «escritorio» del robot (deskFor): la pantalla se enciende cuando trabaja, como en los escritorios.
@@ -143,8 +151,12 @@ function drawRooms() {
         re.seats.push({el, paper: el.querySelector('.paper')});
       }
       while (re.seats.length > n) re.seats.pop().el.remove();
-      // Arriba se ve la tapa por detrás (el robot la mira desde el otro lado); abajo, la pantalla.
-      re.seats.forEach((d, j) => { const p = tableSeat(j); d.el.classList.toggle('front', j % 2 === 1); setRect(d.el, p.x - 1.5, j % 2 ? SV.table.y + SV.table.h - 4 : SV.table.y + 0.8, 3, 2.9); d.el.style.zIndex = tz; });
+      // Mesa: arriba se ve la tapa por detrás (el robot la mira desde el otro lado); abajo, la pantalla.
+      re.seats.forEach((d, j) => {
+        const p = tableSeat(j);
+        if (round) { const L = RT.laps[j]; if (!L) return; d.el.classList.toggle('front', L.front); setRect(d.el, L.x - 1.5, L.y - 1.5, 3, 2.9); d.el.style.zIndex = roundTableZ() + 1; return; }
+        d.el.classList.toggle('front', j % 2 === 1); setRect(d.el, p.x - 1.5, j % 2 ? SV.table.y + SV.table.h - 4 : SV.table.y + 0.8, 3, 2.9); d.el.style.zIndex = tz;
+      });
       syncLaptops();
       continue;
     }
@@ -180,8 +192,46 @@ const restPos = a => a.queueSlot != null && !st.view ? queuePos(a.queueSlot) : s
 /* ---------- vista de una sala ---------- */
 // Geometría de la sala por dentro (unidades del mapa): tablero a la izquierda, mesa común a la derecha con los robots
 // alrededor (mitad arriba, mitad abajo), pasillos por arriba, abajo y a la derecha de la mesa, y la puerta abajo.
-const SV = {H: 74, board: {x: 2.5, y: 10, w: 40, h: 61}, table: {x: 47, y: 35, w: 42, h: 11}, door: {x: 84, y: 71.5}, aisleTop: 20, aisleBottom: 64, aisleRight: 94};
+const SV = {H: 74, board: {x: 2.5, y: 10, w: 40, h: 61}, table: {x: 47, y: 35, w: 42, h: 11}, door: {x: 84, y: 71.5}, aisleTop: 20, aisleBottom: 64, aisleRight: 94, mode: 'mesa', n: 6};
+// Hasta 6 robots, mesa común. Desde 7, mesa redonda grande (ovalada): los robots alrededor, a la misma distancia uno de
+// otro; los de arriba quedan detrás del borde y los de abajo delante. Si son muchos, la mesa crece hacia abajo.
+// Los robots miden lo mismo en píxeles en cualquier pantalla: la mesa se calcula en píxeles con el ancho real del mapa.
+const MESA_MAX = 6, ROBOT_PX = 64, NAME_PX = 18, SIGN_PX = 24, SEAT_GAP_PX = 104; // SEAT_GAP: distancia entre vecinos
+const RT = {cx: 0, cy: 0, a: 0, b: 0, seats: [], laps: [], xU: 10, yU: 6.25};
+function roundSeats(n, a, b, cx, cy) { // en px: n puestos a igual distancia por el contorno, desde arriba al centro
+  const pt = t => { const c = Math.cos(t), s = Math.sin(t); return {x: cx + (a + 34) * c, y: cy + b * s + (s < 0 ? (24 + 30 * Math.abs(c)) * s : 50 * s), t}; }; // arriba: de pie tras el borde con el nombre a la vista (más arriba en las diagonales)
+  const N = 720, pts = Array.from({length: N + 1}, (_, i) => pt(-Math.PI / 2 + 2 * Math.PI * i / N));
+  const acc = [0]; for (let i = 1; i <= N; i++) acc.push(acc[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  const total = acc[N], out = [];
+  for (let k = 0, i = 0; k < n; k++) { const want = total * k / n; while (acc[i] < want) i++; out.push(pts[i]); }
+  return {total, out};
+}
+function salaGeom(n) {
+  SV.n = Math.max(MESA_MAX, n);
+  SV.mode = n > MESA_MAX ? 'round' : 'mesa';
+  const W = MAP.clientWidth || 1000, xU = W / 100, yU = W * 0.00625; // px por unidad (el mapa es 16:10 por cada 100 de alto)
+  RT.xU = xU; RT.yU = yU;
+  let gapPx = SV.table.w / Math.ceil(SV.n / 2) * xU;
+  SV.H = 74;
+  if (SV.mode === 'round') {
+    const left = 44.5 * xU, right = 94 * xU, a = Math.max(70, (right - left) / 2 - 34 - 78), cx = (left + right) / 2; // margen: nombre y cartel no pisan el tablero
+    let b = 46, r;
+    for (; b < 600; b += 6) { r = roundSeats(n, a, b, 0, 0); if (r.total / n >= SEAT_GAP_PX) break; }
+    const cy = 19 * yU + SIGN_PX + ROBOT_PX + b + 30; // los de arriba, bajo la pizarra
+    Object.assign(RT, {a, b, cx, cy});
+    RT.seats = roundSeats(n, a, b, cx, cy).out.map(p => ({x: p.x / xU, y: p.y / yU, top: Math.sin(p.t) < -0.2}));
+    RT.laps = RT.seats.map((p, k) => { const t = roundSeats(n, a, b, cx, cy).out[k].t; return {x: (cx + a * 0.8 * Math.cos(t)) / xU, y: (cy + b * 0.8 * Math.sin(t)) / yU, front: Math.sin(t) > 0.2}; });
+    gapPx = r.total / n;
+    SV.H = Math.max(74, (cy + b + 50 + NAME_PX + 14) / yU + 6);
+  }
+  // Ancho de los nombres y de los globos: lo que mide un puesto.
+  MAP.style.setProperty('--sala-nw', Math.max(48, Math.round(Math.min(gapPx, 140) - 8)) + 'px');
+  MAP.style.setProperty('--sala-bw', Math.max(56, Math.round(Math.min(gapPx, 214) - 14)) + 'px');
+  SV.board.h = SV.H - 13; SV.door.y = SV.H - 2.5; SV.aisleBottom = SV.H - 10;
+}
+const roundTableZ = () => Math.round((RT.cy - RT.b * 0.8) / RT.yU * 10);
 function tableSeat(k = 0) {
+  if (SV.mode === 'round') return RT.seats[k] || RT.seats[RT.seats.length - 1] || {x: 70, y: 40};
   const n = Math.max(6, (geo.rooms[0]?.maxSlot ?? 0) + 1), per = Math.ceil(n / 2), col = Math.floor(k / 2);
   return {x: SV.table.x + SV.table.w * (col + 0.5) / per, y: k % 2 ? SV.table.y + SV.table.h + 12 : SV.table.y - 4}; // los de arriba, detrás del borde de la mesa con el nombre a la vista
 }
@@ -194,6 +244,16 @@ function syncLaptops() {
 }
 // Por los pasillos de la sala: a la fila de abajo directo; a la de arriba rodeando la mesa por la derecha.
 function salaRoute(f, t) {
+  if (SV.mode === 'round') { // rodeando la mesa por fuera, por el lado más corto
+    const ang = p => Math.atan2(p.y * RT.yU - RT.cy, p.x * RT.xU - RT.cx);
+    const A = RT.a + 34 + 70, B = RT.b + 90;
+    const out = t => ({x: Math.max(44, Math.min(95, (RT.cx + A * Math.cos(t)) / RT.xU)), y: Math.max(19, Math.min(SV.H - 3, (RT.cy + B * Math.sin(t)) / RT.yU))});
+    let t0 = ang(f), t1 = ang(t), d = t1 - t0;
+    if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+    const steps = Math.max(1, Math.ceil(Math.abs(d) / 0.35)), pts = [];
+    for (let i = 0; i <= steps; i++) pts.push(out(t0 + d * i / steps));
+    return [...pts, t];
+  }
   const up = p => p.y < SV.table.y;
   const rowY = p => up(p) ? SV.aisleTop : SV.aisleBottom;
   const pts = [{x: f.x, y: rowY(f)}];
@@ -318,7 +378,9 @@ function viewClass(a) {
   const show = shownHere(a.data) || (!!a.transit && !st.view); // en la oficina se ve mientras camina hacia o desde las salas
   for (const el of [a.el, ...a.subEls.values(), a.extraEl].filter(Boolean)) { el.classList.toggle('offview', !show); el.classList.toggle('sv', show && !!st.view); }
   // En la sala, los de la fila de abajo llevan el globo debajo del nombre: así no tapa la mesa ni los portátiles.
-  a.el.classList.toggle('bub-below', !!st.view && a.data.place?.sala === st.view && a.data.place.slot % 2 === 1);
+  a.el.classList.toggle('bub-below', !!st.view && SV.mode === 'mesa' && a.data.place?.sala === st.view && a.data.place.slot % 2 === 1);
+  // Mesa redonda: en el lado izquierdo el cartel (LISTO, ?) va hacia afuera, así no tapa el nombre del vecino de arriba.
+  a.el.classList.toggle('sign-left', !!st.view && SV.mode === 'round' && a.data.place?.sala === st.view && tableSeat(a.data.place.slot).x * RT.xU < RT.cx);
 }
 function enterSala(id) {
   if (!st.salas.some(s => s.id === id)) return;
@@ -440,3 +502,6 @@ timeOfDay();
 setInterval(timeOfDay, 5 * 60e3);
 const queue = (a, fn) => (a.q = a.q.then(fn).catch(() => {}));
 
+// Si cambia el ancho de la ventana estando en una sala, la mesa redonda se recalcula (los robots miden lo mismo en px).
+let salaResizeT = 0;
+window.addEventListener('resize', () => { if (!st.view) return; clearTimeout(salaResizeT); salaResizeT = setTimeout(() => layout(), 250); });

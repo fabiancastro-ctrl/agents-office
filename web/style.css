@@ -1696,3 +1696,19 @@ html.hc .robot.bub-flip .bubble::after{border-top-color:transparent;border-botto
 /* En espera: terminó su turno pero tiene algo corriendo de fondo. Ticket pequeño en lugar de LISTO. */
 .st-done.onhold .sign{background:#c8d8f8;color:#1d2d44;border-color:#3d5a8a;font-size:11px;padding:0 4px;animation:none}
 .pill.p-hold,.rc.g-hold .pill{background:color-mix(in srgb,var(--sky) 22%,transparent);color:var(--sky);border-color:color-mix(in srgb,var(--sky) 45%,transparent)}
+
+/* Alguien dentro de una sala te necesita: el cuarto «Salas de épica» late en ámbar y la fila de esa sala se rellena,
+   con un aviso que abre al robot directo. */
+.room.sala-need{animation:warneed 1.8s ease-in-out infinite}
+@keyframes warneed{0%,100%{box-shadow:inset 0 0 0 2px rgba(243,183,79,.55)}50%{box-shadow:inset 0 0 0 3px rgba(243,183,79,1),0 0 18px 3px rgba(243,183,79,.45)}}
+.rchip.need{background:color-mix(in srgb,var(--amber) 22%,transparent);border-radius:7px;padding:3px 4px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--amber) 60%,transparent)}
+.rchip.need>span:not(.sala-face){white-space:normal}
+.rchip-alert{display:block;max-width:100%;margin-top:1px;padding:0;border:0;background:none;font:700 10.5px var(--body);color:var(--amber);cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rchip-alert:hover,.rchip-alert:focus-visible{text-decoration:underline}
+@media (prefers-reduced-motion:reduce){.room.sala-need{animation:none;box-shadow:inset 0 0 0 3px rgba(243,183,79,.9)}}
+
+/* Mesa redonda (7 o más robots en la sala). Los nombres caben en su puesto (completos al pasar el mouse). */
+#map.sala-view .robot.sv .nm{max-width:var(--sala-nw,200px);overflow:hidden;text-overflow:ellipsis}
+#map.sala-view .robot.sv:hover .nm{max-width:none;z-index:8}
+.sala-table.round{border-radius:50%;background:radial-gradient(ellipse at 50% 38%,#c49a6c,#8a6440 70%);box-shadow:inset 0 -8px 0 rgba(0,0,0,.18),inset 0 0 0 6px rgba(91,68,51,.35),0 8px 0 #5b4433,0 14px 22px rgba(0,0,0,.38)}
+.robot.sign-left .sign{left:auto;right:78%}

@@ -109,7 +109,6 @@ function declutterBubbles() {
     if (sb) minX = Math.max(minX, sb.getBoundingClientRect().right + 4); // en la sala, nunca encima del tablero
     // En la sala, cada globo cabe en el espacio entre dos puestos vecinos de la mesa: así no chocan de lado (el texto
     // se corta con «…» y completo se ve al pasar el mouse).
-    if (sb) { const gap = (tableSeat(2).x - tableSeat(0).x) * mr.width / 100; MAP.style.setProperty('--sala-bw', Math.max(56, Math.round(gap - 14)) + 'px'); }
     for (const b of list) {
       b.style.removeProperty('--bx');
       const r = b.getBoundingClientRect(), k = b.offsetWidth ? r.width / b.offsetWidth : 1;
@@ -175,7 +174,6 @@ function urgency(d) {
 setInterval(() => { for (const a of st.robots.values()) if (a.data.state === 'input' || isStuck(a.data)) paint(a); }, 30000);
 
 function paint(a) {
-  viewClass(a);
   const d = a.data;
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
@@ -183,6 +181,7 @@ function paint(a) {
   // 10 · Antigüedad: medalla de veterano con más de 1 día en la oficina, de oro con más de 7.
   const age = Date.now() - (Date.parse(d.startedAt || '') || Date.now());
   a.el.className = ['robot', d.parent ? 'flyer' : '', d.loop ? 'looping' : '', age > 7 * 86400e3 ? 'vet2' : age > 86400e3 ? 'vet1' : '', `st-${shownState}`, onHold(d) ? 'onhold' : '', tool, d.critical > 0 && d.state === 'done' ? 'crit' : '', isStuck(d) ? 'stuck' : '', urg ? `urg-${urg}` : '', ...keep, st.selected === d.name ? 'sel' : '', cardUi.hl === d.name ? 'hl' : '', d.spawnReq ? 'spawn' : '', isSleepy(d) ? 'sleepy' : '', d.consoleLost ? 'lost' : ''].filter(Boolean).join(' ');
+  viewClass(a); // después de rearmar las clases: si no, se pierden las de la vista (sala, globo abajo, cartel a la izquierda)
   // Pide robots nuevos: cartel propio (no «LISTO») para que se vea que espera tu aprobación.
   // Al revivirlo: se endereza y los ojos vuelven a encender (solo la primera vez que deja de estar caído).
   if (a.wasLost && !d.consoleLost) { a.el.classList.add('poweron'); setTimeout(() => a.el.classList.remove('poweron'), 1600); }

@@ -12,6 +12,7 @@ async function quickKill(btn, name) {
 
 MAP.addEventListener('click', e => {
   if (e.target.closest('[data-sala-exit]')) return leaveSala();
+  const nr = e.target.closest('[data-need-robot]'); if (nr) { e.stopPropagation(); return select(nr.dataset.needRobot); } // aviso de la sala: abre al robot sin entrar
   const on = e.target.closest('[data-out-need]'); if (on?.dataset.outNeed) return select(on.dataset.outNeed);
   const sdm = e.target.closest('[data-sala-dismiss]');
   if (sdm) { // dos clics: el primero arma, el segundo (en 3 s) despide

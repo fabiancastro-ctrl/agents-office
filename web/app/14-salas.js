@@ -20,17 +20,22 @@ function renderOutsideNeed() {
   btn.textContent = out.length === 1 ? `🔴 ${out[0].name} te necesita afuera` : `🔴 ${out.length} te necesitan afuera`;
   btn.title = `Fuera de esta sala te esperan: ${out.map(d => d.name + (d.place?.sala ? ` (en la sala «${st.salas.find(s => s.id === d.place.sala)?.name || 'otra'}»)` : '')).join(', ')}. Clic: abrir a ${out[0].name} (el que más lleva esperando) sin salir de la sala.`;
 }
+// Por qué te necesita, en pocas palabras (para el aviso de la sala en la lista «Salas de épica»).
+const needWhy = d => d.consoleLost ? 'perdió su consola' : d.spawnReq ? 'pide robots' : d.ask ? 'te pregunta' : d.hold || d.needsPermission ? 'pide permiso' : 'espera tu respuesta';
 function renderSalaChips() {
   renderOutsideNeed();
   $('#sala-count').textContent = `${st.salas.length} sala${st.salas.length === 1 ? '' : 's'}`;
   $('#sala-chips').innerHTML = st.salas.map(s => { // lista completa: la sala es chica y hace scroll
     const bots = salaRobots(s.id), n = bots.length;
     // Sus robots no se ven en la oficina: si alguno te necesita, la sala lo avisa.
-    const need = bots.filter(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost).length;
+    const needers = bots.map(a => a.data).filter(d => d.state === 'input' || d.spawnReq || d.consoleLost)
+      .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0)), need = needers.length;
     const done = s.done && !need; // equipo terminado: todos entregaron
     const prog = salaProgress(s); // 3 · avance del equipo, visible sin entrar
-    return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><span class="sala-face" style="--st:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}">${salaFace(s)}</span><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? ` · ⚠ ${need} te necesita${need === 1 ? '' : 'n'}` : done ? ' · ✓ terminó' : prog ? ` · ${prog.ok}/${prog.n} entregaron` : ` · ${s.thread.length} msj`}</small></span>${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
+    return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><span class="sala-face" style="--st:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}">${salaFace(s)}</span><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? '' : done ? ' · ✓ terminó' : prog ? ` · ${prog.ok}/${prog.n} entregaron` : ` · ${s.thread.length} msj`}</small>${need ? `<button type="button" class="rchip-alert" data-need-robot="${esc(needers[0].name)}" title="Abrir a ${esc(needers[0].name)} sin entrar a la sala${need > 1 ? ` (también: ${esc(needers.slice(1).map(d => d.name).join(', '))})` : ''}">⚠ ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}</button>` : ''}</span>${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
   }).join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';
+  // Si alguien dentro de una sala te necesita, todo el cuarto «Salas de épica» late en ámbar (sus robots no se ven afuera).
+  $('#sala-chips').closest('.room')?.classList.toggle('sala-need', st.salas.some(s => salaRobots(s.id).some(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost)));
 }
 
 function salasPanel() {
