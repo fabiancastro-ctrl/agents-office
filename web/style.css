@@ -1712,3 +1712,28 @@ html.hc .robot.bub-flip .bubble::after{border-top-color:transparent;border-botto
 #map.sala-view .robot.sv:hover .nm{max-width:none;z-index:8}
 .sala-table.round{border-radius:50%;background:radial-gradient(ellipse at 50% 38%,#c49a6c,#8a6440 70%);box-shadow:inset 0 -8px 0 rgba(0,0,0,.18),inset 0 0 0 6px rgba(91,68,51,.35),0 8px 0 #5b4433,0 14px 22px rgba(0,0,0,.38)}
 .robot.sign-left .sign{left:auto;right:78%}
+/* Cambios de un robot (26-cambios.js): archivos que tocó y su estado en git */
+.chg>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none}
+.chg>summary::-webkit-details-marker{display:none}
+.chg>summary h4{margin:0;flex:1}
+.chg>summary h4::before{content:'▸ ';color:var(--muted)}
+.chg[open]>summary h4::before{content:'▾ '}
+.chg .chg-ref{padding:1px 7px}
+.chg-list{max-height:210px;overflow:auto;padding-right:4px;overscroll-behavior:contain;display:grid;gap:8px;margin-top:6px}
+.chg-repo{display:grid;gap:3px}
+.chg-h{display:flex;align-items:baseline;gap:8px;font-size:12px;min-width:0}
+.chg-h code{font-family:var(--mono);font-size:11px;color:var(--sky);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chg-h small{margin-left:auto;color:var(--muted);white-space:nowrap}
+.chg-sep{font-size:11px;color:var(--muted);margin-top:4px}
+.chg-f{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:8px;align-items:center;text-align:left;background:var(--panel-2);border:0;border-left:3px solid var(--amber);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:11.5px;color:var(--ink);cursor:pointer;min-width:0}
+.chg-f:hover{filter:brightness(1.2)}
+.chg-f.n{border-left-color:var(--teal)}
+.chg-f.d{border-left-color:var(--rose)}
+.chg-f.ok{border-left-color:var(--line);opacity:.7}
+.chg-f b{font-weight:600;white-space:nowrap}
+.chg-dir{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chg-n i{font-style:normal;margin-left:4px}
+.chg-n .a{color:var(--teal)}
+.chg-n .d{color:var(--rose)}
+.chg-s{font-family:var(--body);font-size:10.5px;color:var(--muted);white-space:nowrap}
+.chg-at{justify-self:end}

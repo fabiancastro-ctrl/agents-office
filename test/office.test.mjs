@@ -939,3 +939,35 @@ test('rutina sin cambios: el robot de rutina que no cambió nada se da de baja s
     assert.deepEqual(names, ['cambia', 'charla', 'libre']);
   } finally { await o.stop(); }
 });
+
+test('cambios: archivos que tocó el robot con su estado en git, otros cambios del repo y archivos ajenos rechazados', async () => {
+  const o = await startOffice({ env: { OFFICE_EDITOR: '/usr/bin/true' } });
+  try {
+    const repo = path.join(o.ws, 'svc');
+    fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+    const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe' });
+    g('init', '-q', '-b', 'main');
+    fs.writeFileSync(path.join(repo, 'src/a.go'), 'uno\ndos\n');
+    fs.writeFileSync(path.join(repo, 'listo.md'), 'x\n');
+    g('add', '.'); g('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'base');
+    await o.api('POST', '/api/robots', libre('dev'));
+    const edit = (tool, f) => o.hook('dev', { hook_event_name: 'PostToolUse', tool_name: tool, cwd: repo, tool_input: { file_path: f } });
+    fs.writeFileSync(path.join(repo, 'src/a.go'), 'uno\ntres\ncuatro\n');
+    await edit('Edit', path.join(repo, 'src/a.go'));
+    fs.writeFileSync(path.join(repo, 'src/b.go'), 'nuevo\n');
+    await edit('Write', path.join(repo, 'src/b.go'));
+    await edit('Edit', path.join(repo, 'listo.md')); // tocado pero sin cambio pendiente
+    fs.writeFileSync(path.join(repo, 'sed.txt'), 'por fuera\n'); // cambio que no pasó por Edit/Write
+    await waitFor(async () => (await o.snapshot()).robots.find(r => r.name === 'dev')?.files === 3, { what: 'que cuente 3 archivos' });
+    const c = (await o.api('GET', '/api/robots/dev/cambios')).body;
+    assert.equal(c.repos.length, 1);
+    const r = c.repos[0];
+    assert.equal(r.branch, 'main');
+    assert.deepEqual(r.files.map(f => [f.shown, f.status, f.add, f.del]), [['listo.md', 'sin cambios pendientes', null, null], ['src/b.go', 'nuevo', 1, null], ['src/a.go', 'modificado', 2, 1]]);
+    assert.deepEqual(r.others.map(f => f.shown), ['sed.txt']);
+    assert.equal(r.pending, 3);
+    assert.equal((await o.api('POST', '/api/robots/dev/cambios-abrir', { path: path.join(repo, 'src/a.go') })).body.mode, 'diff');
+    assert.equal((await o.api('POST', '/api/robots/dev/cambios-abrir', { path: path.join(repo, 'src/b.go') })).body.mode, 'archivo');
+    assert.equal((await o.api('POST', '/api/robots/dev/cambios-abrir', { path: '/etc/hosts' })).status, 403);
+  } finally { await o.stop(); }
+});

@@ -54,7 +54,7 @@ function view(r, withLog = false) {
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
     parent: r.parent || null, reported: !!r.reported, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending, relevo: r.relevo && ['done', 'input'].includes(r.state) ? r.relevo : null, relevoPending: !!r.relevoPending, consoleLost: !!r.consoleLost,
-    bg: bgList(r), permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null, repo: r.repo || null,
+    bg: bgList(r), permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null, repo: r.repo || null, files: (r.files || []).length,
     spend: r.spend || null, crown: crownOf(r.name), loop: r.loop || null
   };
   if (withLog) v.log = r.log.slice(-150);

@@ -20,6 +20,7 @@ import { listSkills, openConsole, pane, pressKey, say } from './tmux.mjs';
 import { resetRepoIndex, routines, routineView, rutinasApi } from './rutinas.mjs';
 import { salas, salasApi, salaView } from './salas.mjs';
 import { mantenimientoApi } from './mantenimiento.mjs';
+import { openChange, robotChanges } from './cambios.mjs';
 
 /* ---------- http ---------- */
 
@@ -261,6 +262,12 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true, title: r.title });
       }
       if (req.method === 'GET' && action === 'pane') return send(res, 200, { text: await pane(r) });
+      // Cambios: los archivos que tocó y cómo están en git; «abrir» lo muestra en el editor (diff contra HEAD si tiene cambios).
+      if (req.method === 'GET' && action === 'cambios') return send(res, 200, await robotChanges(r));
+      if (req.method === 'POST' && action === 'cambios-abrir') {
+        const out = await openChange(r, (await readBody(req)).path);
+        return send(res, out.status, out.error ? { error: out.error } : { ok: true, mode: out.mode });
+      }
       if (req.method === 'POST' && action === 'console') { await openConsole(r); return send(res, 200, { ok: true }); }
       if (req.method === 'DELETE' && !action) { await removeRobot(r, 'dado de baja'); return send(res, 200, { ok: true }); }
     }

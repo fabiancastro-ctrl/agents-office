@@ -9,6 +9,7 @@ import { pendingResults, spawnQueue } from './equipo.mjs';
 import { criticalOf } from './turno.mjs';
 import { markLost } from './consola.mjs';
 import { pumpTranscript } from './transcript.mjs';
+import { filesFromTranscript } from './cambios.mjs';
 
 /* ---------- persistencia ---------- */
 // Se guarda lo minimo para reconectar los robots cuya ventana tmux siga viva tras reiniciar el daemon.
@@ -25,7 +26,7 @@ function saveState() {
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
         leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, inputKind: r.inputKind || null, inputPerm: r.inputPerm || null, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt,
-        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported, note: r.note || '', salaNote: r.salaNote || '', routine: r.routine || null, changed: !!r.changed, prompts: r.prompts || 0, relevoNext: r.relevoNext || 0, repo: r.repo || null, bg: r.bg || null
+        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported, note: r.note || '', salaNote: r.salaNote || '', routine: r.routine || null, changed: !!r.changed, prompts: r.prompts || 0, relevoNext: r.relevoNext || 0, repo: r.repo || null, bg: r.bg || null, files: r.files || [], gitCwd: r.gitCwd || null
       })),
       spawnQueue,
       pendingResults: [...pendingResults]
@@ -62,6 +63,7 @@ async function restore() {
     if (r.state === 'input') r.inputAt ||= now();
     r.transcript ||= path.join(os.homedir(), '.claude/projects', WORKSPACE.replace(/\//g, '-'), `${r.sessionId}.jsonl`);
     if (['walking', 'delegating'].includes(r.state)) r.state = 'working';
+    if (!Array.isArray(s.files)) r.files = filesFromTranscript(r.transcript); // guardado antes de «Cambios»
     r.timeline = Array.isArray(s.timeline) && s.timeline.length ? s.timeline : [{ at: s.startedAt || now(), s: r.state }];
     robots.set(r.name, r);
     loadConv(r);

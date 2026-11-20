@@ -51,10 +51,11 @@ function robotPanel(a) {
           <div class="chat-tools"><label class="btn sm attach">Adjuntar<input type="file" multiple hidden data-attfor="chat"></label><button type="button" class="btn sm" data-bigedit="chat-in" title="Abre un editor grande para respuestas o contextos largos (Enter envía, Shift+Enter salto de línea)">⤢ Expandir</button><small class="muted">/ comandos y skills · códigos y repos se sugieren solos · Tab elige</small></div>
         </form>
       </div>
-      <div class="rp-col" style="--extra:${(d.subs.length ? 150 : 0) + (d.docs.length ? 205 : 0)}px">
+      <div class="rp-col" style="--extra:${(d.subs.length ? 150 : 0) + (d.docs.length ? 205 : 0) + (d.files ? (chg.open ? 250 : 40) : 0)}px">
         ${kidsBlock(d)}
         ${subs}
         ${docsBlock(d)}
+        ${changesBlock(d)}
         <h4>Consola en vivo</h4>
         <pre class="term" id="pane">${esc(paneCache.get(d.name) ?? 'cargando…')}</pre>
         <div class="row">

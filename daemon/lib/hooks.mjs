@@ -7,6 +7,7 @@ import { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, describeTool, EVENTS_FIL
 import { broadcast, emit } from './estado.mjs';
 import { registerSession } from './uso.mjs';
 import { log, setState, taskNote } from './persistencia.mjs';
+import { trackFile } from './cambios.mjs';
 import { finishTurn, trackDoc } from './turno.mjs';
 import { pumpTranscript } from './transcript.mjs';
 
@@ -106,6 +107,7 @@ function trackRepo(r, body) {
   const edit = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(body.tool_name) && body.hook_event_name === 'PreToolUse';
   const repo = (edit && repoOf(body.tool_input?.file_path || body.tool_input?.notebook_path)) || repoOf(body.cwd);
   if (repo && repo !== r.repo) { r.repo = repo; emit(r); }
+  if (body.cwd && body.cwd !== r.gitCwd && repoOf(body.cwd)) r.gitCwd = body.cwd; // para «Cambios»: lo que cambió en su repo por otros medios
 }
 
 function hold(r, body, closers = []) {
@@ -291,6 +293,7 @@ async function onHook(name, body, via = '', closers = []) {
     case 'PostToolUse': {
       if (internalHelper) break;
       if (['Write', 'Edit', 'MultiEdit'].includes(body.tool_name)) trackDoc(r, body.tool_name, body.tool_input?.file_path);
+      if (trackFile(r, body.tool_name, body.tool_input?.file_path || body.tool_input?.notebook_path)) emit(r);
       if (!sub && r.tool) { r.tool = ''; emit(r); } // entre herramientas, el robot piensa
       break;
     }
