@@ -5,13 +5,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { ATTACH_DIR, ATTACH_MAX_BYTES, clients, console_, inbox, MAX_ROBOTS_LIMIT, PORT, robots, run, setMaxRobots, setWorkspace, WEB, WORKSPACE } from './base.mjs';
-import { broadcast, configView, emit, knownDoc, MAP_THEMES, TEXT_DOC, view } from './estado.mjs';
+import { broadcast, configView, emit, isCold, knownDoc, MAP_THEMES, TEXT_DOC, view } from './estado.mjs';
 import { claudeStatus, fame, fameWall, loadSessions, officeUsage } from './uso.mjs';
 import { OFFICE_NAME_MAX, officeName, saveConfig, saveWorkspace, setOfficeName, setupView, workspaceInfo } from './carpeta.mjs';
 import { log, restore, saveState } from './persistencia.mjs';
 import { doorView, drainSpawnQueue, equipoRobotApi, launchOrQueue, puertaApi, resumeResults, spawnQueue } from './equipo.mjs';
 import { archive, cleanTitle, emitInbox, favorites, fijadosApi, frecuentesApi, pins, SUMMARY_ASK } from './turno.mjs';
-import { despedidosApi, exportConversation } from './exportar.mjs';
+import { despedidosApi, exportConversation, officeSummary } from './exportar.mjs';
 import { removeRobot, revive } from './consola.mjs';
 import { blockedBy, snooze, startRelevo } from './relevo.mjs';
 import { answerAsk, decide, onHook } from './hooks.mjs';
@@ -237,6 +237,10 @@ const server = http.createServer(async (req, res) => {
       // Despedir con su resumen: le pide un super resumen (su próxima respuesta) y al recibirlo lo da de baja.
       if (req.method === 'POST' && action === 'despedir-con-resumen') {
         if (r.state !== 'done' && !(r.state === 'input' && !r.needsPermission && !r.hold && !r.ask)) return send(res, 409, { error: 'Está en medio de algo: espera a que termine su turno.' });
+        if (isCold(r)) { // frío: despertarlo reescribiría toda su caché; el resumen lo arma la oficina, sin tokens
+          await removeRobot(r, 'despedido con su resumen', officeSummary(r), 'oficina');
+          return send(res, 200, { ok: true, by: 'oficina' });
+        }
         r.summaryPending = true;
         log(r, 'sys', 'Le pediste su resumen para despedirlo');
         emit(r);

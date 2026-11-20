@@ -1028,3 +1028,27 @@ test('salas: el relevo de un hijo no cierra la sala; mudar robots y reabrir una 
     assert.match(pane, /--- fin de la sala ---\n\n+sigue con lo tuyo/); // la consola solo muestra el final del aviso
   } finally { await o.stop(); }
 });
+
+test('cuota: robots sin herramientas pesadas, resumen sin tokens para uno frío y hilo de sala con @nombre', async () => {
+  const old = new Date(Date.now() - 2 * 3600e3).toISOString();
+  const o = await startOffice({ maxRobots: 4, robots: [{ name: 'frio', idx: 0, title: 'PR 9', note: 'espera a Ana', startedAt: old, lastEventAt: old }] });
+  try {
+    // Lanzamiento: sin Artifact ni Workflow (pesan ~16 k en cada llamada).
+    await o.api('POST', '/api/robots', libre('nuevo'));
+    const call = await waitFor(() => o.claudeCalls().find(c => c.includes('--session-id')), { what: 'el lanzamiento' });
+    assert.match(call, /--disallowedTools=Artifact,[^ ]*Workflow/);
+    // Frío: «Despedir con su resumen» no lo despierta; la oficina arma el resumen y lo despide.
+    const r = await o.api('POST', '/api/robots/frio/despedir-con-resumen');
+    assert.equal(r.body.by, 'oficina');
+    const arch = (await o.api('GET', '/api/despedidos?all=1')).body.recent.find(a => a.name === 'frio');
+    assert.equal(arch.summaryBy, 'oficina');
+    assert.match(fs.readFileSync(arch.summaryPath, 'utf8'), /## Objetivo[\s\S]*PR 9[\s\S]*espera a Ana[\s\S]*claude --resume/);
+    // Hilo: @nombre despierta solo a ese; el resto lo recibe con su próximo mensaje.
+    const req = await o.api('POST', '/api/robots/nuevo/encargos', { encargos: [{ titulo: 'Uno', encargo: 'x' }] });
+    const ok = await o.api('POST', `/api/robots/nuevo/encargos/${req.body.id}`, { decision: 'approve' });
+    const h = await o.api('POST', `/api/salas/${ok.body.sala}/hilo`, { text: '@uno revisa el contrato' });
+    assert.deepEqual([h.body.notified, h.body.queued], [1, 1]);
+    const h2 = await o.api('POST', `/api/salas/${ok.body.sala}/hilo`, { text: 'nota para todos' });
+    assert.deepEqual([h2.body.notified, h2.body.queued], [0, 2]);
+  } finally { await o.stop(); }
+});

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { CLAUDE_BIN, console_, maxRobots, NAMES, nextColor, now, PERMISSION_MODES, PORT, robots, run, SESSION, SETTINGS, trunc, WORKSPACE } from './base.mjs';
 import { emit } from './estado.mjs';
 import { freeDesk, log, roomSeat, setState } from './persistencia.mjs';
-import { cleanTitle, ROBOT_HINTS } from './turno.mjs';
+import { cleanTitle, ROBOT_FLAGS, ROBOT_HINTS } from './turno.mjs';
 import { attachmentNote } from './adjuntos.mjs';
 import { routines } from './rutinas.mjs';
 import { salaPreamble, salas } from './salas.mjs';
@@ -94,7 +94,7 @@ async function launchReserved({ kind, skill, args, text, permissionMode, name, o
   const tmuxArgs = ['new-window', '-d', '-t', `${SESSION}:`, '-n', name, '-c', WORKSPACE,
     '-e', `OFFICE_ROBOT=${name}`, '-e', `OFFICE_PORT=${PORT}`,
     'env', '-u', 'ANTHROPIC_API_KEY',
-    CLAUDE_BIN, '--settings', SETTINGS, '--session-id', sessionId, '--append-system-prompt', ROBOT_HINTS];
+    CLAUDE_BIN, '--settings', SETTINGS, '--session-id', sessionId, '--append-system-prompt', ROBOT_HINTS, ...ROBOT_FLAGS];
   if (permissionMode) tmuxArgs.push('--permission-mode', permissionMode);
   tmuxArgs.push(prompt);
   try {

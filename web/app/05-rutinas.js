@@ -132,7 +132,8 @@ function cronPanel() {
         <div class="fgrid full" id="g-agenda" hidden>
           <div class="field full"><label for="rt-agenda">Instrucciones</label><textarea id="rt-agenda" rows="5" data-ac placeholder="Ej.: busca los PRs abiertos de karol en DROPI-SAS y pásale a otro robot un /review-deep por cada uno que no hayas procesado"></textarea></div>
           <label class="check full"><input type="checkbox" id="rt-delegate" checked> Puede pasarle trabajo a otros robots de la oficina</label>
-          <div class="note full">Cada ejecución gasta cuota aunque no haya nada nuevo: dale un horario («A una hora» o horario laboral). El robot recibe un archivo de memoria para recordar lo que hizo antes. Si la ejecución anterior sigue en la oficina, se salta la siguiente.</div>
+          <div class="field full"><label for="rt-gate">Lanzar solo si cambia (opcional, no gasta cuota)</label><input id="rt-gate" placeholder="Ej.: gh pr list -R NR-2-0/nr-qa --search review-requested:@me --json number,headRefOid" autocomplete="off"><small class="muted">Un comando de shell que corre antes en tu carpeta de trabajo. Si su salida es la misma que la vez anterior, no se lanza ningún robot.</small></div>
+          <div class="note full">Sin condición, cada ejecución gasta cuota aunque no haya nada nuevo: dale un horario («A una hora» o horario laboral). El robot recibe un archivo de memoria para recordar lo que hizo antes. Si la ejecución anterior sigue en la oficina, se salta la siguiente.</div>
         </div>
 
         <div class="fgrid full" id="g-wake" hidden>
@@ -166,7 +167,7 @@ function routineBody() {
     : when === 'once' ? {mode: 'once', at: val('rt-at') ? new Date(val('rt-at')).toISOString() : ''}
     : {mode: 'every', everyMin: Number(val('rt-every')), ...(chk('rt-hours') ? {hours: {from: val('rt-h-from'), to: val('rt-h-to'), days: daysOf('rt-hday')}} : {})};
   const common = {type, name: val('rt-name').trim() || undefined, schedule, permissionMode: val('rt-mode')};
-  if (type === 'agenda') return {...common, text: val('rt-agenda'), delegate: chk('rt-delegate')};
+  if (type === 'agenda') return {...common, text: val('rt-agenda'), delegate: chk('rt-delegate'), gate: val('rt-gate')};
   if (type === 'wake') {
     const ck = val('rt-c-kind'), to = val('rt-c-to');
     return {...common, cond: ck === 'pr' ? {kind: 'pr', ref: val('rt-c-ref'), event: val('rt-c-event')} : ck === 'nexus' ? {kind: 'nexus', key: val('rt-c-key'), to: to === 'custom' ? val('rt-c-tostate') : to} : {kind: 'time', at: val('rt-c-at') ? new Date(val('rt-c-at')).toISOString() : ''},
@@ -188,7 +189,7 @@ function fillRoutineForm(rt, dup) {
   if (sch.mode === 'every') { setField('rt-every', sch.everyMin); setField('rt-hours', !!sch.hours); if (sch.hours) { setField('rt-h-from', sch.hours.from); setField('rt-h-to', sch.hours.to); for (let d = 0; d < 7; d++) setField(`rt-hday-${d}`, sch.hours.days.includes(d)); } }
   if (sch.mode === 'daily') { setField('rt-time', sch.time); for (let d = 0; d < 7; d++) setField(`rt-day-${d}`, sch.days.includes(d)); }
   if (sch.mode === 'once') setField('rt-at', localDT(sch.at));
-  if (rt.type === 'agenda') { setField('rt-agenda', rt.text); setField('rt-delegate', rt.delegate); }
+  if (rt.type === 'agenda') { setField('rt-agenda', rt.text); setField('rt-delegate', rt.delegate); setField('rt-gate', rt.gate || ''); }
   if (rt.type === 'watch' && rt.source) {
     setField('rt-where', rt.source.scope); setField('rt-repo', rt.source.repo || ''); setField('rt-owner', rt.source.owner || 'DROPI-SAS'); setField('rt-query', rt.source.query);
     setField('rt-scope', rt.onlyNew ? 'new' : 'all'); setField('rt-drafts', rt.includeDrafts); setField('rt-extra', rt.extra);

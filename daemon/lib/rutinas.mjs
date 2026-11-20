@@ -83,7 +83,7 @@ function routineView(rt) {
   const live = n => { const r = robots.get(n); if (!r) return null; const u = usage(r); return { state: r.state, tokens: u.out + u.in + u.cacheWrite }; };
   return {
     id: rt.id, type: rt.type, name: rt.name, everyMin: rt.schedule?.everyMin || rt.everyMin, schedule: rt.schedule, source: rt.source, onlyNew: rt.onlyNew,
-    includeDrafts: rt.includeDrafts, action: rt.action, extra: rt.extra, text: rt.text, delegate: rt.delegate, events: rt.events || ['new', 'commits'],
+    includeDrafts: rt.includeDrafts, action: rt.action, extra: rt.extra, text: rt.text, delegate: rt.delegate, gate: rt.gate || "", events: rt.events || ['new', 'commits'],
     cond: rt.cond || null, wake: rt.wake || null, status: rt.status || '', fired: rt.fired || null, doneOnce: !!rt.doneOnce,
     memory: rt.type === 'agenda' ? path.relative(WORKSPACE, memoryPath(rt)) : null, runs: rt.runs || 0,
     permissionMode: rt.permissionMode, paused: rt.paused, running: !!rt.running,
@@ -242,6 +242,16 @@ function agendaPrompt(rt) {
 async function runAgenda(rt) {
   const prev = rt.lastRobot && robots.get(rt.lastRobot);
   if (prev && prev.state !== 'done') return { dispatched: 0, note: `La ejecución anterior (${prev.name}) sigue trabajando; se salta esta` };
+  // Condición (opcional): un comando que corre antes, sin tokens. Si su salida es la misma que la última vez, no hay nada
+  // nuevo y no se lanza a nadie (lanzar un robot ya cuesta su arranque aunque se vaya sin hacer nada).
+  if (rt.gate) {
+    let out;
+    try { out = (await run('/bin/sh', ['-c', rt.gate], { cwd: WORKSPACE, timeout: 60e3, maxBuffer: 4 * 1024 * 1024 })).stdout; }
+    catch (e) { return { error: `La condición falló: ${trunc(e.stderr || e.message, 200)}` }; }
+    const sig = crypto.createHash('sha1').update(out.trim()).digest('hex');
+    if (sig === rt.gateSig) return { dispatched: 0, note: 'Sin cambios según su condición: no lanzó a nadie' };
+    rt.gateSig = sig; // se anota antes de lanzar: si el robot falla, la próxima vez solo vuelve a lanzar si cambia
+  }
   fs.mkdirSync(path.dirname(memoryPath(rt)), { recursive: true });
   if (!fs.existsSync(memoryPath(rt))) fs.writeFileSync(memoryPath(rt), `# Memoria de la rutina «${rt.name}»\n\n`);
   rt.runs = (rt.runs || 0) + 1;
@@ -406,6 +416,7 @@ async function buildRoutine(b) {
     f.text = String(b.text || '').trim();
     if (!f.text) throw new Error('Escribe las instrucciones de la tarea programada.');
     f.delegate = !!b.delegate;
+    f.gate = String(b.gate || '').trim().slice(0, 2000);
     f.name = trunc(b.name || trunc(f.text, 40), 60);
   } else if (type === 'wake') {
     const c = b.cond || {};
@@ -476,6 +487,7 @@ async function updateRoutine(rt, b) {
   if (f.type !== rt.type) throw new Error('No se puede cambiar el tipo de una rutina: crea otra.');
   if (JSON.stringify(f.source) !== JSON.stringify(rt.source) || f.onlyNew !== rt.onlyNew) { rt.seen = {}; rt.baselined = false; }
   if (JSON.stringify(f.cond) !== JSON.stringify(rt.cond)) { delete rt.base; delete rt.fired; rt.paused = false; }
+  if (f.gate !== rt.gate) delete rt.gateSig; // condición nueva: la próxima ejecución lanza y anota desde dónde
   Object.assign(rt, f);
   rt.doneOnce = false;
   rt.nextAt = rt.paused ? Infinity : firstRun(rt);

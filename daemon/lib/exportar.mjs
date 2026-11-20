@@ -114,12 +114,26 @@ function writeSummary(r, summary, by) {
   const head = `# ${r.name}${r.title ? ` · ${r.title}` : ''}\n\n_${by === 'robot' ? 'Resumen escrito por el robot al despedirlo' : 'Resumen armado por la oficina al despedirlo'} · entró ${r.startedAt?.slice(0, 16).replace('T', ' ')} · se fue ${now().slice(0, 16).replace('T', ' ')}_\n\n`;
   try { fs.mkdirSync(sumDir(), { recursive: true }); fs.writeFileSync(file, head + summary.trim() + '\n'); return file; } catch { return null; }
 }
+// Resumen que arma la oficina sin despertar al robot (no gasta tokens): para uno «frío», cuya caché ya venció y al que
+// pedirle el resumen le costaría reescribir todo su contexto. Sale de lo que la oficina ya tiene de él.
+function officeSummary(r) {
+  const rel = p => (WORKSPACE && p.startsWith(WORKSPACE + path.sep) ? path.relative(WORKSPACE, p) : p);
+  const said = r.log.filter(l => l.kind === 'agent').slice(-2).map(l => String(l.text || '').trim()).filter(Boolean);
+  const out = [`## Objetivo\n\n${r.title ? `**${r.title}** · ` : ''}${trunc(String(r.prompt || r.label || '').replace(/\n--- Sala[\s\S]*$/, '').trim(), 1500)}`];
+  if (r.note) out.push(`## Nota tuya\n\n${r.note}`);
+  if (said.length) out.push(`## Lo último que dijo\n\n${said.map(t => trunc(t, 3000)).join('\n\n---\n\n')}`);
+  if (r.docs.length) out.push(`## Documentos\n\n${r.docs.map(d => `- ${rel(d.path)}`).join('\n')}`);
+  if (r.files?.length) out.push(`## Archivos que tocó\n\n${r.files.slice(-30).reverse().map(f => `- ${rel(f)}`).join('\n')}`);
+  const bg = Object.values(r.bg || {});
+  if (bg.length) out.push(`## Dejó corriendo de fondo\n\n${bg.map(e => `- ${e.kind}: ${e.what}`).join('\n')}`);
+  out.push(`## Sesión\n\n\`claude --resume ${r.sessionId}\` recupera su conversación completa.`);
+  return out.join('\n\n');
+}
 // Solo se archiva (con su documento en docs/resumenes-robots/) quien se fue con «📝 Despedir con su resumen».
 // «Dar de baja» es solo eso: se va sin resumen ni archivo.
-function archiveRobot(r, reason, robotSummary) {
+function archiveRobot(r, reason, robotSummary, by = 'robot') {
   const summary = String(robotSummary || '').trim();
   if (!summary) return;
-  const by = 'robot';
   const summaryPath = writeSummary(r, summary, by);
   const log = r.log.filter(l => ['user', 'agent', 'bg', 'doc'].includes(l.kind)).slice(-80)
     .map(l => ({ kind: l.kind, at: l.at, text: String(l.text ?? '').slice(0, 6000), ...(l.who ? { who: l.who } : {}) }));
@@ -211,4 +225,4 @@ async function despedidosApi(req, res, url, parts) {
     }
 }
 
-export { archiveRobot, archMeta, convDir, despedidosApi, emitArchive, exportConversation, migrateSummaries, retake, searchArchive };
+export { archiveRobot, archMeta, convDir, officeSummary, despedidosApi, emitArchive, exportConversation, migrateSummaries, retake, searchArchive };

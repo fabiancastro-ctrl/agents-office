@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { inbox, now, replaceList, robots, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { inbox, now, replaceList, robots, ROOT, RUNS, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, bumpStats, emit, view } from './estado.mjs';
 import { log, saveState, setState } from './persistencia.mjs';
 import { maybeFlush, pendingResults, reportToParent } from './equipo.mjs';
@@ -137,13 +137,15 @@ const ROBOT_HINTS = 'Trabajas dentro de la Oficina de Agentes, que muestra tus r
   + 'Si te piden redactar un mensaje para otra persona (Google Chat, WhatsApp, Slack, correo), entrégalo completo dentro de una cita Markdown (cada línea empieza con «> »), una cita por mensaje y sin comentarios tuyos adentro; lo que quieras decirme a mí va fuera. '
   + 'Dentro de la cita usa Markdown normal (**negrita**, _cursiva_, listas con -, enlaces): la oficina lo convierte al formato del chat al copiarlo. '
   + 'Esos mensajes los firmo yo: primera persona del singular (yo hice, revisé, encontré, necesito), nunca en plural (hicimos, revisamos), y sin mencionar a Claude ni a la IA salvo que te lo pida; el plural solo vale cuando de verdad incluye al destinatario o a su equipo ("necesitamos validar juntos"). '
-  + 'Si te piden repartir trabajo en ROBOTS (robots nuevos, independientes, otras consolas), no uses subagentes: pídeselos a la oficina con un archivo JSON '
-  + '{"contexto":"lo que ya averiguaste y sirve a todos: decisiones, datos verificados, qué no repetir","encargos":[{"nombre":"una o dos palabras de lo que hace, ej. puertos-wallet","titulo":"título corto","encargo":"qué debe hacer"}]} (máximo 6) '
-  + 'enviado con: curl -s -X POST "http://127.0.0.1:$OFFICE_PORT/api/robots/$OFFICE_ROBOT/encargos" -H "Content-Type: application/json" --data-binary @<archivo>. '
-  + 'Cada robot nuevo arranca sin tu conversación: el encargo debe ser autosuficiente (objetivo, repos y rutas, documentos de entrada, restricciones, qué entregar y en qué formato). '
-  + 'El usuario los aprueba en la oficina; tú y ellos quedan en una sala cuyo CONTEXT.md recibe ese contexto (la respuesta del curl te da su ruta). '
-  + 'Sigue con tu trabajo: cada resultado te llega como mensaje «[Oficina] Resultado…» (los que terminen mientras trabajas te llegan juntos al terminar tu turno); intégralos. '
+  // Cómo pedir robots va en un archivo que se lee solo cuando hace falta: aquí viajaría en cada llamada.
+  + `Si te piden repartir trabajo en ROBOTS (consolas nuevas e independientes, no subagentes), lee antes ${path.join(ROOT, 'daemon', 'robots-equipo.md')} y sigue sus pasos. `
   + 'Si te piden agentes o subagentes, usa la herramienta de agentes como siempre.';
+
+// Banderas de cada robot: sin las herramientas que un robot no usa y que pesan en cada llamada (Artifact y Workflow
+// solas son ~16 k de los ~40 k de base). OFFICE_ROBOT_DISALLOWED las cambia ('' = ninguna); OFFICE_ROBOT_STRICT_MCP=1
+// además deja fuera los MCP de tu cuenta (conectores de claude.ai): ahorra ~2,7 k pero el robot no los podrá usar.
+const ROBOT_DISALLOWED = process.env.OFFICE_ROBOT_DISALLOWED ?? 'Artifact,ArtifactComments,ArtifactData,Workflow,SendFeedback,ShareOnboardingGuide';
+const ROBOT_FLAGS = [...(ROBOT_DISALLOWED.trim() ? [`--disallowedTools=${ROBOT_DISALLOWED.trim()}`] : []), ...(process.env.OFFICE_ROBOT_STRICT_MCP === '1' ? ['--strict-mcp-config'] : [])];
 
 const cleanTitle = t => String(t ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
 
@@ -235,4 +237,4 @@ async function fijadosApi(req, res, url, parts) {
     }
 }
 
-export { ARCH_FILE, ARCH_MAX, archive, cleanTitle, criticalOf, deliver, emitInbox, favorites, fijadosApi, finishTurn, frecuentesApi, normText, pins, requestOf, ROBOT_HINTS, saveFavorites, savePins, sumDir, SUMMARY_ASK, trackDoc };
+export { ARCH_FILE, ARCH_MAX, archive, cleanTitle, criticalOf, deliver, emitInbox, favorites, fijadosApi, finishTurn, frecuentesApi, normText, pins, requestOf, ROBOT_FLAGS, ROBOT_HINTS, saveFavorites, savePins, sumDir, SUMMARY_ASK, trackDoc };

@@ -5,7 +5,7 @@ import { CLAUDE_BIN, console_, PORT, robots, run, SESSION, SETTINGS, WORKSPACE }
 import { broadcast, emit, usage } from './estado.mjs';
 import { convDirty, convFile, endWait, log, saveState, setState } from './persistencia.mjs';
 import { drainSpawnQueue, flushIfIdle, pendingResults, resultTimers } from './equipo.mjs';
-import { deliver, ROBOT_HINTS } from './turno.mjs';
+import { deliver, ROBOT_FLAGS, ROBOT_HINTS } from './turno.mjs';
 import { archiveRobot } from './exportar.mjs';
 import { ensureSession, launching } from './tmux.mjs';
 import { emitRoutines, routines, saveRoutines } from './rutinas.mjs';
@@ -36,7 +36,7 @@ async function revive(r) {
   let size = 0; try { size = fs.statSync(r.transcript).size; } catch { /* sin transcript */ }
   const tmuxArgs = ['new-window', '-d', '-t', `${SESSION}:`, '-n', r.name, '-c', WORKSPACE,
     '-e', `OFFICE_ROBOT=${r.name}`, '-e', `OFFICE_PORT=${PORT}`, 'env', '-u', 'ANTHROPIC_API_KEY',
-    CLAUDE_BIN, '--settings', SETTINGS, '--resume', r.sessionId, '--append-system-prompt', ROBOT_HINTS];
+    CLAUDE_BIN, '--settings', SETTINGS, '--resume', r.sessionId, '--append-system-prompt', ROBOT_HINTS, ...ROBOT_FLAGS];
   if (r.permissionMode) tmuxArgs.push('--permission-mode', r.permissionMode);
   await run('tmux', tmuxArgs);
   // Lo que ya estaba en su sesión no se repite en la conversación: se sigue leyendo desde el final.
@@ -48,10 +48,10 @@ async function revive(r) {
   emit(r);
 }
 
-async function removeRobot(r, reason, robotSummary) {
+async function removeRobot(r, reason, robotSummary, by) {
   deliver(r); // si se da de baja con documentos sin entregar, no se pierden
   endWait(r); // si se va mientras te esperaba, esa espera también cuenta
-  try { archiveRobot(r, reason, robotSummary); } catch { /* el archivo es un extra: no frena la baja */ }
+  try { archiveRobot(r, reason, robotSummary, by); } catch { /* el archivo es un extra: no frena la baja */ }
   r.alive = false;
   try { await run('tmux', ['kill-window', '-t', `${SESSION}:${r.name}`]); } catch { /* ya cerrada */ }
   const u = usage(r);

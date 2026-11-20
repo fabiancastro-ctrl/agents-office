@@ -46,6 +46,10 @@ function ctxOf(r) {
   const lim = ctxWindow(r.model, t);
   return { tokens: t, pct: Math.min(100, Math.round(t * 100 / lim)), window: lim };
 }
+// «Frío»: sin actividad más de lo que dura la caché de su conversación. Escribirle le hace releerla (y pagarla) entera
+// de nuevo, así que lo que la oficina pueda resolver sola (p. ej. el resumen para despedirlo) no se le pide.
+const COLD_MS = Number(process.env.OFFICE_COLD_MS) || 55 * 60e3;
+const isCold = r => Date.now() - (Date.parse(r.lastEventAt || r.startedAt || '') || Date.now()) > COLD_MS;
 
 function view(r, withLog = false) {
   const v = {
@@ -176,4 +180,4 @@ function waitsView() {
 let createdAt; try { createdAt = JSON.parse(fs.readFileSync(path.join(RUNS, 'office.json'), 'utf8')).createdAt || null; } catch { createdAt = null; }
 function configView() { return { createdAt, maxRobots, maxRobotsLimit: MAX_ROBOTS_LIMIT, approval: APPROVAL, name: officeName, session: SESSION, stats: statsView(), mapTheme: MAP_THEMES.includes(readConfig().mapTheme) ? readConfig().mapTheme : 'moderna' }; }
 
-export { addWait, broadcast, bumpStats, configView, ctxOf, emit, fmtK, knownDoc, MAP_THEMES, TEXT_DOC, usage, view };
+export { addWait, broadcast, bumpStats, configView, ctxOf, emit, fmtK, isCold, knownDoc, MAP_THEMES, TEXT_DOC, usage, view };

@@ -304,8 +304,15 @@ async function compact(name) {
 // Dormido: listo y sin actividad hace más de 2 h (por lo general espera algo de afuera). Se sugiere despedirlo:
 // «📝 Despedir con su resumen» guarda un super resumen y con él otro robot retoma la tarea cuando vuelva lo que esperaba.
 const canSummary = d => !d.summaryPending && (d.state === 'done' || (d.state === 'input' && !d.needsPermission && !d.hold && !d.ask));
+// Frío (más que la caché de su conversación sin actividad): el resumen lo arma la oficina sin despertarlo (sin tokens).
+// El mismo umbral que isCold en daemon/lib/estado.mjs.
+const COLD_MS = 55 * 60e3;
+const isCold = d => Date.now() - (Date.parse(d.lastEventAt || d.startedAt || '') || Date.now()) > COLD_MS;
 async function sumKill(name) {
-  try { await api('POST', `/api/robots/${name}/despedir-con-resumen`); toast(`${name} está escribiendo su resumen; al terminar se va`); } catch { /* toast ya mostrado */ }
+  try {
+    const r = await api('POST', `/api/robots/${name}/despedir-con-resumen`);
+    toast(r.by === 'oficina' ? `${name} se fue: llevaba más de una hora quieto, así que la oficina armó su resumen sin despertarlo (sin gastar tokens)` : `${name} está escribiendo su resumen; al terminar se va`);
+  } catch { /* toast ya mostrado */ }
 }
 // Relevo por contexto: con mucho contexto la oficina ofrece «🔁 Relevar» (escribe su resumen y sigue otro robot con su
 // mismo nombre y solo ese resumen) o «Seguir así» (no vuelve a ofrecer hasta que suba 100 k más).
