@@ -920,3 +920,22 @@ test('relevo por contexto: en espera con más de 150 k se releva solo', async ()
     await waitFor(() => o.claudeCalls().find(c => c.includes('Esperaba el CI del PR 9')), { what: 'el robot de relevo' });
   } finally { await o.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('rutina sin cambios: el robot de rutina que no cambió nada se da de baja solo; con cambios o si le escribes, se queda', async () => {
+  const o = await startOffice({ maxRobots: 4, env: { OFFICE_NO_CHANGE_GRACE_MS: '300' } });
+  try {
+    const stop = (n, m) => o.hook(n, { hook_event_name: 'Stop', last_assistant_message: m });
+    for (const n of ['quieto', 'cambia', 'charla', 'libre']) await o.api('POST', '/api/robots', { ...libre(n), ...(n === 'libre' ? {} : { routine: 'rt-x', leaveWhenDone: true }) });
+    for (const n of ['quieto', 'cambia', 'charla', 'libre']) await o.hook(n, { hook_event_name: 'UserPromptSubmit', prompt: 'revisa los PRs' });
+    // Leer y escribir su memoria no es un cambio; comentar un PR sí.
+    await o.hook('quieto', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'gh pr list -R a/b' } });
+    await o.hook('quieto', { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(o.data, 'routines/rt-x/memoria.md') } });
+    await o.hook('cambia', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'gh pr comment 3 -R a/b -b "listo"' } });
+    await o.hook('charla', { hook_event_name: 'UserPromptSubmit', prompt: 'y el otro PR?' });
+    for (const n of ['quieto', 'cambia', 'charla', 'libre']) await stop(n, 'Nada nuevo que revisar.');
+    await waitFor(async () => !(await o.snapshot()).robots.some(r => r.name === 'quieto'), { what: 'que se vaya el robot sin cambios' });
+    await sleep(600);
+    const names = (await o.snapshot()).robots.map(r => r.name).sort();
+    assert.deepEqual(names, ['cambia', 'charla', 'libre']);
+  } finally { await o.stop(); }
+});

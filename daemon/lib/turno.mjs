@@ -11,6 +11,7 @@ import { removeRobot } from './consola.mjs';
 import { checkRelevo, finishRelevo } from './relevo.mjs';
 import { emitSalas, postThread, salas, saveSalas } from './salas.mjs';
 import { readBody, send } from './http.mjs';
+import { bgList } from './hooks.mjs';
 
 /* ---------- ciclo de vida del turno ---------- */
 
@@ -45,13 +46,29 @@ function finishTurn(r, lastMessage) {
     return;
   }
   // Ningún robot se va solo: queda con el cartel LISTO y su conversación hasta que lo des de baja.
+  // Salvo uno de rutina que terminó sin cambios (ver noChangeLeave).
   if (r.state !== 'done') bumpStats(r);
   reportToParent(r, lastMessage);
   setState(r, 'done');
   checkRelevo(r); // con mucho contexto, ofrece el relevo
   emit(r);
+  if (quietRoutine(r)) setTimeout(() => noChangeLeave(r, lastMessage), NO_CHANGE_GRACE_MS);
   // Cerró su turno: si le guardé resultados de sus hijos mientras trabajaba, le llegan ahora, todos juntos.
   if (pendingResults.has(r.name)) setTimeout(() => maybeFlush(r.name), 1500);
+}
+
+// Rutina sin cambios: el robot que lanzó una rutina, si cerró su turno sin cambiar nada (hooks.mjs: isChange), sin
+// documentos, sin tareas de fondo ni hijos pendientes y sin que nadie le escribiera después del encargo, se da de baja
+// solo, con lo que dijo como resumen en el archivo. Espera unos segundos con el cartel LISTO para que se vea qué dijo.
+const NO_CHANGE_GRACE_MS = Number(process.env.OFFICE_NO_CHANGE_GRACE_MS) || 45e3;
+const quietRoutine = r => !!r.routine && r.alive && r.state === 'done' && !r.changed && (r.prompts || 0) <= 1 && !r.docs.length
+  && !bgList(r).length && !r.spawnReq && r.pendingSubs <= 0 && !r.summaryPending && !r.relevoPending && !r.consoleLost
+  && ![...robots.values()].some(x => x.parent === r.name);
+function noChangeLeave(r, lastMessage) {
+  if (robots.get(r.name) !== r || !quietRoutine(r)) return; // le escribiste, cambió algo o ya se fue
+  log(r, 'sys', 'Rutina sin cambios: se da de baja solo');
+  broadcast({ type: 'notice', text: `🧹 ${r.name} terminó la rutina sin cambios y se dio de baja` });
+  removeRobot(r, 'rutina sin cambios', lastMessage || 'Terminó la rutina sin cambios.');
 }
 
 // Entrega a la bandeja todos los documentos del robot que aun no entrego (o que cambio despues de entregarlos).

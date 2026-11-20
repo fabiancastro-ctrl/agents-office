@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, describeTool, EVENTS_FILE, HOLD_TOOLS, NEVER_ALLOW, now, pending, robots, run, trunc, WORKSPACE } from './base.mjs';
+import { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, describeTool, EVENTS_FILE, HOLD_TOOLS, NEVER_ALLOW, now, pending, robots, run, RUNS, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { registerSession } from './uso.mjs';
 import { log, setState, taskNote } from './persistencia.mjs';
@@ -29,6 +29,29 @@ function repoOf(p) {
 // Cada tarea sale cuando Claude Code avisa que terminó (la notificación trae el mismo tool_use_id), cuando vence o
 // cuando empieza una sesión nueva. Los subagentes de fondo ya se cuentan aparte (delegando).
 const BG_MAX_MS = Number(process.env.OFFICE_BG_MAX_MS) || 12 * 3600e3; // por si nunca llega el aviso
+
+// Rutinas sin cambios: un robot de rutina que cierra su turno sin haber cambiado nada se da de baja solo (turno.mjs).
+// «Cambio» = editar o crear un archivo (salvo la memoria de la rutina y lo de la oficina), un comando que escribe en git,
+// GitHub, Nexus o una API, o una herramienta MCP que crea, edita, comenta o envía. Ante la duda cuenta como cambio: el robot se queda.
+const MUTATING_CMD = new RegExp([
+  String.raw`\bgit\s+(?:-C\s+\S+\s+)?(?:commit|push|merge|rebase|tag|cherry-pick|revert|am|apply|worktree\s+add)\b`,
+  String.raw`\bgh\s+(?:pr|issue)\s+(?:create|comment|review|merge|edit|close|reopen|ready)\b`,
+  String.raw`\bgh\s+(?:release|repo)\s+(?:create|edit|delete)\b`,
+  String.raw`\bgh\s+api\b[^|;&]*(?:-X|--method)\s*['"]?(?:POST|PUT|PATCH|DELETE)`,
+  String.raw`\bnx\s+\S*\s*(?:create|update|comment|move|close|take|assign|done)\b`,
+  String.raw`\bcurl\b(?![^|;&]*(?:127\.0\.0\.1|localhost))[^|;&]*(?:-X\s*['"]?(?:POST|PUT|PATCH|DELETE)|--data\b|-d\s)`,
+  String.raw`\bsed\s+-i\b|\btee\b|\b(?:rm|mv|cp|mkdir|touch)\s|>\s*(?!/dev/null|&)[\w~./"'-]`
+].join('|'));
+const MUTATING_MCP = /(?:create|update|edit|delete|remove|comment|send|post|merge|publish|write|set|move|assign|upload|batch)/i;
+function isChange(tool, input) {
+  if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(tool)) {
+    const p = String(input?.file_path || input?.notebook_path || '');
+    return !p || !path.resolve(p).startsWith(RUNS + path.sep); // la memoria de la rutina no cuenta
+  }
+  if (tool === 'Bash') return MUTATING_CMD.test(String(input?.command || ''));
+  if (String(tool).startsWith('mcp__')) return MUTATING_MCP.test(String(tool).split('__').pop());
+  return false;
+}
 function trackBg(r, body) { addBg(r, body.tool_use_id || crypto.randomBytes(4).toString('hex'), body.tool_name, body.tool_input, Date.now()); }
 // También la usa transcript.mjs: al reiniciar la oficina, lo pendiente se reconstruye leyendo el transcript (así cuentan
 // las tareas lanzadas antes del reinicio). Si ya estaba anotada, no se toca.
@@ -229,7 +252,7 @@ async function onHook(name, body, via = '', closers = []) {
       if (p.startsWith('<agent-message')) log(r, 'sub', 'Un subagente entregó su resultado');
       // Claude Code le avisa al robot cuando termina algo que dejó en segundo plano: no lo escribiste tú.
       else if (/^\s*<task-notification>/.test(p)) { log(r, 'bg', taskNote(p)); bgDone(r, p); }
-      else { log(r, 'user', p); if (r.bg) for (const [k, v] of Object.entries(r.bg)) if (v.kind === 'despertador') delete r.bg[k]; } // un despertador que sonó
+      else { log(r, 'user', p); r.prompts = (r.prompts || 0) + 1; if (r.bg) for (const [k, v] of Object.entries(r.bg)) if (v.kind === 'despertador') delete r.bg[k]; } // un despertador que sonó
       r.needsPermission = false;
       if (r.loop) { r.loop = null; r.loopTrack = {}; } // le escribiste o le llegó algo: arranca de cero
       setState(r, 'working');
@@ -241,6 +264,7 @@ async function onHook(name, body, via = '', closers = []) {
       const what = describeTool(body.tool_name, body.tool_input);
       trackLoop(r, sub, body, what);
       if (!sub) trackBg(r, body);
+      if (r.routine && !r.changed && isChange(body.tool_name, body.tool_input)) r.changed = true; // también lo de sus subagentes
       if (sub) {
         sub.activity = what;
         emit(r);
@@ -305,4 +329,4 @@ async function onHook(name, body, via = '', closers = []) {
   return null; // sin salida: Claude Code sigue su flujo normal
 }
 
-export { addBg, answerAsk, bgDone, bgList, bgOutput, checkBgAlive, decide, onHook };
+export { addBg, answerAsk, bgDone, bgList, bgOutput, checkBgAlive, decide, isChange, onHook };

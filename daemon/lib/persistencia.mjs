@@ -25,7 +25,7 @@ function saveState() {
         name: r.name, kind: r.kind, skill: r.skill, label: r.label, prompt: r.prompt, color: r.color, place: r.place,
         permissionMode: r.permissionMode, sessionId: r.sessionId, transcript: r.transcript, startedAt: r.startedAt, state: r.state, docs: r.docs,
         leaveWhenDone: r.leaveWhenDone, origin: r.origin, inputAt: r.inputAt, inputKind: r.inputKind || null, inputPerm: r.inputPerm || null, critical: criticalOf(r), title: r.title || '', request: r.request, look: r.look || null, baseColor: r.baseColor, timeline: r.timeline, lastEventAt: r.lastEventAt,
-        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported, note: r.note || '', salaNote: r.salaNote || '', routine: r.routine || null, relevoNext: r.relevoNext || 0, repo: r.repo || null, bg: r.bg || null
+        parent: r.parent || null, spawnReq: r.spawnReq || null, reported: !!r.reported, note: r.note || '', salaNote: r.salaNote || '', routine: r.routine || null, changed: !!r.changed, prompts: r.prompts || 0, relevoNext: r.relevoNext || 0, repo: r.repo || null, bg: r.bg || null
       })),
       spawnQueue,
       pendingResults: [...pendingResults]
@@ -55,6 +55,7 @@ async function restore() {
       needsPermission: false, hold: null, log: [], restoring: true
     };
     r.docs = s.docs || (s.doc ? [{ path: s.doc, at: s.startedAt, delivered: false, updated: false }] : []);
+    if (s.prompts == null) r.prompts = 99; // guardado antes de contar mensajes: no se sabe si le escribiste, así que no se va solo
     if (!r.place) r.place = freeDesk();
     if (!r.place) continue;
     if (r.place.type === 'desk') used.add(r.place.idx);
