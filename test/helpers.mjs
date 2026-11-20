@@ -30,8 +30,9 @@ export async function startOffice(opts = {}) {
   const claudeLog = path.join(base, 'claude.log');
   // Claude falso: anota con qué argumentos lo abrieron y se queda vivo (cat) para que la ventana exista.
   const fake = path.join(base, 'claude-falso.sh');
-  // Una llamada por línea: los saltos de línea del prompt se anotan como espacios.
-  fs.writeFileSync(fake, `#!/bin/sh\n{ printf '%s' "$*" | tr '\\n' ' '; printf '\\n'; } >> '${claudeLog}'\nexec cat\n`, { mode: 0o755 });
+  // Una llamada por línea: los saltos de línea del prompt se anotan como espacios. Con candado (mkdir es atómico):
+  // sin él, dos hijos que arrancan a la vez mezclaban sus líneas a mitad de un prompt largo y una prueba fallaba a veces.
+  fs.writeFileSync(fake, `#!/bin/sh\nline=$(printf '%s' "$*" | tr '\\n' ' ')\nwhile ! mkdir '${claudeLog}.lock' 2>/dev/null; do sleep 0.01; done\nprintf '%s\\n' "$line" >> '${claudeLog}'\nrmdir '${claudeLog}.lock'\nexec cat\n`, { mode: 0o755 });
   if (opts.robots?.length) {
     execFileSync('tmux', ['new-session', '-d', '-s', session, '-n', 'lobby']);
     for (const r of opts.robots) execFileSync('tmux', ['new-window', '-d', '-t', `${session}:`, '-n', r.name, 'cat']);
