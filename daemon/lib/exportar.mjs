@@ -131,7 +131,8 @@ function archiveRobot(r, reason, robotSummary) {
   fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
   emitArchive();
 }
-const archMeta = a => ({ id: a.id, name: a.name, title: a.title, label: a.label, color: a.color, look: a.look, startedAt: a.startedAt, leftAt: a.leftAt, docs: a.docs.length, note: a.note || '',
+const RELEVO_REASON = 'relevado por contexto'; // el motivo con que relevo.mjs da de baja al robot relevado
+const archMeta = a => ({ id: a.id, name: a.name, title: a.title, relevo: a.reason === RELEVO_REASON, label: a.label, color: a.color, look: a.look, startedAt: a.startedAt, leftAt: a.leftAt, docs: a.docs.length, note: a.note || '',
   summaryBy: a.summaryBy || 'oficina', summaryPath: a.summaryPath || null, excerpt: trunc(String(a.summary || '').replace(/[#*_`>|-]+/g, ' '), 260) });
 const emitArchive = () => broadcast({ type: 'archive', count: archive.length });
 // Busca en el archivo (sin tildes ni mayúsculas): devuelve por robot las posiciones de los mensajes que coinciden.
@@ -181,6 +182,18 @@ async function despedidosApi(req, res, url, parts) {
       const a = archive.find(x => x.id === parts[2]);
       if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
       try { return send(res, 200, { ok: true, ...exportConversation(a) }); } catch (e) { return send(res, 409, { error: e.message }); }
+    }
+    // Limpiar relevos: los relevos por contexto son automáticos y su robot sigue con el mismo nombre (y el resumen en su
+    // primer mensaje), así que se pueden quitar todos juntos. Igual que «Quitar»: los resúmenes van a la Papelera.
+    if (req.method === 'POST' && url.pathname === '/api/despedidos/limpiar-relevos') {
+      const gone = archive.filter(x => x.reason === RELEVO_REASON);
+      if (!gone.length) return send(res, 200, { ok: true, quitados: 0, papelera: 0 });
+      replaceList(archive, archive.filter(x => x.reason !== RELEVO_REASON));
+      fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+      emitArchive();
+      let papelera = 0;
+      for (const a of gone) if (a.summaryPath && !archive.some(x => x.summaryPath === a.summaryPath) && toTrash(a.summaryPath, path.basename(a.summaryPath, '.md'))) papelera++;
+      return send(res, 200, { ok: true, quitados: gone.length, papelera });
     }
     if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2]) { // lo quita de la lista y su resumen va a la Papelera
       const a = archive.find(x => x.id === parts[2]);

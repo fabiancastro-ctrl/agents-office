@@ -971,3 +971,25 @@ test('cambios: archivos que tocó el robot con su estado en git, otros cambios d
     assert.equal((await o.api('POST', '/api/robots/dev/cambios-abrir', { path: '/etc/hosts' })).status, 403);
   } finally { await o.stop(); }
 });
+
+test('limpiar relevos: quita del archivo solo a los relevados por contexto y manda sus resúmenes a la Papelera', async () => {
+  const trash = fs.mkdtempSync(path.join(os.tmpdir(), 'office-trash-'));
+  const sum = path.join(os.tmpdir(), `relevo-${Date.now()}.md`);
+  fs.writeFileSync(sum, '# resumen del relevo\n');
+  const base = { title: '', label: 'x', kind: 'libre', color: 1, look: null, docs: [], log: [], startedAt: '2026-11-19T10:00:00Z', leftAt: '2026-11-19T11:00:00Z', summaryBy: 'robot' };
+  const arch = [
+    { ...base, id: 'aaaa1111', name: 'rex', reason: 'relevado por contexto', summary: 'relevo', summaryPath: sum },
+    { ...base, id: 'bbbb2222', name: 'nova', reason: 'despedido con su resumen', summary: 'se fue', summaryPath: null }
+  ];
+  const o = await startOffice({ env: { OFFICE_TRASH: trash }, files: { 'despedidos.json': JSON.stringify(arch) } });
+  try {
+    const before = (await o.api('GET', '/api/despedidos?all=1')).body.recent;
+    assert.deepEqual(before.map(a => [a.name, a.relevo]).sort(), [['nova', false], ['rex', true]]);
+    const r = (await o.api('POST', '/api/despedidos/limpiar-relevos')).body;
+    assert.deepEqual([r.quitados, r.papelera], [1, 1]);
+    assert.deepEqual((await o.api('GET', '/api/despedidos?all=1')).body.recent.map(a => a.name), ['nova']);
+    assert.equal(fs.existsSync(sum), false);
+    assert.equal(fs.readdirSync(trash).length, 1);
+    assert.equal((await o.api('POST', '/api/despedidos/limpiar-relevos')).body.quitados, 0);
+  } finally { await o.stop(); }
+});

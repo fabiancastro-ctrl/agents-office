@@ -112,7 +112,7 @@ const archUi = {list: null, q: ''};
 function setArchCount(n) { const b = $('#arch-n'); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; }
 function archivoPanel() {
   return `<div class="dlg-head"><h3>🗄 Archivo de despedidos</h3><p>Aquí quedan los robots que despediste con «📝 Despedir con su resumen», con el <b>super resumen</b> que escribieron al irse («Dar de baja» no deja nada). Con «↻ Retomar» entra un robot nuevo solo con ese resumen y lo que le digas. Cada resumen también queda como documento en <code>docs/resumenes-robots/</code> de tu carpeta de trabajo. «Quitar» saca al robot de la lista y manda su resumen a la Papelera, de donde se recupera.</p></div>
-    <input class="arch-q" id="arch-q" type="search" placeholder="Filtrar por nombre, título, nota o resumen…" autocomplete="off">
+    <div class="arch-bar"><input class="arch-q" id="arch-q" type="search" placeholder="Filtrar por nombre, título, nota o resumen…" autocomplete="off"><button type="button" class="btn sm ghost" id="arch-relevos" data-arch-relevos hidden title="Quita de la lista a todos los relevados por contexto (son automáticos: su robot siguió con el mismo nombre y el resumen) y manda sus resúmenes a la Papelera">🧹 Limpiar relevos</button></div>
     <div class="arch-list" id="arch-list"><p class="muted">Cargando…</p></div>
     <section class="dlg-sec"><h4>🚪 Salas cerradas</h4><p class="note">Las salas que cerraste o que se cerraron solas al irse su equipo. Su contexto y su hilo siguen en <code>runs/salas/&lt;id&gt;/</code>.</p><div class="arch-list" id="arch-salas"><p class="muted">Cargando…</p></div></section>`;
 }
@@ -132,11 +132,13 @@ function drawArchivo() {
       : ss.map(s => `<article class="ac-item" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><div class="ac-h"><b>${esc(s.name)}</b>${s.key ? `<span class="ac-title">${esc(s.key)}</span>` : ''}<small>${esc(s.reason || 'cerrada')} · ${whenS(s.closedAt)}</small></div>
         ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button><button type="button" class="btn sm" data-sala-exp="${esc(s.id)}" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo">⬇ Exportar</button><button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">🗑 Borrar</button></div></article>`).join('');
   }
+  const nRelevos = archUi.list.filter(a => a.relevo).length, rb = $('#arch-relevos', PANEL);
+  if (rb && !rb.classList.contains('armed')) { rb.hidden = !nRelevos; rb.textContent = `🧹 Limpiar relevos (${nRelevos})`; rb.disabled = false; }
   const list = archUi.list.filter(a => !q || norm(`${a.name} ${a.title} ${a.note} ${a.label} ${a.excerpt}`).includes(q));
   const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
   box.innerHTML = !archUi.list.length ? '<p class="muted">Todavía no despides a ningún robot. Cuando lo hagas, su resumen queda aquí.</p>'
     : !list.length ? '<p class="muted">Nada coincide con el filtro.</p>'
-    : list.map(a => `<article class="ac-item" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><div class="ac-h">${robotHead(COLORS[(a.color || 0) % COLORS.length], lookOf(a.name, null, {look: a.look}))}<b>${esc(a.name)}</b>${a.title ? `<span class="ac-title">📌 ${esc(a.title)}</span>` : ''}<span class="ac-by ${a.summaryBy === 'robot' ? 'r' : ''}">📝 ${a.summaryBy === 'robot' ? 'resumen del robot' : 'resumen de la oficina'}</span><small>se fue ${when(a.leftAt)}</small></div>
+    : list.map(a => `<article class="ac-item" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><div class="ac-h">${robotHead(COLORS[(a.color || 0) % COLORS.length], lookOf(a.name, null, {look: a.look}))}<b>${esc(a.name)}</b>${a.title ? `<span class="ac-title">📌 ${esc(a.title)}</span>` : ''}<span class="ac-by ${a.summaryBy === 'robot' ? 'r' : ''}">📝 ${a.summaryBy === 'robot' ? 'resumen del robot' : 'resumen de la oficina'}</span>${a.relevo ? '<span class="ac-by">🔁 relevo</span>' : ''}<small>se fue ${when(a.leftAt)}</small></div>
       ${a.note ? `<div class="ac-note">🗒 ${esc(a.note)}</div>` : ''}<p class="ac-x">${esc(a.excerpt || a.label)}</p>
       <div class="row"><button type="button" class="btn primary sm" data-arch="${esc(a.id)}" data-retake>↻ Retomar</button><button type="button" class="btn sm" data-arch="${esc(a.id)}">Ver resumen</button><button type="button" class="btn sm ghost" data-arch-del="${esc(a.id)}" title="Lo quita de esta lista y manda su resumen a la Papelera (de ahí se recupera)">Quitar</button></div></article>`).join('');
 }
@@ -154,6 +156,18 @@ PANEL.addEventListener('click', async e => {
       drawArchivo();
       toast(r.papelera ? 'Sala borrada: su contexto y su hilo quedaron en la Papelera.' : 'Sala borrada del archivo.');
     } catch { sd.disabled = false; }
+    return;
+  }
+  const lr = e.target.closest('[data-arch-relevos]');
+  if (lr) { // dos clics, como «Quitar»
+    if (!lr.classList.contains('armed')) { lr.classList.add('armed'); lr.textContent = '¿Limpiar todos los relevos?'; setTimeout(() => { lr.classList.remove('armed'); drawArchivo(); }, 3000); return; }
+    lr.disabled = true; lr.classList.remove('armed');
+    try {
+      const r = await api('POST', '/api/despedidos/limpiar-relevos');
+      archUi.list = archUi.list.filter(a => !a.relevo);
+      drawArchivo();
+      toast(r.quitados ? `${r.quitados} relevo${r.quitados === 1 ? '' : 's'} quitado${r.quitados === 1 ? '' : 's'}${r.papelera ? `: sus resúmenes quedaron en la Papelera` : ''}.` : 'No había relevos en el archivo.');
+    } catch { drawArchivo(); }
     return;
   }
   const b = e.target.closest('[data-arch-del]'); if (!b) return;
