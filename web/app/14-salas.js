@@ -76,7 +76,7 @@ function salaPanel(s) {
         <div class="log" id="sala-log" data-src="@sala:${esc(s.id)}">${thread || '<div class="lg sys"><span class="x">Todavía no hay mensajes. Lo que digan los robots al cerrar cada turno aparece aquí.</span></div>'}</div>
         <form class="chat" id="sala-form">
           <textarea id="sala-in" rows="2" data-ac data-big="sala-form" placeholder="Escribe en el hilo… Enter publica, Shift+Enter salto de línea."></textarea><button class="btn primary">Publicar</button>
-          <label class="check" style="grid-column:1/-1"><input type="checkbox" id="sala-notify"> Enviárselo también a los ${present.length} robots de la sala (gasta cuota)</label>
+          <label class="check" style="grid-column:1/-1"><input type="checkbox" id="sala-notify"> Despertar ya a los ${present.length} robots de la sala (gasta un turno cada uno). Sin marcar, les llega con su próximo mensaje; con <code>@nombre</code> despiertas solo a ese.</label>
         </form>
       </div>
       <div class="rp-col">

@@ -128,8 +128,8 @@ PANEL.addEventListener('submit', async e => {
     if (!t) return;
     $('#sala-in').value = ''; grow($('#sala-in'));
     try {
-      const {notified} = await api('POST', `/api/salas/${id}/hilo`, {text: t, notify: $('#sala-notify').checked});
-      if (notified) toast(`Enviado también a ${notified} robot${notified === 1 ? '' : 's'} de la sala.`);
+      const {notified, queued} = await api('POST', `/api/salas/${id}/hilo`, {text: t, notify: $('#sala-notify').checked});
+      if (notified || queued) toast([notified ? `Enviado ya a ${notified} robot${notified === 1 ? '' : 's'}` : '', queued ? `${notified ? 'a' : 'A'} ${queued} le${queued === 1 ? '' : 's'} llega con su próximo mensaje (sin gastar un turno)` : ''].filter(Boolean).join('; ') + '.');
     } catch { $('#sala-in').value = t; }
   }
   if (e.target.id === 'sala-job') {

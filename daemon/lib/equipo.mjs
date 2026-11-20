@@ -195,8 +195,7 @@ function flushResults(parent) {
   if (!b?.items.length || !p) return;
   pendingResults.delete(parent);
   const left = kidsWorking(parent), n = b.items.length;
-  let note = p.salaNote ? `${p.salaNote}\n\n` : '';
-  p.salaNote = '';
+  let note = ''; // su salaNote, si tiene, la pega say()
   if (p.toldNames) { // si al aprobar cambiaron los nombres que le dije, se lo aclaro aquí (no en un mensaje aparte)
     const team = [...robots.values()].filter(x => x.parent === p.name).map(x => x.name);
     const changed = p.toldNames.filter(n => !team.includes(n) && !b.items.some(i => i.name === n));

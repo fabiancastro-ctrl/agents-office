@@ -130,8 +130,16 @@ function writeRoster(s) {
   emitSalas(); // el tablero lo dibuja de salaView
 }
 const rosterOf = name => salas.filter(s => s.roster?.some(e => e.name === name));
+// Salas retenidas: mientras un robot de la sala se releva (se va y entra su relevo), la sala no se cierra ni manda al
+// que coordina a su escritorio por quedar solo un momento.
+const held = new Set();
+const holdSala = id => { if (id) held.add(id); };
+function releaseSala(id) {
+  if (!id || !held.delete(id)) return;
+  ownerBackIfAlone(); closeEmptyTeamSalas(); // por si el relevo no logró volver a entrar
+}
 function closeEmptyTeamSalas() {
-  const keep = s => !s.auto || [...robots.values()].some(r => r.place.sala === s.id) || spawnQueue.some(q => q.sala === s.id);
+  const keep = s => !s.auto || held.has(s.id) || [...robots.values()].some(r => r.place.sala === s.id) || spawnQueue.some(q => q.sala === s.id);
   if (salas.every(keep)) return;
   for (const s of salas.filter(x => !keep(x))) archiveSala(s, 'se fue todo el equipo');
   salas = salas.filter(keep);
@@ -153,7 +161,7 @@ function checkTeamDone(kid) {
 // Si en una sala de equipo queda solo quien la armó, vuelve caminando a un escritorio y la sala pasa al archivo.
 function ownerBackIfAlone() {
   for (const s of salas) {
-    if (!s.auto) continue;
+    if (!s.auto || held.has(s.id)) continue;
     const inSala = [...robots.values()].filter(r => r.place.sala === s.id);
     if (inSala.length !== 1 || inSala[0].name !== s.owner || spawnQueue.some(q => q.sala === s.id)) continue;
     const o = inSala[0];
@@ -164,6 +172,33 @@ function ownerBackIfAlone() {
     saveState();
   }
 }
+// Reagrupar: mudas un robot a una sala abierta (o lo devuelves a un escritorio) desde su ventana. No le gasta un turno:
+// lo de la sala (contexto, quién es quién, cómo publicar en el hilo) le llega pegado a su próximo mensaje (salaNote).
+function moveToSala(r, salaId) {
+  const from = r.place.sala;
+  if (!salaId) {
+    if (!from) return { status: 409, error: 'No está en ninguna sala.' };
+    const desk = freeDesk();
+    if (!desk) return { status: 409, error: 'No hay escritorios libres.' };
+    r.place = desk; r.salaNote = '';
+    log(r, 'sys', 'Lo devolviste a un escritorio');
+  } else {
+    const s = salas.find(x => x.id === salaId);
+    if (!s) return { status: 404, error: 'Esa sala no existe.' };
+    if (from === s.id) return { status: 409, error: 'Ya está en esa sala.' };
+    r.place = roomSeat(`sala-${s.id}`, s.name, { sala: s.id });
+    if (!(s.roster ||= []).some(e => e.name === r.name)) { s.roster.push({ name: r.name, title: r.title || trunc(r.label || '', 60) }); writeRoster(s); }
+    if (s.done) s.done = false;
+    r.salaNote = `[Oficina] Te mudaron a la sala «${s.name}».${salaPreamble(s, r.name)}`;
+    log(r, 'sys', `Lo mudaste a la sala «${s.name}»`);
+    saveSalas();
+  }
+  emit(r); saveState();
+  if (from) { ownerBackIfAlone(); closeEmptyTeamSalas(); }
+  emitSalas();
+  return { status: 200 };
+}
+
 // Papelera: lo que borras desde la oficina (resúmenes de despedidos, salas cerradas) va a la de macOS, de donde se
 // recupera; sin ella, a runs/papelera. OFFICE_TRASH la cambia (las pruebas usan una temporal). null si no existía.
 function toTrash(src, label) {
@@ -184,7 +219,8 @@ let salasArchive = [];
 try { salasArchive = JSON.parse(fs.readFileSync(SALAS_ARCH_FILE, 'utf8')); } catch { salasArchive = []; }
 function archiveSala(s, reason) {
   salasArchive.unshift({ id: s.id, name: s.name, key: s.key || '', purpose: s.purpose || '', owner: s.owner || null, auto: !!s.auto, color: Number.isInteger(s.color) ? s.color : null,
-    context: contextPath(s), threadFile: threadPath(s), messages: s.thread.length, docs: s.docs.length, createdAt: s.createdAt, closedAt: now(), reason });
+    context: contextPath(s), threadFile: threadPath(s), messages: s.thread.length, docs: s.docs.length, createdAt: s.createdAt, closedAt: now(), reason,
+    saved: { key: s.key || '', folder: s.folder || '', thread: s.thread, docs: s.docs, notes: s.notes || [], roster: s.roster || [], ownerLook: s.ownerLook || null, rosterMoved: !!s.rosterMoved } }); // para «Reabrir»
   salasArchive = salasArchive.slice(0, 300);
   fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
 }
@@ -255,7 +291,24 @@ async function salasApi(req, res, url, parts) {
       const file = exportSala(e);
       return send(res, 200, { ok: true, path: file, shown: path.relative(WORKSPACE || RUNS, file) });
     }
-    if (req.method === 'GET' && url.pathname === '/api/salas-cerradas') return url.searchParams.get('q') ? send(res, 200, { results: searchClosedSalas(url.searchParams.get('q')) }) : send(res, 200, { salas: salasArchive });
+    if (req.method === 'GET' && url.pathname === '/api/salas-cerradas') return url.searchParams.get('q') ? send(res, 200, { results: searchClosedSalas(url.searchParams.get('q')) }) : send(res, 200, { salas: salasArchive.map(({ saved, ...e }) => ({ ...e, reopen: !salas.some(x => x.id === e.id) })) });
+    // Reabrir: vuelve a la lista con su contexto, hilo, notas y reparto. Ya no es de equipo: no se cierra sola.
+    if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'salas-cerradas' && parts[2] && parts[3] === 'reabrir') {
+      const e = salasArchive.find(x => x.id === parts[2]);
+      if (!e) return send(res, 404, { error: 'Esa sala ya no está en el archivo.' });
+      if (salas.some(x => x.id === e.id)) return send(res, 409, { error: 'Esa sala ya está abierta.' });
+      if (!fs.existsSync(path.dirname(e.context))) return send(res, 410, { error: 'Su carpeta ya no está (la borraste o fue a la Papelera).' });
+      const sv = e.saved || {};
+      const s = { id: e.id, name: e.name, key: sv.key ?? e.key ?? '', folder: sv.folder || '', thread: sv.thread || [], docs: sv.docs || [], notes: sv.notes || [], roster: sv.roster || [],
+        createdAt: e.createdAt, owner: e.owner || null, color: e.color, ownerLook: sv.ownerLook || null, purpose: e.purpose || '', rosterMoved: !!sv.rosterMoved, reopenedAt: now() };
+      // Una sala cerrada antes de guardar su hilo: el HILO.md viejo se conserva aparte en vez de pisarlo con uno vacío.
+      if (!sv.thread && fs.existsSync(threadPath(s))) fs.renameSync(threadPath(s), path.join(path.dirname(threadPath(s)), 'HILO-anterior.md'));
+      salas.push(s);
+      replaceList(salasArchive, salasArchive.filter(x => x !== e));
+      fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
+      writeThreadFile(s); saveSalas(); emitSalas();
+      return send(res, 200, { ok: true, id: s.id });
+    }
     if (req.method === 'DELETE' && parts[0] === 'api' && parts[1] === 'salas-cerradas' && parts[2]) {
       // Borra una sala cerrada: sale del archivo y su carpeta (CONTEXT.md, HILO.md) va a la Papelera, de donde se recupera.
       const e = salasArchive.find(x => x.id === parts[2]);
@@ -312,9 +365,14 @@ async function salasApi(req, res, url, parts) {
         if (String(req.headers['content-type'] || '').startsWith('application/json')) {
           const { text, notify } = await readBody(req);
           postThread(s, 'Coordinador', text);
-          // Avisar gasta cuota: cada robot de la sala recibe el mensaje como un turno nuevo.
-          if (notify) for (const r of inSala) await say(r, `[Hilo de la sala «${s.name}»] El coordinador escribió:\n${String(text).trim()}`);
-          return send(res, 201, { ok: true, notified: notify ? inSala.length : 0 });
+          // Un turno nuevo gasta cuota (relee todo su contexto). Solo lo reciben ya los que nombras con @nombre, o todos si
+          // marcaste «avisar» sin nombrar a nadie; al resto le llega pegado a su próximo mensaje (salaNote), sin turno aparte.
+          const msg = `[Hilo de la sala «${s.name}»] El coordinador escribió:\n${String(text).trim()}`;
+          const named = inSala.filter(r => new RegExp(`(^|\\s)@${r.name.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}\\b`, 'i').test(text));
+          const now_ = named.length ? named : notify ? inSala : [];
+          for (const r of inSala) if (!now_.includes(r)) r.salaNote = r.salaNote ? `${r.salaNote}\n\n${msg}` : msg;
+          for (const r of now_) await say(r, msg);
+          return send(res, 201, { ok: true, notified: now_.length, queued: inSala.length - now_.length });
         }
         const from = url.searchParams.get('from') || '';
         postThread(s, robots.has(from) ? from : `externo (${trunc(from, 20) || 'sin nombre'})`, (await readRaw(req, 1e6)).toString('utf8'));
@@ -330,4 +388,4 @@ async function salasApi(req, res, url, parts) {
     }
 }
 
-export { archiveSala, checkTeamDone, closeEmptyTeamSalas, contextPath, createSala, emitSalas, exportSala, ownerBackIfAlone, postThread, rosterOf, rosterPath, rosterState, salaExportDir, salaPreamble, salas, SALAS_ARCH_FILE, SALAS_DIR, salasApi, salasArchive, salaView, saveSalas, searchClosedSalas, teamSala, threadPath, toTrash, writeRoster };
+export { archiveSala, checkTeamDone, closeEmptyTeamSalas, holdSala, moveToSala, releaseSala, contextPath, createSala, emitSalas, exportSala, ownerBackIfAlone, postThread, rosterOf, rosterPath, rosterState, salaExportDir, salaPreamble, salas, SALAS_ARCH_FILE, SALAS_DIR, salasApi, salasArchive, salaView, saveSalas, searchClosedSalas, teamSala, threadPath, toTrash, writeRoster };

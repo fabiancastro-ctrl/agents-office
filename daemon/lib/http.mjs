@@ -18,7 +18,7 @@ import { answerAsk, decide, onHook } from './hooks.mjs';
 import { validAttachments } from './adjuntos.mjs';
 import { listSkills, openConsole, pane, pressKey, say } from './tmux.mjs';
 import { resetRepoIndex, routines, routineView, rutinasApi } from './rutinas.mjs';
-import { salas, salasApi, salaView } from './salas.mjs';
+import { moveToSala, salas, salasApi, salaView } from './salas.mjs';
 import { mantenimientoApi } from './mantenimiento.mjs';
 import { openChange, robotChanges } from './cambios.mjs';
 
@@ -262,6 +262,7 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true, title: r.title });
       }
       if (req.method === 'GET' && action === 'pane') return send(res, 200, { text: await pane(r) });
+      if (req.method === 'POST' && action === 'sala') { const out = moveToSala(r, (await readBody(req)).sala || null); return send(res, out.status, out.error ? { error: out.error } : { ok: true }); }
       // Cambios: los archivos que tocó y cómo están en git; «abrir» lo muestra en el editor (diff contra HEAD si tiene cambios).
       if (req.method === 'GET' && action === 'cambios') return send(res, 200, await robotChanges(r));
       if (req.method === 'POST' && action === 'cambios-abrir') {

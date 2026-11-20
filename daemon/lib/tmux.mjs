@@ -113,7 +113,10 @@ async function launchReserved({ kind, skill, args, text, permissionMode, name, o
 async function say(r, text, attachments) {
   const target = `${SESSION}:${r.name}`;
   const buffer = `office-${r.name}`;
-  const full = (String(text || '').trim() || 'Te adjunto estos archivos.') + attachmentNote(attachments);
+  // Lo pendiente de su sala (lo mudaron o se armó su equipo) viaja pegado a este mensaje, sin un turno aparte.
+  const note = r.salaNote ? `${r.salaNote}\n\n` : '';
+  r.salaNote = '';
+  const full = note + (String(text || '').trim() || 'Te adjunto estos archivos.') + attachmentNote(attachments);
   // paste-buffer -p usa bracketed paste: los saltos de linea llegan como parte del mensaje
   // en vez de enviarlo a medias (send-keys los tomaria como Enter).
   await run('tmux', ['set-buffer', '-b', buffer, full]);

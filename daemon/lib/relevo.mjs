@@ -12,6 +12,7 @@ import { removeRobot } from './consola.mjs';
 import { archive } from './turno.mjs';
 import { bgList } from './hooks.mjs';
 import { launch, say } from './tmux.mjs';
+import { holdSala, releaseSala } from './salas.mjs';
 
 const num = (v, d) => { const n = Number(v); return v !== undefined && v !== '' && Number.isFinite(n) && n >= 0 ? n : d; };
 const OFFER_K = num(process.env.OFFICE_RELEVO_K, 300);
@@ -97,6 +98,10 @@ async function finishRelevo(r, summary) {
   const old = { name: r.name, title: r.title || '', label: r.label, color: r.color, look: r.look || null, note: r.note || '', salaNote: r.salaNote || '',
     parent: r.parent || null, sala: r.place?.sala || null, permissionMode: r.permissionMode || '', request: r.request || null, skill: r.skill, kind: r.kind,
     baseColor: r.baseColor, bg: bgList(r).map(b => `${b.kind}: ${b.what}`), tokens: ctxOf(r)?.tokens || 0 };
+  holdSala(old.sala); // su sala no se cierra (ni manda al que coordina a su escritorio) en el hueco hasta que entra el relevo
+  try { return await relaunch(r, old, summary); } finally { releaseSala(old.sala); }
+}
+async function relaunch(r, old, summary) {
   await removeRobot(r, 'relevado por contexto', summary);
   const a = archive.at(-1);
   const arch = a && a.name === old.name && a.summary === String(summary).trim() ? a : null;

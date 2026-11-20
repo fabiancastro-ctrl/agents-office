@@ -993,3 +993,38 @@ test('limpiar relevos: quita del archivo solo a los relevados por contexto y man
     assert.equal((await o.api('POST', '/api/despedidos/limpiar-relevos')).body.quitados, 0);
   } finally { await o.stop(); }
 });
+
+test('salas: el relevo de un hijo no cierra la sala; mudar robots y reabrir una sala cerrada', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', { ...libre('jefe'), title: 'Epica' });
+    const req = await o.api('POST', '/api/robots/jefe/encargos', { encargos: [{ titulo: 'Hijo', encargo: 'haz algo' }] });
+    const ok = await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' });
+    const salaId = ok.body.sala, kid = ok.body.launched[0];
+    await o.hook(kid, { hook_event_name: 'Stop', last_assistant_message: 'listo por ahora' });
+    const oldSession = (await o.robot(kid)).sessionId;
+    assert.equal((await o.api('POST', `/api/robots/${kid}/relevar`)).status, 200);
+    await o.hook(kid, { hook_event_name: 'Stop', last_assistant_message: '## Relevo\n- sigue con algo' });
+    await waitFor(async () => { const r = await o.robot(kid); return r && r.sessionId !== oldSession; }, { what: 'el relevo del hijo' });
+    let snap = await o.snapshot();
+    assert.ok(snap.salas.some(s => s.id === salaId), 'la sala sigue abierta');
+    for (const n of ['jefe', kid]) assert.equal(snap.robots.find(r => r.name === n).place.sala, salaId, `${n} sigue en la sala`);
+    // Mudar: el hijo a un escritorio; el padre queda solo, vuelve al suyo y la sala pasa al archivo.
+    assert.equal((await o.api('POST', `/api/robots/${kid}/sala`, { sala: null })).status, 200);
+    snap = await o.snapshot();
+    assert.ok(!snap.salas.some(s => s.id === salaId));
+    // Reabrir: vuelve con su hilo y ya no se cierra sola; mudar a los dos de nuevo.
+    const cerrada = (await o.api('GET', '/api/salas-cerradas')).body.salas.find(s => s.id === salaId);
+    assert.equal(cerrada.reopen, true);
+    assert.equal(cerrada.saved, undefined);
+    assert.equal((await o.api('POST', `/api/salas-cerradas/${salaId}/reabrir`)).status, 200);
+    for (const n of ['jefe', kid]) assert.equal((await o.api('POST', `/api/robots/${n}/sala`, { sala: salaId })).status, 200);
+    assert.equal((await o.api('POST', `/api/robots/jefe/sala`, { sala: salaId })).status, 409, 'ya está en esa sala');
+    snap = await o.snapshot();
+    assert.deepEqual(snap.robots.filter(r => r.place.sala === salaId).map(r => r.name).sort(), ['jefe', kid].sort());
+    // Lo de la sala le llega pegado a su próximo mensaje, sin turno aparte.
+    await o.api('POST', `/api/robots/${kid}/say`, { text: 'sigue con lo tuyo' });
+    const pane = await waitFor(async () => { const t = (await o.api('GET', `/api/robots/${kid}/pane`)).body.text; return t.includes('sigue con lo tuyo') ? t : null; }, { what: 'el mensaje en su consola' });
+    assert.match(pane, /--- fin de la sala ---\n\n+sigue con lo tuyo/); // la consola solo muestra el final del aviso
+  } finally { await o.stop(); }
+});

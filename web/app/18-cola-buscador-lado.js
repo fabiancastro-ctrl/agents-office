@@ -130,7 +130,7 @@ function drawArchivo() {
     const whenS = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
     sb.innerHTML = !ss.length ? `<p class="muted">${archUi.salas?.length ? 'Nada coincide con el filtro.' : 'Todavía no se cierra ninguna sala.'}</p>`
       : ss.map(s => `<article class="ac-item" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><div class="ac-h"><b>${esc(s.name)}</b>${s.key ? `<span class="ac-title">${esc(s.key)}</span>` : ''}<small>${esc(s.reason || 'cerrada')} · ${whenS(s.closedAt)}</small></div>
-        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button><button type="button" class="btn sm" data-sala-exp="${esc(s.id)}" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo">⬇ Exportar</button><button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">🗑 Borrar</button></div></article>`).join('');
+        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button><button type="button" class="btn sm" data-sala-exp="${esc(s.id)}" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo">⬇ Exportar</button>${s.reopen ? `<button type="button" class="btn sm" data-sala-reopen="${esc(s.id)}" title="La vuelve a abrir con su contexto, su hilo y sus notas; después mudas a los robots desde su ventana («🚪 Mudar a una sala»). Ya no se cierra sola.">↩ Reabrir</button>` : ''}<button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">🗑 Borrar</button></div></article>`).join('');
   }
   const nRelevos = archUi.list.filter(a => a.relevo).length, rb = $('#arch-relevos', PANEL);
   if (rb && !rb.classList.contains('armed')) { rb.hidden = !nRelevos; rb.textContent = `🧹 Limpiar relevos (${nRelevos})`; rb.disabled = false; }
@@ -146,6 +146,13 @@ PANEL.addEventListener('input', e => { if (e.target.id === 'arch-q') drawArchivo
 PANEL.addEventListener('click', async e => {
   const sx = e.target.closest('[data-sala-exp]');
   if (sx) { try { const r = await api('POST', `/api/salas-cerradas/${sx.dataset.salaExp}/exportar`); toast(`Sala exportada: ${r.shown}`); showDoc(r.path); } catch { /* toast ya mostrado */ } return; }
+  const so = e.target.closest('[data-sala-reopen]');
+  if (so) {
+    so.disabled = true;
+    try { await api('POST', `/api/salas-cerradas/${so.dataset.salaReopen}/reabrir`); archUi.salas = (archUi.salas || []).filter(x => x.id !== so.dataset.salaReopen); drawArchivo(); toast('Sala reabierta: múdale robots desde su ventana («🚪 Mudar a una sala»).'); }
+    catch { so.disabled = false; }
+    return;
+  }
   const sd = e.target.closest('[data-sala-del]');
   if (sd) { // dos clics: el primero arma, el segundo (en 3 s) borra
     if (!sd.classList.contains('armed')) { sd.classList.add('armed'); sd.textContent = '¿Borrar?'; setTimeout(() => { sd.classList.remove('armed'); sd.textContent = '🗑 Borrar'; }, 3000); return; }
@@ -238,6 +245,18 @@ function sidePicker(d) {
   return `<select class="mt-sel sd-pick" id="side-pick" title="Abre otro robot a la izquierda para leer las dos conversaciones a la vez" aria-label="Ver otro robot al lado"><option value="">⇆ Ver al lado…</option>${others.map(x => `<option value="${esc(x.data.name)}"${st.side === x.data.name ? ' selected' : ''}>${esc(x.data.name)}${titleOf(x.data) ? ' · ' + esc(titleOf(x.data).slice(0, 40)) : ''}</option>`).join('')}</select>`;
 }
 PANEL.addEventListener('change', e => { if (e.target.id === 'side-pick') { st.side = e.target.value || null; renderSide(); } });
+// Reagrupar: mudar al robot a una sala abierta o devolverlo a un escritorio. Lo de la sala le llega con su próximo mensaje.
+function salaPicker(d) {
+  const cur = d.place?.sala || '';
+  if (!st.salas.length && !cur) return '';
+  return `<select class="mt-sel sd-pick" id="sala-pick" title="Muda a este robot a una sala (lo de la sala le llega con tu próximo mensaje, sin gastar un turno) o devuélvelo a un escritorio" aria-label="Sala del robot"><option value=""${cur ? '' : ' selected'}>${cur ? '↩ A un escritorio' : '🚪 Mudar a una sala…'}</option>${st.salas.map(s => `<option value="${esc(s.id)}"${s.id === cur ? ' selected' : ''}>🚪 ${esc(s.name)}</option>`).join('')}</select>`;
+}
+PANEL.addEventListener('change', async e => {
+  if (e.target.id !== 'sala-pick' || !st.selected) return;
+  const sala = e.target.value || null;
+  try { await api('POST', `/api/robots/${encodeURIComponent(st.selected)}/sala`, { sala }); toast(sala ? 'Mudado: lo de la sala le llega con tu próximo mensaje.' : 'De vuelta a un escritorio.'); }
+  catch { schedulePanel(); }
+});
 $('#dlg-card').addEventListener('click', async e => {
   const b = e.target.closest('[data-side]'); if (!b) return;
   const act = b.dataset.side, d = st.robots.get(st.side)?.data;
