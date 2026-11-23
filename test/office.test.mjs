@@ -1597,7 +1597,7 @@ test('permitir siempre: arma la regla, la muestra y solo con apply la agrega a s
     assert.equal(fs.existsSync(file), false, 'la vista previa no escribe nada');
     assert.equal((await ask('Bash: ls')).body.rule, 'Bash(ls:*)');
     assert.equal((await ask('Grep')).body.rule, 'Grep');
-    for (const bad of ['Bash: rm -rf', 'Bash: git push', 'Bash: echo $(x)', 'Read', 'Edit', ''])
+    for (const bad of ['Bash: rm -rf', 'Bash: git push', 'Bash: node -e', 'Bash: gh pr', 'Bash: python3 x.py', 'Bash: curl -X', 'Bash: echo $(x)', 'Read', 'Edit', ''])
       assert.equal((await ask(bad)).status, 400, bad);
     // existing file: the rest is kept and the rule is not duplicated
     fs.mkdirSync(path.dirname(file), { recursive: true });

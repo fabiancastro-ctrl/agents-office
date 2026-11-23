@@ -9,7 +9,10 @@ import { NEVER_ALLOW, saveJson, WORKSPACE } from './base.mjs';
 // Tools whose rule needs a path to be safe: the key does not carry one, so no rule is offered.
 const PATH_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 // Command prefixes that are never offered as «always», whatever the user waited on.
-const RISKY_PREFIX = /^(rm|mv|sudo|dd|chmod|chown|kill|git push|git reset|git clean|git checkout|git rebase)\b/;
+// The key keeps only the first two words, so interpreters, shells, network and cloud CLIs would become a blank check
+// (`node -e`, `bash -c`, `gh pr` → merge, `curl -X` → any request).
+const RISKY_PREFIX =
+  /^(rm|mv|sudo|dd|chmod|chown|kill|pkill|killall|git push|git reset|git clean|git checkout|git rebase|git branch|git tag|bash|sh|zsh|fish|eval|exec|env|xargs|find|node|deno|bun|npx|pnpx|python\d*(\.\d+)?|ruby|perl|php|osascript|curl|wget|ssh|scp|rsync|nc|gh|aws|gcloud|az|terraform|tofu|kubectl|helm|docker|psql|mysql|redis-cli|launchctl|crontab|open)\b/;
 const SAFE_WORD = /^[\w./@=+,:-]+$/;
 
 // → { rule } or { error }
