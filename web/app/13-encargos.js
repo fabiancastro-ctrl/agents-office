@@ -214,7 +214,6 @@ function inboxPanel() {
   const filter = st.inboxFilter || 'nuevos';
   const shown = inboxShown(),
     temps = st.inbox.length - shown.length;
-  const items = filter === 'nuevos' ? shown.filter(i => i.status !== 'visto') : shown;
   const n = unseen();
   const row = i => {
     const isNew = i.status !== 'visto';
@@ -231,38 +230,62 @@ function inboxPanel() {
       </div>
     </div>`;
   };
-  // Grouped by robot (default), room or repo. Groups keep the order of the inbox (latest delivery first);
-  // inside each group the oldest document goes first.
+  // Accordion grouped by robot (default), room or repo. Groups keep the order of the inbox (latest delivery first);
+  // inside each group the oldest document goes first. A group stays in the «nuevos» view with a 0 count once it
+  // has shown unseen documents, so it does not jump around while you mark things as seen.
   const mode = ['robot', 'sala', 'repo'].includes(st.inboxGroup) ? st.inboxGroup : 'robot';
   const keyOf = i =>
     mode === 'sala' ? i.salaName || (i.sala ? 'Sala cerrada' : 'Sin sala') : mode === 'repo' ? i.repo || 'Sin repo' : i.robot;
   const groups = new Map();
-  for (const i of items) {
+  for (const i of shown) {
     const k = keyOf(i);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(i);
   }
-  for (const list of groups.values()) list.sort((a, b) => a.at - b.at);
+  const keep = (st.inboxKeep ||= new Set());
+  for (const [k, list] of groups) {
+    list.sort((a, b) => a.at - b.at);
+    if (list.some(i => i.status !== 'visto')) keep.add(`${mode}:${k}`);
+    else if (filter === 'nuevos' && !keep.has(`${mode}:${k}`)) groups.delete(k);
+  }
+  // Open/closed state per mode and group key, remembered in localStorage. The first time a mode is drawn only the
+  // group with the oldest unseen document is open (a single group is always open); the choice is then stored.
+  let openMap;
+  try {
+    openMap = JSON.parse(prefGet('inboxOpen.' + mode, 'null'));
+  } catch {
+    openMap = null;
+  }
+  if (!openMap || typeof openMap !== 'object') {
+    openMap = {};
+    let first = null;
+    for (const [k, list] of groups) {
+      const old = list.find(i => i.status !== 'visto');
+      if (old && (!first || old.at < first.at)) first = { k, at: old.at };
+    }
+    if (first) openMap[first.k] = true;
+    if (groups.size) prefSet('inboxOpen.' + mode, JSON.stringify(openMap));
+  }
+  st.inboxOpenMap = { mode, map: openMap };
   const rows = [...groups]
     .map(([key, list]) => {
-      const nNew = list.filter(i => i.status !== 'visto').length;
-      const count = `${list.length} doc${list.length === 1 ? '' : 's'}${nNew && filter !== 'nuevos' ? ` · ${nNew} nuevo${nNew === 1 ? '' : 's'}` : ''}`;
-      const seenBtn = `<button class="btn sm" data-inbox="seen-group" data-ids="${esc(
-        list
-          .filter(i => i.status !== 'visto')
-          .map(i => i.id)
-          .join(',')
-      )}" ${nNew ? '' : 'disabled'}>Marcar vista todo</button>`;
-      let head;
+      const fresh = list.filter(i => i.status !== 'visto');
+      const nNew = fresh.length;
+      const open = groups.size === 1 || openMap[key] === true;
+      const shownList = filter === 'nuevos' ? fresh : list;
+      const count = `<small class="ib-n${nNew ? ' has' : ''}">${nNew} sin ver${filter !== 'nuevos' ? ` · ${list.length} en total` : ''}</small>`;
+      const seenBtn = `<button type="button" class="btn sm" data-inbox="seen-group" data-ids="${esc(fresh.map(i => i.id).join(','))}" ${nNew ? '' : 'disabled'}>Marcar vista todo</button>`;
+      let who;
       if (mode === 'robot') {
         const live = st.robots.get(key);
-        head = `${live ? `<span class="ib-av">${robotSVG(COLORS[live.data.color % COLORS.length], lookOf(key, live.data.place, live.data))}</span>` : ''}<b>${esc(key)}</b><span class="ib-lbl" title="${esc(list[0].label)}">${esc(list[0].label)}</span><small>${count}${live ? '' : ' · ya se fue'}</small>`;
+        who = `${live ? `<span class="ib-av">${robotSVG(COLORS[live.data.color % COLORS.length], lookOf(key, live.data.place, live.data))}</span>` : ''}<b>${esc(key)}</b><span class="ib-lbl" title="${esc(list[0].label)}">${esc(list[0].label)}${live ? '' : ' · ya se fue'}</span>`;
       } else {
-        head = `<b>${esc(key)}</b><span class="ib-lbl"></span><small>${count}</small>`;
+        who = `<b>${esc(key)}</b><span class="ib-lbl"></span>`;
       }
-      return `<section class="ib-g">
-      <div class="ib-gh">${head}${seenBtn}</div>
-      ${list.map(row).join('')}
+      // The toggle and the «mark all» button are siblings (no button inside a button), so the latter never folds the group.
+      return `<section class="ib-g${open ? ' open' : ''}">
+      <div class="ib-gh"><button type="button" class="ib-toggle" data-ib-toggle="${esc(key)}" aria-expanded="${open}"><span class="ib-car" aria-hidden="true">${open ? '▾' : '▸'}</span>${who}${count}</button>${seenBtn}</div>
+      <div class="ib-body"${open ? '' : ' hidden'}>${shownList.map(row).join('') || '<p class="muted">Nada nuevo en este grupo.</p>'}</div>
     </section>`;
     })
     .join('');

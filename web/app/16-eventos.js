@@ -402,6 +402,14 @@ PANEL.addEventListener('click', async e => {
     }
     return;
   }
+  const tg = e.target.closest('[data-ib-toggle]');
+  if (tg && st.inboxOpenMap) {
+    const { mode, map } = st.inboxOpenMap,
+      k = tg.dataset.ibToggle;
+    map[k] = tg.getAttribute('aria-expanded') !== 'true';
+    prefSet('inboxOpen.' + mode, JSON.stringify(map));
+    return renderPanel();
+  }
   const ib = e.target.closest('[data-inbox]');
   if (ib?.dataset.inbox === 'temp') {
     st.inboxTemp = !st.inboxTemp;

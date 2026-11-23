@@ -1771,3 +1771,13 @@ html.hc .robot.bub-flip .bubble::after{border-top-color:transparent;border-botto
 .sala-board .sb-deps{flex-basis:100%;display:grid;gap:3px}
 .sala-board .sb-dr{display:flex;flex-wrap:wrap;align-items:center;gap:3px 4px;font-size:10.5px}
 .sala-board .sb-dt.on{background:#ffe9b8;color:#8a5a00;border-color:#d99a1c}
+
+/* Inbox accordion: header toggle + sibling «mark all» button; no grey for the unseen count */
+.ib-gh{justify-content:space-between}
+.ib-toggle{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:none;border:0;padding:2px;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ib-toggle:focus-visible{outline:2px solid var(--amber);outline-offset:1px;border-radius:4px}
+.ib-car{width:12px;flex:none;color:var(--amber)}
+.ib-n.has{color:var(--rose);font-weight:600}
+.ib-body{display:grid;gap:6px;animation:ibopen .12s ease-out}
+.ib-body[hidden]{display:none}
+@keyframes ibopen{from{opacity:.4}to{opacity:1}}
