@@ -214,6 +214,14 @@ route('POST', 'note', async (r, req, res) => {
   emit(r);
   return send(res, 200, { ok: true, note: r.note });
 });
+// Priority of the robot in the «waiting for you» queue: 'p0', 'p1' or '' (normal). Persisted with the robot state.
+route('POST', 'priority', async (r, req, res) => {
+  const p = String((await readBody(req)).priority ?? '').toLowerCase();
+  if (!['', 'p0', 'p1', 'normal'].includes(p)) return send(res, 400, { error: 'La prioridad debe ser p0, p1 o normal.' });
+  r.priority = p === 'p0' || p === 'p1' ? p : undefined;
+  emit(r);
+  return send(res, 200, { ok: true, priority: r.priority || null });
+});
 // Título que le pones tú al robot («Tareas de QA», «Revisando wallet#32 Ramiro»); vacío lo quita.
 route('POST', 'title', async (r, req, res) => {
   r.title = cleanTitle((await readBody(req)).title);

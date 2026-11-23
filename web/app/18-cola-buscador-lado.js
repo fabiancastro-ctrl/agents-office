@@ -1,10 +1,11 @@
 /* ---------- cola de los que te esperan ---------- */
-// Del que lleva más esperando al más reciente. S salta al siguiente; tras aprobar o denegar con A/D pasa solo.
+// By priority (p0, p1, normal), then from the one waiting longest to the most recent. S jumps to the next one;
+// after approving or denying with A/D it moves on by itself.
 const waitingList = () =>
   [...st.robots.values()]
     .map(a => a.data)
     .filter(d => d.state === 'input' || d.spawnReq)
-    .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0))
+    .sort((x, y) => prioRank(x.priority) - prioRank(y.priority) || (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0))
     .map(d => d.name);
 function nextWaiting(from) {
   const l = waitingList();

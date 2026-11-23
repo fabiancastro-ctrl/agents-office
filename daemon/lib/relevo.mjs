@@ -140,6 +140,7 @@ async function finishRelevo(r, summary) {
     color: r.color,
     look: r.look || null,
     note: r.note || '',
+    priority: r.priority || null,
     salaNote: r.salaNote || '',
     parent: r.parent || null,
     sala: r.place?.sala || null,
@@ -189,6 +190,7 @@ async function relaunch(r, old, summary) {
     n = await launch(launchArgs);
   }
   n.note = old.note;
+  if (old.priority) n.priority = old.priority;
   n.salaNote = old.salaNote;
   if (old.request) n.request = old.request;
   if (Number.isInteger(old.baseColor)) n.baseColor = old.baseColor;

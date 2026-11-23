@@ -67,6 +67,7 @@ function saveState() {
         spawnReq: r.spawnReq || null,
         reported: !!r.reported,
         note: r.note || '',
+        priority: r.priority || null,
         salaNote: r.salaNote || '',
         routine: r.routine || null,
         changed: !!r.changed,

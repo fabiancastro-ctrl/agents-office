@@ -85,6 +85,7 @@ function view(r, withLog = false) {
     spawnReq: r.spawnReq || null,
     kids: kidsOf(r.name),
     note: r.note || '',
+    priority: r.priority || null,
     summaryPending: !!r.summaryPending,
     relevo: r.relevo && ['done', 'input'].includes(r.state) ? r.relevo : null,
     relevoPending: !!r.relevoPending,

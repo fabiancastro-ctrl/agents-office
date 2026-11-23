@@ -502,6 +502,19 @@ function noteEditor(d) {
     ? `<div class="rt-note" id="note-view"><span>🗒 ${esc(d.note)}</span><button type="button" class="btn sm ghost" data-note="edit">✎</button><button type="button" class="btn sm ghost" data-note="clear" title="Quitar la nota">✕</button></div>`
     : `<button type="button" class="btn sm ghost" id="note-view" data-note="edit" title="Una nota tuya: qué espera, de quién, qué falta">🗒 Nota</button>`;
 }
+// Priority in the «waiting for you» queue: p0 (red), p1 (amber) or normal. Set from the window or from the card.
+const prioRank = p => (p === 'p0' ? 0 : p === 'p1' ? 1 : 2);
+const prioNext = p => (p === 'p0' ? 'normal' : p === 'p1' ? 'p0' : 'p1');
+const prioTag = p => (p ? `<span class="prio prio-${p}">${p.toUpperCase()}</span>` : '');
+function prioPicker(d) {
+  const opt = (v, label) =>
+    `<button type="button" class="btn sm prio-opt${(d.priority || 'normal') === v ? ` on prio-${v}` : ''}" data-prio="${v}" aria-pressed="${(d.priority || 'normal') === v}">${label}</button>`;
+  return `<span class="prio-pick" title="Prioridad en la cola de los que te esperan: P0 y P1 pasan primero">Prioridad ${opt('normal', 'Normal')}${opt('p1', 'P1')}${opt('p0', 'P0')}</span>`;
+}
+onClick('[data-prio]', b => {
+  const d = st.robots.get(st.selected)?.data;
+  if (d) api('POST', `/api/robots/${d.name}/priority`, { priority: b.dataset.prio }).catch(() => {});
+});
 onClick('[data-note]', b => {
   const d = st.robots.get(st.selected)?.data;
   if (!d) return;

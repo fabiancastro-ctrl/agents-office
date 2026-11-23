@@ -1747,3 +1747,21 @@ test('bandeja: marcar vistos varios documentos a la vez ignora ids desconocidos 
     await o.stop();
   }
 });
+
+test('prioridad: se fija por robot, se valida, se guarda en el estado y se quita con normal', async () => {
+  const o = await startOffice();
+  try {
+    await o.api('POST', '/api/robots', libre('rex'));
+    assert.equal((await o.api('POST', '/api/robots/rex/priority', { priority: 'urgente' })).status, 400);
+    assert.equal((await o.api('POST', '/api/robots/rex/priority', { priority: 'p0' })).body.priority, 'p0');
+    assert.equal((await o.robot('rex')).priority, 'p0');
+    const saved = () =>
+      JSON.parse(fs.readFileSync(path.join(o.data, 'office-state.json'), 'utf8')).robots.find(r => r.name === 'rex')?.priority;
+    await waitFor(() => saved() === 'p0', { what: 'que la prioridad quede guardada' });
+    await o.api('POST', '/api/robots/rex/priority', { priority: 'normal' });
+    assert.equal((await o.robot('rex')).priority, null);
+    await waitFor(() => !saved(), { what: 'que se guarde sin prioridad' });
+  } finally {
+    await o.stop();
+  }
+});
