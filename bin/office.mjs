@@ -138,6 +138,7 @@ function summary(o) {
     skill: r.skill || null,
     look: r.look || null,
     label: r.label || '',
+    priority: r.priority || null,
     room: r.place?.type === 'room' ? (r.place.sala ? 'sala' : 'rutina') : ''
   }));
   return {

@@ -122,6 +122,20 @@ body.t-day .cloud{background:rgba(255,255,255,.55)}
 .st.on{color:var(--teal)} .st.on::before{background:var(--teal);box-shadow:0 0 6px var(--teal)}
 .st.orp{color:var(--amber)} .st.orp::before{background:var(--amber)}
 .plq .needb{font-family:var(--mono);font-size:11px;color:var(--rose);font-weight:600}
+/* live miniature: one mini face per robot with a state glyph (no grey: idle is violet) */
+.plq .mini{display:flex;flex-wrap:wrap;gap:3px 4px;margin-top:3px}
+.plq .mini small{font:600 9px/18px var(--mono);color:var(--ink)}
+.mf{position:relative;display:inline-flex;width:20px;height:18px}
+.mf .rhead{width:20px;height:18px;overflow:visible}
+.mf i{position:absolute;right:-3px;bottom:-3px;min-width:9px;height:9px;padding:0 1px;border-radius:5px;font:700 7px/9px var(--mono);font-style:normal;text-align:center;color:#2a1d05;background:var(--amber);box-sizing:border-box}
+.mf.s-input i{background:var(--rose);color:#3a0d13}
+.mf.s-input{animation:winneed 1s steps(2) infinite}
+.mf.s-working,.mf.s-walking,.mf.s-delegating{filter:drop-shadow(0 0 3px var(--amber))}
+.mf.s-delegating i{background:var(--violet)}
+.mf.s-done i{background:var(--teal)}
+.mf.s-idle i{background:var(--violet);color:#1e1740}
+.mf.p-p0 .rhead{outline:2px solid #e0414f;outline-offset:1px;border-radius:4px}
+.mf.p-p1 .rhead{outline:2px solid var(--amber);outline-offset:1px;border-radius:4px}
 
 /* ventanas: un puesto por ventana */
 .wins{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:12px;padding:0 4px;background:linear-gradient(90deg,transparent 0 calc(100% - 1px),rgba(0,0,0,.18) 0) 0 0/calc((100% + 12px)/8) 100%} /* columnas entre ventanas */
@@ -517,10 +531,25 @@ function robotTitle(r) {
   const m = /^\/([\w:-]+)\s*(.*)$/.exec(r.label || '');
   return suggestTitle(r.request || (m ? {kind: 'skill', skill: m[1], args: m[2]} : {kind: 'libre', text: r.label}));
 }
+// Live miniature of the floor: one mini face per robot with its state glyph (data comes from summary() in office.mjs,
+// refreshed with every poll). Needs first, then working, done and idle; at most 14 faces plus a «+N».
+const MINI_GLYPH = {input: '?', working: '●', walking: '●', delegating: '◆', done: '✓', idle: 'z'};
+function miniStrip(o) {
+  if (!o.running || !(o.robotList || []).length) return '';
+  const order = {input: 0, working: 1, delegating: 1, walking: 1, done: 2, idle: 3};
+  const list = [...o.robotList].sort((a, b) => (order[a.state] ?? 4) - (order[b.state] ?? 4));
+  const shown = list.slice(0, 14);
+  const faces = shown.map(r => {
+    const place = r.room ? {type: 'room', sala: r.room === 'sala'} : null;
+    const tip = `${r.name} · ${STATE[r.state] || r.state}${r.priority ? ' · ' + r.priority.toUpperCase() : ''}`;
+    return `<span class="mf s-${esc(r.state)}${r.priority ? ' p-' + esc(r.priority) : ''}" title="${esc(tip)}">${robotHead(ROBOT_COLORS[(r.color || 0) % ROBOT_COLORS.length], lookOf(r.name, place, r))}<i>${MINI_GLYPH[r.state] || ''}</i></span>`;
+  }).join('');
+  return `<div class="mini" aria-hidden="true">${faces}${list.length > shown.length ? `<small>+${list.length - shown.length}</small>` : ''}</div>`;
+}
 function floorInner(o, idx) {
   const orph = !o.running && o.orphans > 0;
   const st = o.running ? '<span class="st on">corriendo</span>' : orph ? `<span class="st orp">${o.orphans} sin supervisión</span>` : '<span class="st">detenida</span>';
-  return `<div class="plq"><span class="no">PISO ${idx + 1} · :${o.port}</span><b>${esc(o.title)}</b>${st}${o.running && o.need ? `<span class="needb">✋ ${o.need} te necesita${o.need === 1 ? '' : 'n'}</span>` : ''}</div>
+  return `<div class="plq"><span class="no">PISO ${idx + 1} · :${o.port}</span><b>${esc(o.title)}</b>${st}${o.running && o.need ? `<span class="needb">✋ ${o.need} te necesita${o.need === 1 ? '' : 'n'}</span>` : ''}${miniStrip(o)}</div>
     <div class="wins">${windows(o)}</div>`;
 }
 function render() {

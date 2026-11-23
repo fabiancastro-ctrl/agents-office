@@ -1819,3 +1819,53 @@ test('dependencias en la sala: vienen del pedido o del tablero, se quitan solas 
     await o.stop();
   }
 });
+
+test('edificio: el resumen de cada piso trae los robots con estado y prioridad, y la página pinta su miniatura', async () => {
+  const net = await import('node:net');
+  const { spawn } = await import('node:child_process');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'office-lobby-'));
+  const home = path.join(base, 'home'),
+    data = path.join(base, 'datos');
+  fs.mkdirSync(path.join(home, 'oficinas', 'piso'), { recursive: true });
+  fs.mkdirSync(data);
+  fs.writeFileSync(path.join(home, 'oficinas', 'piso', 'office.json'), JSON.stringify({ port: 4999, session: 'office-lobby-test', data }));
+  fs.writeFileSync(path.join(data, 'daemon.lock'), JSON.stringify({ pid: process.pid }));
+  const robot = (name, state, extra = {}) => ({ name, state, color: 1, label: 'x', ...extra });
+  fs.writeFileSync(
+    path.join(data, 'office-state.json'),
+    JSON.stringify({ robots: [robot('ana', 'input', { priority: 'p0' }), robot('bruno', 'working'), robot('carla', 'done')], inbox: [] })
+  );
+  const port = await new Promise(res => {
+    const s = net.createServer().listen(0, '127.0.0.1', () => {
+      const p = s.address().port;
+      s.close(() => res(p));
+    });
+  });
+  const proc = spawn(
+    process.execPath,
+    [path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'bin', 'office.mjs'), '__lobby-serve', String(port)],
+    {
+      env: { ...process.env, AGENT_OFFICE_HOME: home },
+      stdio: 'ignore'
+    }
+  );
+  try {
+    const url = `http://127.0.0.1:${port}`;
+    await waitFor(async () => (await fetch(`${url}/api/offices`)).ok, { what: 'que arranque el edificio' });
+    const { offices } = await (await fetch(`${url}/api/offices`)).json();
+    const list = offices[0].robotList;
+    assert.deepEqual(
+      list.map(r => [r.name, r.state, r.priority]),
+      [
+        ['ana', 'input', 'p0'],
+        ['bruno', 'working', null],
+        ['carla', 'done', null]
+      ]
+    );
+    const page = await (await fetch(`${url}/`)).text();
+    assert.ok(page.includes('function miniStrip') && page.includes('${miniStrip(o)}'), 'el piso incluye su miniatura');
+  } finally {
+    proc.kill();
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
