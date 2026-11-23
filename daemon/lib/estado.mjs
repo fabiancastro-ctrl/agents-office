@@ -51,6 +51,8 @@ function ctxOf(r) {
 const COLD_MS = Number(process.env.OFFICE_COLD_MS) || 55 * 60e3;
 const isCold = r => Date.now() - (Date.parse(r.lastEventAt || r.startedAt || '') || Date.now()) > COLD_MS;
 
+// La línea de tiempo completa (hasta TIMELINE_MAX entradas) vive solo en el daemon y en office-state.json. La página solo
+// lee la última entrada (fecha de la última actividad cuando falta lastEventAt), así que cada evento manda solo esa.
 function view(r, withLog = false) {
   const v = {
     name: r.name, kind: r.kind, skill: r.skill, label: r.label, color: r.color,
@@ -58,7 +60,7 @@ function view(r, withLog = false) {
     bubble: r.bubble, activity: r.activity, tool: r.tool || '', needsPermission: r.needsPermission,
     hold: r.hold, ask: r.ask || null, ctx: ctxOf(r), request: requestOf(r), docs: r.docs, usage: usage(r), sessionId: r.sessionId, origin: r.origin, inputAt: r.inputAt, critical: criticalOf(r), title: r.title || '', look: r.look || null,
     parent: r.parent || null, reported: !!r.reported, spawnReq: r.spawnReq || null, kids: kidsOf(r.name), note: r.note || '', summaryPending: !!r.summaryPending, relevo: r.relevo && ['done', 'input'].includes(r.state) ? r.relevo : null, relevoPending: !!r.relevoPending, consoleLost: !!r.consoleLost,
-    bg: bgList(r), permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: r.timeline || [], lastEventAt: r.lastEventAt || null, repo: r.repo || null, files: (r.files || []).length,
+    bg: bgList(r), permissionMode: r.permissionMode, startedAt: r.startedAt, timeline: (r.timeline || []).slice(-1), lastEventAt: r.lastEventAt || null, repo: r.repo || null, files: (r.files || []).length,
     spend: r.spend || null, crown: crownOf(r.name), loop: r.loop || null
   };
   if (withLog) v.log = r.log.slice(-150);
