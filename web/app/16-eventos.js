@@ -55,6 +55,23 @@ MAP.addEventListener('click', e => {
     board.noteFor = board.noteFor === st.view ? null : st.view;
     return renderBoard();
   }
+  if (e.target.closest('[data-sala-dep-open]')) {
+    board.depFor = board.depFor === st.view ? null : st.view;
+    return renderBoard();
+  }
+  const dep = e.target.closest('[data-sala-dep]');
+  if (dep) {
+    const sala = st.salas.find(x => x.id === st.view),
+      me = sala?.roster.find(x => x.name === dep.dataset.salaDep);
+    if (!me) return;
+    const target = dep.dataset.salaDepOn,
+      cur = me.espera || [];
+    api('POST', `/api/salas/${st.view}/espera`, {
+      name: me.name,
+      espera: cur.includes(target) ? cur.filter(n => n !== target) : [...cur, target]
+    }).catch(() => {});
+    return;
+  }
   const nd = e.target.closest('[data-sala-note-del]');
   if (nd) {
     nd.disabled = true;

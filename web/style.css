@@ -1763,3 +1763,11 @@ html.hc .robot.bub-flip .bubble::after{border-top-color:transparent;border-botto
 .nb-c i{font-style:normal;color:var(--rose)}
 .nb-c.nb-p0{border-color:#e0414f}
 .nb-c.nb-p1{border-color:var(--amber)}
+
+/* Dependencies inside a room: «waits for A» (amber-brown) and bottleneck (red), no grey */
+.sala-board .sb-mem .sb-dep{font-style:normal;font-size:10px;color:#8a5a00;background:#ffe9b8;border-radius:8px;padding:0 5px;white-space:nowrap}
+.sala-board .sb-mem .sb-blk{font-style:normal;font-size:10px;color:#fff;background:#d6404f;border-radius:8px;padding:0 5px;white-space:nowrap}
+.sala-board .sb-depbtn{flex-basis:auto;font-size:10.5px}
+.sala-board .sb-deps{flex-basis:100%;display:grid;gap:3px}
+.sala-board .sb-dr{display:flex;flex-wrap:wrap;align-items:center;gap:3px 4px;font-size:10.5px}
+.sala-board .sb-dt.on{background:#ffe9b8;color:#8a5a00;border-color:#d99a1c}

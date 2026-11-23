@@ -403,7 +403,7 @@ function salaRoute(f, t) {
   return pts;
 }
 // Tablero de la sala: por qué se creó, su CONTEXT.md y las últimas notas del hilo.
-const board = { ctx: '', at: 0, for: null, loading: false, noteFor: null, whyOpen: false };
+const board = { ctx: '', at: 0, for: null, loading: false, noteFor: null, whyOpen: false, depFor: null };
 async function loadBoard(force) {
   const s = st.salas.find(x => x.id === st.view);
   if (!s || board.loading || (!force && board.for === s.id && Date.now() - board.at < 15000)) return renderBoard();
@@ -450,7 +450,7 @@ function renderBoard() {
     <div class="sb-why${board.whyOpen ? ' open' : ''}" data-sala-why title="${board.whyOpen ? 'Clic para resumir' : `Por qué se creó esta sala. Clic para verlo completo.`}">${esc(why)}</div>
     ${s.spend && !s.roster?.length ? spendHtml(s) : ''}
     ${board.noteFor === s.id ? `<form class="sb-nf" data-sala-note-form><textarea rows="2" maxlength="240" placeholder="Tu nota (Enter pega, Esc cancela)…"></textarea><button class="btn sm">Pegar</button></form>` : ''}
-    ${s.roster?.length ? `<div class="sb-team"><b>Reparto${prog ? ` · ${prog.ok}/${prog.n} entregaron` : ''}</b>${s.spend ? spendHtml(s) : ''}${prog ? `<i class="sb-prog${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%"></i>` : ''}<span class="sb-chips">${s.roster.map(e => `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}" title="${esc(`${e.name}${e.title ? ' · ' + e.title : ''} · ${e.state}`)}"><i class="sb-dot"></i><code>${esc(e.name)}</code></span>`).join('')}</span></div>` : ''}
+    ${s.roster?.length ? `<div class="sb-team"><b>Reparto${prog ? ` · ${prog.ok}/${prog.n} entregaron` : ''}</b>${s.spend ? spendHtml(s) : ''}${prog ? `<i class="sb-prog${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%"></i>` : ''}<span class="sb-chips">${s.roster.map(memChip).join('')}</span>${depBlock(s)}</div>` : ''}
     <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
     <div class="sb-notes">${mine.map(n => `<div class="sb-note mine" title="Tu nota (${esc(fmtWhen(n.at, { hour: 'numeric' }))}): solo la ves tú"><button type="button" class="sb-nx" data-sala-note-del="${esc(n.id)}" title="Quitar la nota" aria-label="Quitar la nota">×</button><b>📌 Tú</b>${esc(n.text)}</div>`).join('')}${notes.length ? notes.map(({ m, i }, k) => `<div class="sb-note n${k % 4}${salaMail.flying.has(m.id) ? ' arriving' : ''}" data-mid="${esc(m.id)}" data-note-i="${i}" role="button" tabindex="0" title="${esc(`${m.from} · ${hhmm(m.at)}\n${plainMd(m.text).slice(0, 500)}${m.text.length > 500 ? '…' : ''}\n\nClic: abrir el mensaje completo en el hilo`)}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 160))}</div>`).join('') : mine.length ? '' : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
   el.querySelector('.sb-ctx').scrollTop = keep;
@@ -465,6 +465,37 @@ function renderBoard() {
   } else if (nta && !draft) nta.focus();
   drawDoodles(s);
   flyNewMail(s);
+}
+// Dependencies inside the room: «⏸ espera a A» on the waiting member and «⏳ N lo esperan» on the one being waited for.
+const memChip = e => {
+  const wait = e.waits?.length
+    ? `<em class="sb-dep" title="Espera la entrega de ${esc(e.waits.join(', '))}">⏸ espera a ${esc(e.waits.join(', '))}</em>`
+    : '';
+  const blk = e.waitedBy
+    ? `<em class="sb-blk" title="Cuello de botella: ${e.waitedBy} robot${e.waitedBy === 1 ? '' : 's'} espera${e.waitedBy === 1 ? '' : 'n'} su entrega">⏳ ${e.waitedBy} lo ${e.waitedBy === 1 ? 'espera' : 'esperan'}</em>`
+    : '';
+  return `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}${e.waits?.length ? ' is-waiting' : ''}${e.waitedBy ? ' is-blocker' : ''}" title="${esc(`${e.name}${e.title ? ' · ' + e.title : ''} · ${e.state}`)}"><i class="sb-dot"></i><code>${esc(e.name)}</code>${wait}${blk}</span>`;
+};
+// Editor opened from the board: for each member, toggle buttons for the members it waits for.
+function depBlock(s) {
+  const kids = s.roster.filter(e => !e.owner && e.state !== 'no se lanzó');
+  if (kids.length < 2) return '';
+  const open = board.depFor === s.id;
+  const rows = open
+    ? kids
+        .map(
+          b =>
+            `<div class="sb-dr"><code>${esc(b.name)}</code> espera a ${kids
+              .filter(a => a.name !== b.name)
+              .map(
+                a =>
+                  `<button type="button" class="btn sm sb-dt${(b.espera || []).includes(a.name) ? ' on' : ''}" data-sala-dep="${esc(b.name)}" data-sala-dep-on="${esc(a.name)}" aria-pressed="${(b.espera || []).includes(a.name)}">${esc(a.name)}</button>`
+              )
+              .join('')}</div>`
+        )
+        .join('')
+    : '';
+  return `<button type="button" class="btn sm ghost sb-depbtn" data-sala-dep-open title="Marca quién espera la entrega de quién. Solo informa: no detiene a nadie.">⏸ Dependencias</button>${rows ? `<div class="sb-deps">${rows}</div>` : ''}`;
 }
 const spendHtml = s =>
   `<span class="sb-spend" title="Gasto del equipo: lo que gastaron todos los que pasaron por esta sala (padre e hijos, también los que ya se fueron, con sus subagentes) desde que se armó. Entrada + salida + caché escrita, como los KPI. Se recalcula cada minuto y no gasta cuota.">💸 <b>${fmtTok(s.spend)}</b></span>`;

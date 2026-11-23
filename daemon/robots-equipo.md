@@ -16,5 +16,6 @@ Robots = consolas nuevas e independientes, no subagentes. Úsalo solo si te pide
    ```
 
 - Cada robot nuevo arranca sin tu conversación: el encargo debe ser autosuficiente (objetivo, repos y rutas, documentos de entrada, restricciones, qué entregar y en qué formato).
+- Opcional: si un encargo depende de la entrega de otro de la misma petición, agrega `"espera": ["nombre-del-otro"]` a ese encargo (solo informa en el tablero de la sala; no lo detiene).
 - El usuario los aprueba en la oficina; tú y ellos quedan en una sala cuyo CONTEXT.md recibe ese contexto (la respuesta del curl te da su ruta).
 - Sigue con tu trabajo: cada resultado te llega como mensaje «[Oficina] Resultado…» (los que terminen mientras trabajas te llegan juntos al terminar tu turno); intégralos.
