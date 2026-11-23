@@ -1788,3 +1788,10 @@ html.hc .robot.bub-flip .bubble::after{border-top-color:transparent;border-botto
 @keyframes ibopen{from{opacity:.4}to{opacity:1}}
 #cables{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:450}
 #cables line{stroke:#ff4d5e;stroke-width:1.5;stroke-dasharray:3 4;stroke-linecap:round;pointer-events:stroke;cursor:help}
+.alert.stall-box{background:#1d1a12;border-color:#5c4a24}
+.alert.stall-box>b{color:var(--amber)}
+html[data-theme=light] .alert.stall-box{background:#fff8e8;border-color:#ecd29a}
+/* stalled on the map: bobbing «zzz» over the robot (amber, opaque: grey means disconnected) */
+.robot.stuck::after{content:"zzz";position:absolute;left:-24px;top:-6px;font:700 12px/1 var(--mono);color:var(--amber);text-shadow:0 0 4px rgba(0,0,0,.8);letter-spacing:1px;animation:zzbob 1.8s ease-in-out infinite;pointer-events:none;z-index:3}
+@keyframes zzbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@media (prefers-reduced-motion:reduce){.robot.stuck::after{animation:none}}

@@ -105,3 +105,10 @@ function clashBox(d) {
   return `<div class="alert clash-box" id="clash-box">${rows}</div>`;
 }
 const shownPath = p => p.split('/').slice(-2).join('/'); // parent folder + file name, enough to recognize it
+
+// Stalled robot (no activity for a while): says since when and offers «Mirar», which opens its tmux window in Terminal.
+function stalledBox(d) {
+  if (!d.stalled) return '';
+  const at = new Date(lastEventMs(d)).toTimeString().slice(0, 5);
+  return `<div class="alert stall-box" id="stall-box"><b>💤 Estancado desde las ${at} (${fmtDur(idleMs(d))})</b><span class="note">Sin herramientas, subagentes ni mensajes. Puede estar en un comando largo o colgado: mira su consola.</span><div class="row"><button type="button" class="btn sm" data-act="console">Mirar</button></div></div>`;
+}

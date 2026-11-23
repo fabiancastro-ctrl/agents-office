@@ -52,6 +52,32 @@ function ctxOf(r) {
 const COLD_MS = Number(process.env.OFFICE_COLD_MS) || 55 * 60e3;
 const isCold = r => Date.now() - (Date.parse(r.lastEventAt || r.startedAt || '') || Date.now()) > COLD_MS;
 
+// Stalled: «working» with no hook event and no new transcript line for OFFICE_STALL_MIN minutes (10 by default). Waiting on a
+// background task (⏳) or on the user does not count. r.stalled holds the lastEventAt it was marked at, so the next event
+// (which changes lastEventAt) clears it without touching every event handler.
+const STALL_MS = (Number(process.env.OFFICE_STALL_MIN) || 10) * 60e3;
+const stallSince = r => r.lastEventAt || r.startedAt || null;
+const isStalled = r =>
+  ['working', 'delegating'].includes(r.state) &&
+  !r.needsPermission &&
+  !r.hold &&
+  !r.ask &&
+  !bgList(r).length &&
+  Date.now() - (Date.parse(stallSince(r) || '') || Date.now()) > STALL_MS;
+setInterval(() => {
+  for (const r of robots.values()) {
+    if (isStalled(r)) {
+      if (r.stalled !== stallSince(r)) {
+        r.stalled = stallSince(r);
+        emit(r);
+      }
+    } else if (r.stalled) {
+      r.stalled = null;
+      emit(r);
+    }
+  }
+}, Number(process.env.OFFICE_STALL_TICK_MS) || 30e3);
+
 // La línea de tiempo completa (hasta TIMELINE_MAX entradas) vive solo en el daemon y en office-state.json. La página solo
 // lee la última entrada (fecha de la última actividad cuando falta lastEventAt), así que cada evento manda solo esa.
 function view(r, withLog = false) {
@@ -99,6 +125,7 @@ function view(r, withLog = false) {
     repo: r.repo || null,
     files: (r.files || []).length,
     clashes: clashesOf(r),
+    stalled: isStalled(r) ? stallSince(r) : null, // since when it has had no activity (ISO date)
     spend: r.spend || null,
     crown: crownOf(r.name),
     loop: r.loop || null

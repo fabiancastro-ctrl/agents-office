@@ -1560,6 +1560,24 @@ test('choques: dos robots vivos que editaron el mismo archivo se avisan; «Enten
   }
 });
 
+test('estancado: un robot trabajando sin eventos se marca; el siguiente evento lo limpia y uno que terminó no cuenta', async () => {
+  const o = await startOffice({ env: { OFFICE_STALL_MIN: '0.008', OFFICE_STALL_TICK_MS: '100' } });
+  try {
+    await o.api('POST', '/api/robots', libre('lento'));
+    await o.api('POST', '/api/robots', libre('listo'));
+    await o.hook('lento', { hook_event_name: 'UserPromptSubmit', prompt: 'haz algo largo' });
+    await turn(o, 'listo', 'hola', 'ok');
+    await waitFor(async () => (await o.robot('lento')).stalled, { what: 'que lento quede estancado' });
+    assert.equal((await o.robot('lento')).state, 'working');
+    assert.equal((await o.robot('listo')).stalled, null, 'un robot en done no está estancado');
+    await o.hook('lento', { hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: '/etc/hosts' } });
+    assert.equal((await o.robot('lento')).stalled, null, 'el evento limpia la marca');
+    await waitFor(async () => (await o.robot('lento')).stalled, { what: 'que vuelva a quedar estancado' });
+  } finally {
+    await o.stop();
+  }
+});
+
 test('cables de choque: la página trae el interruptor de la vista y el código que dibuja la línea', async () => {
   const o = await startOffice();
   try {

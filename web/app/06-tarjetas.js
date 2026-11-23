@@ -94,16 +94,15 @@ function scheduleCards() {
 }
 
 /* ---------- robots sin actividad y avisos ---------- */
-// Un robot ocupado sin eventos (herramientas, subagentes, mensajes) durante STUCK_MS puede estar colgado o en
-// un comando muy largo: no lo damos por trabado, solo lo señalamos para que le eches un ojo.
-const STUCK_MS = 10 * 60e3;
+// A busy robot with no events (tools, subagents, messages) for OFFICE_STALL_MIN minutes may be hung or in a very long
+// command: we don't call it broken, we just flag it. The daemon decides (d.stalled = since when); the page only shows it.
 const lastEventMs = d =>
   Date.parse(d.lastEventAt || '') || Date.parse(d.timeline?.[d.timeline.length - 1]?.at || '') || Date.parse(d.startedAt || '') || 0;
 const idleMs = d => {
   const t = lastEventMs(d);
   return t ? Date.now() - t : 0;
 };
-const isStuck = d => (d.state === 'working' || d.state === 'delegating') && !d.needsPermission && !d.hold && idleMs(d) > STUCK_MS;
+const isStuck = d => !!d.stalled;
 setInterval(scheduleCards, 30000); // «sin actividad» cambia con el reloj, no con eventos
 
 // Avisos: contador en el título de la pestaña (siempre) y, si los activas, sonido y notificación del sistema.
@@ -127,7 +126,7 @@ const ALERT_TXT = {
   spawn: 'quiere lanzar robots nuevos',
   perm: 'pide permiso',
   ask: 'tiene una pregunta para ti',
-  stuck: 'lleva más de 10 min sin actividad'
+  stuck: 'lleva un buen rato sin actividad'
 };
 function updateTitle(n) {
   document.title = (n ? `(${n}) ` : '') + notif.base;
@@ -430,7 +429,7 @@ function cardHtml(a) {
       <div class="rc-t"><b>${esc(d.name)} <button type="button" class="prio prio-btn${d.priority ? ` prio-${d.priority}` : ''}" data-card-act="prio" title="Prioridad: ${d.priority ? d.priority.toUpperCase() : 'normal'}. Clic para cambiarla (normal, P1, P0)">${d.priority ? d.priority.toUpperCase() : '⚑'}</button></b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">📌 ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small>${d.note ? `<span class="rc-note" title="${esc(d.note)}">🗒 ${esc(d.note)}</span>` : ''}</div>${pill}</div>
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
     <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
-      ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">⏸ sin actividad ${fmtDur(idleMs(d))}</span>` : ''}
+      ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">💤 estancado ${fmtDur(idleMs(d))}</span>` : ''}
       ${d.clashes?.length ? `<span class="rc-clash" title="Otro robot editó ${d.clashes.length === 1 ? 'el mismo archivo' : 'los mismos archivos'}: ${esc(d.clashes.map(c => `${shownPath(c.file)} (${c.with.join(', ')})`).join(' · '))}">⚠ choque${d.clashes.length > 1 ? ` ×${d.clashes.length}` : ''}</span>` : ''}
       ${d.repo ? `<span class="rc-repo" title="Repo donde trabaja (sale de lo que edita o de la carpeta de su consola)">⎇ ${esc(d.repo)}</span>` : ''}<span title="Tokens de esta sesión">◆ ${fmtTok(tok)}</span>${spendChip(d)}${d.loop ? `<span class="rc-loop" title="Posible bucle: ${esc(d.loop.who)} repitió lo mismo ${d.loop.n} veces seguidas (${esc(d.loop.what)}). Si es una espera a propósito, ignóralo.">⟳ ×${d.loop.n}</span>` : ''}${subs ? `<span class="rc-subs" title="Subagentes trabajando">⑂ ${subs}</span>` : ''}${docs ? `<span title="Documentos escritos">▤ ${docs}</span>` : ''}</div>
     ${actions ? `<div class="rc-acts">${actions}</div>` : ''}
