@@ -91,7 +91,7 @@ MAP.addEventListener('click', e => {
   if (r) return select(r.dataset.name);
   const dk = e.target.closest('.desk');
   if (dk) {
-    const a = [...st.robots.values()].find(x => x.data.place.idx == dk.dataset.desk);
+    const a = [...st.robots.values()].find(x => x.data.place.idx === Number(dk.dataset.desk));
     return select(a ? a.data.name : '@new');
   }
   const sala = e.target.closest('[data-sala]');

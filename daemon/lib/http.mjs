@@ -1,6 +1,5 @@
 // Oficina de Agentes · servidor HTTP y rutas de la API.
 // Parte de daemon/daemon.mjs, que carga los módulos de daemon/lib/ en orden y arranca la oficina.
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';

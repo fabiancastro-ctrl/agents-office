@@ -126,7 +126,6 @@ function createSala(b) {
 // los hijos entran a esa; si no, se crea una con su objetivo y el reparto en CONTEXT.md y el padre se muda a ella.
 // Las salas de equipo (auto) se cierran solas cuando no queda nadie ni nadie esperando para entrar; sus archivos quedan.
 function teamSala(r, items, context, salaId) {
-  const team = items.map(it => `- ${it.title || trunc(it.text.replace(/\s+/g, ' '), 80)}`).join('\n');
   const stamp = now().slice(0, 16).replace('T', ' ');
   const cur = r.place.sala && salas.find(s => s.id === r.place.sala);
   if (cur) {
