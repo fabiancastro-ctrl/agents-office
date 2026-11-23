@@ -418,7 +418,7 @@ const server = http.createServer(async (req, res) => {
       const action = parts[3];
       if (await equipoRobotApi(req, res, url, parts, r, action)) return;
       const handler = ROBOT_ROUTES.get(`${req.method} ${action || ''}`);
-      if (handler) return handler(r, req, res);
+      if (handler) return await handler(r, req, res); // con await: si falla, lo atrapa el catch de abajo (si no, el daemon se cae)
     }
     if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'decision' && parts[2]) {
       const { decision } = await readBody(req);

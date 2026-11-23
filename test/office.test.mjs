@@ -1654,3 +1654,19 @@ test('cuota: robots sin herramientas pesadas, resumen sin tokens para uno frío 
     await o.stop();
   }
 });
+
+test('rutas de un robot: un cuerpo JSON roto responde con error y la oficina sigue viva', async () => {
+  const o = await startOffice();
+  try {
+    await o.api('POST', '/api/robots', libre('rex'));
+    const res = await fetch(`${o.url}/api/robots/rex/note`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{roto'
+    });
+    assert.ok(res.status >= 400 && res.status < 500, `respondió ${res.status}`);
+    assert.equal((await o.api('GET', '/api/setup')).status, 200, 'el daemon sigue arriba');
+  } finally {
+    await o.stop();
+  }
+});
