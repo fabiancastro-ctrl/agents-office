@@ -13,6 +13,8 @@ function fillJob(req) {
   set('job-mode', req.permissionMode);
   set('job-title', req.title);
   set('job-name', '');
+  const art = $('#job-artifact', PANEL);
+  if (art) art.checked = !!req.tools?.includes('artifact');
   syncKind();
   const focus = req.kind === 'libre' ? $('#job-text', PANEL) : $('#job-args', PANEL);
   focus?.focus();

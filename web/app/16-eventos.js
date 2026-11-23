@@ -225,6 +225,7 @@ PANEL.addEventListener('submit', async e => {
           title: $('#job-title').value.trim() || undefined,
           attachments
         };
+    if ($('#job-artifact')?.checked) body.tools = ['artifact'];
     body.origin = 'Lanzado por ti desde «Nuevo encargo»';
     body.queue = true; // con la oficina llena, espera en la puerta en vez de dar error
     // Mientras se revisa la cuota y se abre la consola el formulario queda bloqueado: un segundo clic no lanza otro.

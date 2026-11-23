@@ -1597,7 +1597,18 @@ test('permitir siempre: arma la regla, la muestra y solo con apply la agrega a s
     assert.equal(fs.existsSync(file), false, 'la vista previa no escribe nada');
     assert.equal((await ask('Bash: ls')).body.rule, 'Bash(ls:*)');
     assert.equal((await ask('Grep')).body.rule, 'Grep');
-    for (const bad of ['Bash: rm -rf', 'Bash: git push', 'Bash: node -e', 'Bash: gh pr', 'Bash: python3 x.py', 'Bash: curl -X', 'Bash: echo $(x)', 'Read', 'Edit', ''])
+    for (const bad of [
+      'Bash: rm -rf',
+      'Bash: git push',
+      'Bash: node -e',
+      'Bash: gh pr',
+      'Bash: python3 x.py',
+      'Bash: curl -X',
+      'Bash: echo $(x)',
+      'Read',
+      'Edit',
+      ''
+    ])
       assert.equal((await ask(bad)).status, 400, bad);
     // existing file: the rest is kept and the rule is not duplicated
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -1929,5 +1940,60 @@ test('edificio: el resumen de cada piso trae los robots con estado y prioridad, 
   } finally {
     proc.kill();
     fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('per-robot tools: Artifact is disabled by default and kept only for robots with tools: ["artifact"]', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', libre('normal', 'Tarea normal sin artifact'));
+    await o.api('POST', '/api/robots', { ...libre('conart', 'Tarea que publica una pagina'), tools: ['artifact', 'bogus'] });
+    const call = text => waitFor(() => o.claudeCalls().find(c => c.includes(text)), { what: `Claude abierto para ${text}` });
+    const normal = await call('Tarea normal sin artifact');
+    const withArt = await call('Tarea que publica una pagina');
+    const disallowed = c => /--disallowedTools=(\S+)/.exec(c)?.[1] || '';
+    assert.match(disallowed(normal), /Artifact,ArtifactComments,ArtifactData/);
+    assert.match(normal, /No tienes las herramientas de Artifact/);
+    assert.doesNotMatch(disallowed(withArt), /Artifact/);
+    assert.match(disallowed(withArt), /Workflow/);
+    assert.doesNotMatch(withArt, /No tienes las herramientas de Artifact/);
+    assert.deepEqual((await o.robot('normal')).tools, []);
+    assert.deepEqual((await o.robot('conart')).tools, ['artifact'], 'unknown values are ignored');
+  } finally {
+    await o.stop();
+  }
+});
+
+test('per-robot tools: a team request with "herramientas" reaches r.tools and survives resume', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', libre('jefe'));
+    const req = await o.api('POST', '/api/robots/jefe/encargos', {
+      encargos: [
+        { nombre: 'publica', titulo: 'Publica', encargo: 'Publica la pagina del equipo', herramientas: ['artifact', 'otra'] },
+        { nombre: 'plano', titulo: 'Plano', encargo: 'Trabajo sin herramientas extra' }
+      ]
+    });
+    assert.equal(req.status, 202);
+    const ok = await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' });
+    assert.equal(ok.status, 200);
+    await waitFor(() => o.windows().includes('publica'), { what: 'the publishing robot window' });
+    assert.deepEqual((await o.robot('publica')).tools, ['artifact']);
+    assert.deepEqual((await o.robot('plano')).tools, []);
+    const disallowed = c => /--disallowedTools=(\S+)/.exec(c)?.[1] || '';
+    const first = await waitFor(() => o.claudeCalls().find(c => c.includes('Publica la pagina del equipo')), { what: 'its launch' });
+    assert.doesNotMatch(disallowed(first), /Artifact/);
+    // Resume after the console drops: same tools, same flags.
+    await turn(o, 'publica', 'hola', 'Hecho.');
+    execFileSync('tmux', ['kill-window', '-t', `${o.session}:publica`]);
+    await waitFor(async () => (await o.robot('publica'))?.consoleLost, { what: 'the lost console' });
+    const sid = (await o.robot('publica')).sessionId;
+    assert.equal((await o.api('POST', '/api/robots/publica/revivir')).status, 200);
+    const resumed = await waitFor(() => o.claudeCalls().find(c => c.includes(`--resume ${sid}`)), { what: 'the resumed session' });
+    assert.doesNotMatch(disallowed(resumed), /Artifact/);
+    assert.match(disallowed(resumed), /Workflow/);
+    assert.deepEqual((await o.robot('publica')).tools, ['artifact']);
+  } finally {
+    await o.stop();
   }
 });

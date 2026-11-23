@@ -46,6 +46,7 @@ function saveState() {
         color: r.color,
         place: r.place,
         permissionMode: r.permissionMode,
+        tools: r.tools || [],
         sessionId: r.sessionId,
         transcript: r.transcript,
         startedAt: r.startedAt,

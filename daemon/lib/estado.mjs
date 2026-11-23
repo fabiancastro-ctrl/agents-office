@@ -119,6 +119,7 @@ function view(r, withLog = false) {
     consoleLost: !!r.consoleLost,
     bg: bgList(r),
     permissionMode: r.permissionMode,
+    tools: r.tools || [],
     startedAt: r.startedAt,
     timeline: (r.timeline || []).slice(-1),
     lastEventAt: r.lastEventAt || null,

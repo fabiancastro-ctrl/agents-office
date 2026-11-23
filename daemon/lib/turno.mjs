@@ -205,10 +205,28 @@ const ROBOT_HINTS =
 // además deja fuera los MCP de tu cuenta (conectores de claude.ai): ahorra ~2,7 k pero el robot no los podrá usar.
 const ROBOT_DISALLOWED =
   process.env.OFFICE_ROBOT_DISALLOWED ?? 'Artifact,ArtifactComments,ArtifactData,Workflow,SendFeedback,ShareOnboardingGuide';
-const ROBOT_FLAGS = [
-  ...(ROBOT_DISALLOWED.trim() ? [`--disallowedTools=${ROBOT_DISALLOWED.trim()}`] : []),
-  ...(process.env.OFFICE_ROBOT_STRICT_MCP === '1' ? ['--strict-mcp-config'] : [])
+const ARTIFACT_TOOLS = new Set(['Artifact', 'ArtifactComments', 'ArtifactData']);
+// Per-robot extra tools (r.tools). Only "artifact" is known; anything else is dropped.
+const KNOWN_TOOLS = ['artifact'];
+const normTools = list => [
+  ...new Set((Array.isArray(list) ? list : []).map(t => String(t).trim().toLowerCase()).filter(t => KNOWN_TOOLS.includes(t)))
 ];
+// Launch flags for one robot: the shared disallowed list, minus the Artifact tools when the robot has "artifact".
+// Every launch/relaunch path (new, revive, relay, retake) must build its flags through this function.
+function robotFlags(r) {
+  let list = ROBOT_DISALLOWED.split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (normTools(r?.tools).includes('artifact')) list = list.filter(t => !ARTIFACT_TOOLS.has(t));
+  return [
+    ...(list.length ? [`--disallowedTools=${list.join(',')}`] : []),
+    ...(process.env.OFFICE_ROBOT_STRICT_MCP === '1' ? ['--strict-mcp-config'] : [])
+  ];
+}
+// System prompt for one robot: the shared hints, plus one short line for robots that lack the Artifact tools.
+const NO_ARTIFACT_HINT =
+  ' No tienes las herramientas de Artifact: si te piden publicar una página o un artifact, pide un robot con "herramientas": ["artifact"] (ver robots-equipo.md) y pásale el contenido.';
+const robotHints = r => (normTools(r?.tools).includes('artifact') ? ROBOT_HINTS : ROBOT_HINTS + NO_ARTIFACT_HINT);
 
 const cleanTitle = t =>
   String(t ?? '')
@@ -367,8 +385,9 @@ export {
   normText,
   pins,
   requestOf,
-  ROBOT_FLAGS,
-  ROBOT_HINTS,
+  normTools,
+  robotFlags,
+  robotHints,
   saveFavorites,
   savePins,
   sumDir,

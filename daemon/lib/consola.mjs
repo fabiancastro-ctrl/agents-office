@@ -5,7 +5,7 @@ import { CLAUDE_BIN, console_, PORT, robots, run, SESSION, SETTINGS, WORKSPACE }
 import { broadcast, emit, usage } from './estado.mjs';
 import { convDirty, convFile, endWait, log, saveState, setState } from './persistencia.mjs';
 import { drainSpawnQueue, flushIfIdle, pendingResults, resultTimers } from './equipo.mjs';
-import { deliver, ROBOT_FLAGS, ROBOT_HINTS } from './turno.mjs';
+import { deliver, robotFlags, robotHints } from './turno.mjs';
 import { archiveRobot } from './exportar.mjs';
 import { ensureSession, launching } from './tmux.mjs';
 import { emitRoutines, routines, saveRoutines } from './rutinas.mjs';
@@ -73,8 +73,8 @@ async function revive(r) {
     '--resume',
     r.sessionId,
     '--append-system-prompt',
-    ROBOT_HINTS,
-    ...ROBOT_FLAGS
+    robotHints(r),
+    ...robotFlags(r)
   ];
   if (r.permissionMode) tmuxArgs.push('--permission-mode', r.permissionMode);
   await run('tmux', tmuxArgs);

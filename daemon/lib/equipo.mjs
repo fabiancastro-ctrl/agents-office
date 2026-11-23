@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { console_, maxRobots, now, robots, trunc } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { log, saveState } from './persistencia.mjs';
-import { cleanTitle } from './turno.mjs';
+import { cleanTitle, normTools } from './turno.mjs';
 import { launch, launching, say } from './tmux.mjs';
 import {
   checkTeamDone,
@@ -100,7 +100,7 @@ function requestSpawn(r, body) {
         text = String(x.encargo ?? x.text ?? x.tarea ?? '')
           .trim()
           .slice(0, 20000);
-      return { title, text, name: validName(x.nombre ?? x.name) || kidName(title, text) };
+      return { title, text, name: validName(x.nombre ?? x.name) || kidName(title, text), tools: normTools(x.herramientas ?? x.tools) };
     })
     .filter(x => x.text);
   if (!items.length) throw new Error('Manda {"encargos":[{"titulo":"…","encargo":"…"}]} con al menos un encargo.');
@@ -149,7 +149,8 @@ async function decideSpawn(r, id, approve, edited) {
         .map(x => ({
           title: cleanTitle(x.title ?? ''),
           text: String(x.text ?? '').trim(),
-          name: validName(x.name) || kidName(x.title, x.text)
+          name: validName(x.name) || kidName(x.title, x.text),
+          tools: normTools(x.tools)
         }))
         .filter(x => x.text)
     : r.spawnReq.items;
@@ -175,6 +176,7 @@ async function decideSpawn(r, id, approve, edited) {
     title: it.title,
     text: it.text,
     name: it.name || '',
+    tools: normTools(it.tools),
     sala: sala.id,
     at: now()
   }));
@@ -237,6 +239,7 @@ async function drainSpawnQueue() {
           label: q.title || trunc(q.text, 80),
           title: q.title,
           parent: q.parent,
+          tools: q.tools,
           sala,
           color: par?.color,
           look: par ? { ...lookFromName(par.name), ...(par.look || {}) } : null,

@@ -22,7 +22,7 @@ import {
 } from './base.mjs';
 import { emit } from './estado.mjs';
 import { freeDesk, log, roomSeat, setState } from './persistencia.mjs';
-import { cleanTitle, ROBOT_FLAGS, ROBOT_HINTS } from './turno.mjs';
+import { cleanTitle, normTools, robotFlags, robotHints } from './turno.mjs';
 import { attachmentNote } from './adjuntos.mjs';
 import { routines } from './rutinas.mjs';
 import { salaPreamble, salas } from './salas.mjs';
@@ -85,7 +85,8 @@ async function launch({
   sala: salaId,
   parent,
   color,
-  look
+  look,
+  tools
 }) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
   const active = [...robots.values()].filter(x => x.state !== 'done');
@@ -114,7 +115,8 @@ async function launch({
       salaId,
       parent,
       color,
-      look
+      look,
+      tools
     });
   } finally {
     launching.delete(name);
@@ -137,7 +139,8 @@ async function launchReserved({
   salaId,
   parent,
   color,
-  look
+  look,
+  tools
 }) {
   let prompt, label;
   if (kind === 'skill') {
@@ -181,9 +184,11 @@ async function launchReserved({
       skill,
       args: kind === 'skill' ? String(args || '') : '',
       text: kind === 'libre' ? String(text || '').trim() : '',
-      permissionMode: permissionMode || ''
+      permissionMode: permissionMode || '',
+      tools: normTools(tools)
     },
     permissionMode: permissionMode || '',
+    tools: normTools(tools),
     leaveWhenDone: !!leaveWhenDone,
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
     routine: routine || null,
@@ -230,8 +235,8 @@ async function launchReserved({
     '--session-id',
     sessionId,
     '--append-system-prompt',
-    ROBOT_HINTS,
-    ...ROBOT_FLAGS
+    robotHints(r),
+    ...robotFlags(r)
   ];
   if (permissionMode) tmuxArgs.push('--permission-mode', permissionMode);
   tmuxArgs.push(prompt);
