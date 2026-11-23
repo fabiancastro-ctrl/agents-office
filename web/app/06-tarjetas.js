@@ -193,7 +193,6 @@ function fireAlert(name, k) {
 function syncNotifyBtn() {
   const b = $('#btn-notify');
   b.setAttribute('aria-pressed', String(notif.on));
-  b.textContent = notif.on ? 'Avisos: sí' : 'Avisos: no';
 }
 $('#btn-notify').addEventListener('click', async () => {
   notif.on = !notif.on;

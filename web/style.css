@@ -1704,11 +1704,22 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .r-sala.in-sala>.room-h>.btn,.r-sala.in-sala>.room-h>small{flex:none}
 
 /* Menú «⚙ Ajustes» */
-.vista-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:330px;display:grid;gap:6px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+.vista-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:340px;max-width:calc(100vw - 24px);display:grid;gap:4px;padding:10px 12px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
 .vista-menu[hidden]{display:none}
-.vm-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted)}
+.vm-h{margin:8px 0 0;padding-bottom:3px;border-bottom:1px solid var(--line);font-family:var(--body);font-size:var(--fs-1);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.vm-h:first-child{margin-top:0}
+.vm-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;font-size:var(--fs-2);color:var(--ink)}
 .vm-row>.btn,.vm-row>select{flex:none;min-width:118px;justify-content:center;text-align:center}
-.vm-note{margin:4px 0 0;font-size:11.5px;color:var(--muted)}
+.vm-row>select{font-size:var(--fs-2);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--ctl-r);padding:3px 6px}
+.vm-note{margin:6px 0 0;font-size:var(--fs-1);color:var(--muted)}
+/* Switch: label on the left (the row), state word + track on the right. The button text is not shown. */
+.sw{display:inline-flex;align-items:center;gap:8px;flex:none;padding:0;border:0;background:none;font-size:0;color:var(--muted)}
+.sw::before{content:attr(data-off);font-size:var(--fs-1);min-width:46px;text-align:right}
+.sw::after{content:"";width:34px;height:20px;border-radius:999px;border:1px solid var(--line);background:radial-gradient(circle at 10px 50%,var(--muted) 0 7px,transparent 7.5px),var(--panel-2);transition:background .15s}
+.sw[aria-pressed=true]::before{content:attr(data-on);color:var(--ink)}
+.sw[aria-pressed=true]::after{border-color:var(--st-work);background:radial-gradient(circle at calc(100% - 10px) 50%,#fff 0 7px,transparent 7.5px),var(--st-work)}
+.sw:focus-visible::after{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.sw::after{transition:none}}
 /* Narrow windows: the texts shrink first, then the labels hide and only the icon stays. */
 @media (max-width:1380px){.top{gap:8px 10px}.top-c>.btn{padding-inline:9px}.top-c>.door-chip,.top-c>#btn-dismiss{font-size:var(--fs-2)}.office-name{max-width:200px}}
 @media (max-width:1240px){.tag{font-size:10px;padding-inline:6px}.brand{font-size:var(--fs-3)}.office-name{max-width:150px}}

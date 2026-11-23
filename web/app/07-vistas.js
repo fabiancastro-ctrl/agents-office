@@ -4,7 +4,6 @@
 function setView(iso) {
   $('.map-wrap').classList.toggle('iso', iso);
   $('#btn-view').setAttribute('aria-pressed', String(iso));
-  $('#btn-view').textContent = iso ? '2D' : '2.5D';
   prefSet('mapView', iso ? 'iso' : '2d');
 }
 $('#btn-view').addEventListener('click', () => {
@@ -226,8 +225,7 @@ $('#map-theme').addEventListener('change', async e => {
 function setCompact(on) {
   document.body.classList.toggle('compact', on);
   $('#btn-compact').setAttribute('aria-pressed', String(on));
-  $('#btn-compact').textContent = on ? 'Ver mapa' : 'Compacta';
-  $('#btn-view').hidden = on;
+  $('#btn-view').closest('.vm-row').hidden = on; // 2.5D makes no sense without the map
   const t = $('#toast');
   (on ? document.body : MAP).appendChild(t);
   prefSet('compact', on ? '1' : '0');
@@ -241,7 +239,7 @@ setCompact(prefGet('compact', '0') === '1');
 // Tema claro u oscuro (oscuro por defecto). El mapa queda de noche en los dos: es la ilustración de la oficina.
 function setTheme(light) {
   document.documentElement.dataset.theme = light ? 'light' : 'dark';
-  $('#btn-theme').textContent = light ? 'tema oscuro' : 'tema claro';
+  $('#btn-theme').setAttribute('aria-pressed', String(!light));
   prefSet('theme', light ? 'light' : 'dark');
 }
 $('#btn-theme').addEventListener('click', () => setTheme(document.documentElement.dataset.theme !== 'light'));

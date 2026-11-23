@@ -72,7 +72,6 @@ function setCables(on) {
   cables.on = on;
   $('#btn-cables').setAttribute('aria-pressed', String(on));
   $('#btn-cables').classList.toggle('on', on);
-  $('#btn-cables').textContent = on ? 'Visibles' : 'Ocultos';
   cablesKick();
 }
 setCables(cables.on);

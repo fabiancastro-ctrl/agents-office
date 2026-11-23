@@ -61,13 +61,15 @@ function soundOn(prev, d) {
   if ((prev.state !== 'input' && d.state === 'input') || (!prev.spawnReq && d.spawnReq)) SFX.need();
 }
 const soundBtn = document.createElement('button');
-soundBtn.className = 'btn sm';
+soundBtn.className = 'sw';
 soundBtn.id = 'btn-sound';
 soundBtn.type = 'button';
+soundBtn.setAttribute('aria-label', 'Sonidos de la oficina');
+soundBtn.dataset.on = 'Sí';
+soundBtn.dataset.off = 'No';
 soundBtn.title =
   'Sonidos cortos de la oficina: un «pop» al llegar un documento, una campanita cuando alguien te necesita (si «Avisos» está apagado) y una fanfarria cuando un equipo termina. Se guarda en este navegador.';
 const paintSound = () => {
-  soundBtn.textContent = sound.on ? '🔊 Sonido' : '🔈 Sonido: no';
   soundBtn.setAttribute('aria-pressed', String(sound.on));
 };
 paintSound();

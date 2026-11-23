@@ -21,7 +21,6 @@ function applyLegib() {
   }
   root.classList.toggle('hc', legib.hc);
   $('#btn-fz').textContent = `Aa ${Math.round(legib.fz * 100)} %`;
-  $('#btn-hc').textContent = legib.hc ? 'contraste alto' : 'contraste';
   $('#btn-hc').setAttribute('aria-pressed', String(legib.hc));
   $('#btn-hc').classList.toggle('on', legib.hc);
   if (typeof declutterBubbles === 'function') declutterBubbles(); // los globos cambian de tamaño: se reacomodan
