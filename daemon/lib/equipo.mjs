@@ -7,7 +7,18 @@ import { broadcast, emit } from './estado.mjs';
 import { log, saveState } from './persistencia.mjs';
 import { cleanTitle } from './turno.mjs';
 import { launch, launching, say } from './tmux.mjs';
-import { checkTeamDone, contextPath, rosterOf, salas, SALAS_DIR, saveSalas, teamSala, writeRoster } from './salas.mjs';
+import {
+  checkTeamDone,
+  closeEmptyTeamSalas,
+  contextPath,
+  ownerBackIfAlone,
+  rosterOf,
+  salas,
+  SALAS_DIR,
+  saveSalas,
+  teamSala,
+  writeRoster
+} from './salas.mjs';
 import { readBody, send } from './http.mjs';
 
 /* ---------- robots que lanza un robot ---------- */
@@ -148,6 +159,8 @@ async function decideSpawn(r, id, approve, edited) {
   if (!approve || !items.length) {
     log(r, 'sys', 'No aprobaste los robots que pidió');
     emit(r);
+    ownerBackIfAlone(); // su sala seguía abierta por esta petición: si quedó vacía o solo con él, ahora sí se cierra
+    closeEmptyTeamSalas();
     await say(
       r,
       '[Oficina] El usuario no aprobó lanzar los robots que pediste. Sigue tú con el trabajo o pregúntale cómo prefiere hacerlo.'

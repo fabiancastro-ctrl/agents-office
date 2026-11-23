@@ -106,10 +106,16 @@ function createSala(b) {
       throw new Error('La carpeta de documentos debe existir dentro del workspace.');
     folder = path.relative(WORKSPACE, abs);
   }
-  const id = /^[0-9a-f]{8}$/.test(String(b.id || '')) && !salas.some(x => x.id === b.id) ? b.id : crypto.randomBytes(4).toString('hex');
+  // El id pedido solo vale si nadie lo usa: ni una sala abierta, ni una archivada, ni una carpeta que ya existe.
+  const free = id => !salas.some(x => x.id === id) && !salasArchive.some(x => x.id === id) && !fs.existsSync(path.join(SALAS_DIR, id));
+  let id = /^[0-9a-f]{8}$/.test(String(b.id || '')) && free(b.id) ? b.id : crypto.randomBytes(4).toString('hex');
+  while (!free(id)) id = crypto.randomBytes(4).toString('hex');
   const s = { id, name, key, folder, thread: [], docs: [], createdAt: now() };
   fs.mkdirSync(path.join(SALAS_DIR, s.id), { recursive: true });
   const initial = String(b.context || '').trim();
+  // Nunca sobre un CONTEXT.md o un HILO.md que ya existen (con el id libre no debería pasar; si pasa, se apartan).
+  keepAside(contextPath(s));
+  keepAside(threadPath(s));
   fs.writeFileSync(
     contextPath(s),
     initial
@@ -122,13 +128,63 @@ function createSala(b) {
   return s;
 }
 
+// Reabrir una sala archivada con lo que guardó al cerrarse (hilo, documentos, notas, reparto). Su CONTEXT.md sigue en
+// su carpeta y no se toca. auto = true la deja como sala de equipo (se cierra sola otra vez); si no, queda abierta.
+function reopenArchived(e, { auto = false } = {}) {
+  const sv = e.saved || {};
+  const s = {
+    id: e.id,
+    name: e.name,
+    key: sv.key ?? e.key ?? '',
+    folder: sv.folder || '',
+    thread: sv.thread || [],
+    docs: sv.docs || [],
+    notes: sv.notes || [],
+    roster: sv.roster || [],
+    createdAt: e.createdAt,
+    owner: e.owner || null,
+    color: e.color,
+    ownerLook: sv.ownerLook || null,
+    purpose: e.purpose || '',
+    rosterMoved: !!sv.rosterMoved,
+    reopenedAt: now(),
+    ...(auto ? { auto: true } : {})
+  };
+  fs.mkdirSync(path.join(SALAS_DIR, s.id), { recursive: true });
+  // Una sala cerrada antes de guardar su hilo: el HILO.md viejo se conserva aparte en vez de pisarlo con uno vacío.
+  if (!sv.thread) keepAside(threadPath(s));
+  salas.push(s);
+  replaceList(
+    salasArchive,
+    salasArchive.filter(x => x !== e)
+  );
+  saveJson(SALAS_ARCH_FILE, salasArchive, { pretty: true });
+  writeThreadFile(s);
+  saveSalas();
+  return s;
+}
+// Un archivo de sala que se iba a escribir de cero y ya existe: se aparta con fecha en vez de perderlo.
+function keepAside(file) {
+  if (!fs.existsSync(file)) return null;
+  const to = file.replace(/\.md$/, `-anterior-${now().slice(0, 19).replace(/[:T]/g, '-')}.md`);
+  fs.renameSync(file, to);
+  return to;
+}
+
 // Sala de equipo: cuando un robot pide robots y tú los apruebas. Si el padre ya está en una sala (de épica o de equipo),
 // los hijos entran a esa; si no, se crea una con su objetivo y el reparto en CONTEXT.md y el padre se muda a ella.
 // Las salas de equipo (auto) se cierran solas cuando no queda nadie ni nadie esperando para entrar; sus archivos quedan.
 function teamSala(r, items, context, salaId) {
   const stamp = now().slice(0, 16).replace('T', ' ');
-  const cur = r.place.sala && salas.find(s => s.id === r.place.sala);
+  // Su sala de ahora o, si ya no está sentado en ella, la que tenía al pedir los robots y sigue abierta.
+  const cur = (r.place.sala && salas.find(s => s.id === r.place.sala)) || (salaId && salas.find(s => s.id === salaId));
   if (cur) {
+    if (r.place.sala !== cur.id) {
+      r.place = roomSeat(`sala-${cur.id}`, cur.name, { sala: cur.id });
+      log(r, 'sys', `Volvió a la sala «${cur.name}» con su equipo`);
+      emit(r);
+      saveState();
+    }
     if (context) fs.appendFileSync(contextPath(cur), `\n## Contexto que mandó ${r.name} al lanzar más robots (${stamp})\n\n${context}\n`);
     if (cur.done) {
       cur.done = false;
@@ -136,6 +192,23 @@ function teamSala(r, items, context, salaId) {
       emitSalas();
     } // entra más trabajo: el equipo vuelve a estar en curso
     return { sala: cur, created: false };
+  }
+  // La sala que tenía al pedir los robots se archivó mientras esperaba tu aprobación (p. ej. quedó solo y volvió a su
+  // escritorio): se reabre con su hilo y su CONTEXT.md, y el contexto nuevo se agrega al final, sin crear otra.
+  const old = salaId && salasArchive.find(x => x.id === salaId && fs.existsSync(path.dirname(x.context)));
+  if (old) {
+    const s = reopenArchived(old, { auto: true });
+    if (context) fs.appendFileSync(contextPath(s), `\n## Contexto que mandó ${r.name} al lanzar más robots (${stamp})\n\n${context}\n`);
+    s.owner ||= r.name;
+    if (!s.roster.some(e => e.name === r.name))
+      s.roster.unshift({ name: r.name, title: r.title || '', owner: s.owner === r.name, sessionId: r.sessionId });
+    saveSalas();
+    r.place = roomSeat(`sala-${s.id}`, s.name, { sala: s.id });
+    log(r, 'sys', `Volvió a la sala «${s.name}» con su equipo (estaba archivada: se reabrió con su hilo y su contexto)`);
+    emit(r);
+    saveState();
+    emitSalas();
+    return { sala: s, created: true };
   }
   const goal = r.title || r.label || 'su encargo';
   const s = createSala({
@@ -208,9 +281,16 @@ function releaseSala(id) {
   ownerBackIfAlone();
   closeEmptyTeamSalas(); // por si el relevo no logró volver a entrar
 }
+// Una petición de robots pendiente de tu aprobación para esta sala también la mantiene abierta: al aprobarla, los
+// robots entran a ella (antes se archivaba en ese hueco y la aprobación creaba otra con el mismo id, pisando sus archivos).
+const awaitingSpawn = s => [...robots.values()].some(r => r.spawnReq?.salaId === s.id);
 function closeEmptyTeamSalas() {
   const keep = s =>
-    !s.auto || held.has(s.id) || [...robots.values()].some(r => r.place.sala === s.id) || spawnQueue.some(q => q.sala === s.id);
+    !s.auto ||
+    held.has(s.id) ||
+    awaitingSpawn(s) ||
+    [...robots.values()].some(r => r.place.sala === s.id) ||
+    spawnQueue.some(q => q.sala === s.id);
   if (salas.every(keep)) return;
   for (const s of salas.filter(x => !keep(x))) archiveSala(s, 'se fue todo el equipo');
   salas = salas.filter(keep);
@@ -237,7 +317,7 @@ function checkTeamDone(kid) {
 // Si en una sala de equipo queda solo quien la armó, vuelve caminando a un escritorio y la sala pasa al archivo.
 function ownerBackIfAlone() {
   for (const s of salas) {
-    if (!s.auto || held.has(s.id)) continue;
+    if (!s.auto || held.has(s.id) || awaitingSpawn(s)) continue;
     const inSala = [...robots.values()].filter(r => r.place.sala === s.id);
     if (inSala.length !== 1 || inSala[0].name !== s.owner || spawnQueue.some(q => q.sala === s.id)) continue;
     const o = inSala[0];
@@ -476,35 +556,7 @@ async function salasApi(req, res, url, parts) {
     if (salas.some(x => x.id === e.id)) return send(res, 409, { error: 'Esa sala ya está abierta.' });
     if (!fs.existsSync(path.dirname(e.context)))
       return send(res, 410, { error: 'Su carpeta ya no está (la borraste o fue a la Papelera).' });
-    const sv = e.saved || {};
-    const s = {
-      id: e.id,
-      name: e.name,
-      key: sv.key ?? e.key ?? '',
-      folder: sv.folder || '',
-      thread: sv.thread || [],
-      docs: sv.docs || [],
-      notes: sv.notes || [],
-      roster: sv.roster || [],
-      createdAt: e.createdAt,
-      owner: e.owner || null,
-      color: e.color,
-      ownerLook: sv.ownerLook || null,
-      purpose: e.purpose || '',
-      rosterMoved: !!sv.rosterMoved,
-      reopenedAt: now()
-    };
-    // Una sala cerrada antes de guardar su hilo: el HILO.md viejo se conserva aparte en vez de pisarlo con uno vacío.
-    if (!sv.thread && fs.existsSync(threadPath(s)))
-      fs.renameSync(threadPath(s), path.join(path.dirname(threadPath(s)), 'HILO-anterior.md'));
-    salas.push(s);
-    replaceList(
-      salasArchive,
-      salasArchive.filter(x => x !== e)
-    );
-    saveJson(SALAS_ARCH_FILE, salasArchive, { pretty: true });
-    writeThreadFile(s);
-    saveSalas();
+    const s = reopenArchived(e);
     emitSalas();
     return send(res, 200, { ok: true, id: s.id });
   }

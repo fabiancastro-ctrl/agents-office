@@ -1670,3 +1670,47 @@ test('rutas de un robot: un cuerpo JSON roto responde con error y la oficina sig
     await o.stop();
   }
 });
+
+test('salas: pedir robots y dar de baja al último hijo antes de aprobar no borra el CONTEXT.md ni el hilo', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', { ...libre('jefe'), title: 'Puente' });
+    const r1 = await o.api('POST', '/api/robots/jefe/encargos', { encargos: [{ titulo: 'Rutas', encargo: 'x' }] });
+    const ok1 = await o.api('POST', `/api/robots/jefe/encargos/${r1.body.id}`, { decision: 'approve' });
+    const salaId = ok1.body.sala,
+      kid = ok1.body.launched[0];
+    const sala = (await o.snapshot()).salas.find(s => s.id === salaId);
+    fs.appendFileSync(sala.context, '\n## Decisiones tomadas\n\n- DECISION-CLAVE: el puente usa colas\n');
+    for (const t of ['avance 1', 'avance 2'])
+      await fetch(`${o.url}/api/salas/${salaId}/hilo?from=${kid}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: t });
+    // El padre pide más robots; antes de aprobar, se da de baja al único hijo: la sala no se archiva.
+    const r2 = await o.api('POST', '/api/robots/jefe/encargos', {
+      contexto: 'CONTEXTO-NUEVO',
+      encargos: [{ titulo: 'Tablero', encargo: 'y' }]
+    });
+    assert.equal((await o.api('DELETE', `/api/robots/${kid}`)).status, 200);
+    let snap = await o.snapshot();
+    assert.ok(
+      snap.salas.some(s => s.id === salaId),
+      'la sala sigue abierta mientras espera tu aprobación'
+    );
+    assert.equal(snap.robots.find(r => r.name === 'jefe').place.sala, salaId);
+    const ok2 = await o.api('POST', `/api/robots/jefe/encargos/${r2.body.id}`, { decision: 'approve' });
+    assert.equal(ok2.body.sala, salaId);
+    const ctx = fs.readFileSync(sala.context, 'utf8');
+    assert.match(ctx, /DECISION-CLAVE/);
+    assert.match(ctx, /CONTEXTO-NUEVO/);
+    snap = await o.snapshot();
+    assert.ok(snap.salas.find(s => s.id === salaId).thread.length >= 2, 'el hilo conserva los mensajes');
+    // Una sala archivada no presta su id: crear otra con ese id da uno nuevo y no toca sus archivos.
+    const ep = await o.api('POST', '/api/salas', { name: 'Epica vieja' });
+    const vieja = (await o.snapshot()).salas.find(s => s.id === ep.body.id);
+    fs.writeFileSync(vieja.context, 'CONTENIDO-VIEJO\n');
+    assert.equal((await o.api('DELETE', `/api/salas/${ep.body.id}`)).status, 200);
+    const nueva = await o.api('POST', '/api/salas', { name: 'Otra', id: ep.body.id });
+    assert.notEqual(nueva.body.id, ep.body.id);
+    assert.equal(fs.readFileSync(vieja.context, 'utf8'), 'CONTENIDO-VIEJO\n');
+  } finally {
+    await o.stop();
+  }
+});
