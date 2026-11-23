@@ -265,10 +265,8 @@ setInterval(() => {
 function renderKpis() {
   const ds = [...st.robots.values()].map(a => a.data);
   const count = g => ds.filter(d => groupOf(d) === g).length;
-  const need = count('need'),
-    work = count('work'),
+  const work = count('work'),
     done = count('done');
-  const subs = ds.reduce((k, d) => k + runningSubs(d), 0);
   const live = ds.reduce((k, d) => k + tokOf(d), 0);
   const week = st.weeks[0];
   const weekTok = week ? week.out + week.in + week.cacheWrite : 0;
@@ -277,20 +275,19 @@ function renderKpis() {
   const k = (cls, n, label, extra = '', act = '') =>
     `<button type="button" class="kpi ${cls}"${act ? ` data-kpi="${act}"` : ''}>${extra}<b>${n}</b><span>${label}</span></button>`;
   const html =
-    k(
-      `k-work${work ? ' on' : ''}`,
-      `${work}<small>/${max}</small>`,
-      'trabajando',
-      `<i class="kbar" style="--p:${Math.min(100, (work / max) * 100)}%"></i>`,
-      'work'
-    ) +
-    k(`k-need${need ? ' on' : ''}`, need, need === 1 ? 'te necesita' : 'te necesitan', '', 'need') +
-    k(`k-subs${subs ? ' on' : ''}`, subs, 'subagentes activos', '', 'work') +
-    k(`k-done${done ? ' on' : ''}`, done, done === 1 ? 'listo' : 'listos', '', 'done') +
-    waitKpi() +
-    k(`k-inbox${unseen() ? ' on' : ''}`, unseen(), 'nuevos en bandeja', '', 'inbox') +
-    k('k-tok', fmtTok(live), 'tokens en curso', '', 'usage') +
-    k('k-tok', week ? fmtTok(weekTok) : '–', 'tokens esta semana', '', 'usage') +
+    // "te necesitan" lives in the need bar and the tab title; the full detail stays in "Uso Claude".
+    (work
+      ? k(
+          'k-work on',
+          `${work}<small>/${max}</small>`,
+          'trabajando',
+          `<i class="kbar" style="--p:${Math.min(100, (work / max) * 100)}%"></i>`,
+          'work'
+        )
+      : '') +
+    (done ? k('k-done on', done, done === 1 ? 'listo' : 'listos', '', 'done') : '') +
+    (live ? k('k-tok', fmtTok(live), 'tokens en curso', '', 'usage') : '') +
+    // The quota indicator is the fixed one: plan limit when known, weekly tokens otherwise.
     (lim
       ? k(
           `k-lim${lim.pct >= 90 ? ' hot' : lim.pct >= 70 ? ' warm' : ''}`,
@@ -299,7 +296,7 @@ function renderKpis() {
           `<i class="kbar" style="--p:${Math.min(100, lim.pct)}%"></i>`,
           'usage'
         )
-      : '');
+      : k('k-tok', week ? fmtTok(weekTok) : '–', 'tokens esta semana', '', 'usage'));
   if (KPIS._html !== html) {
     KPIS._html = html;
     KPIS.innerHTML = html;
