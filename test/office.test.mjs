@@ -1765,3 +1765,17 @@ test('prioridad: se fija por robot, se valida, se guarda en el estado y se quita
     await o.stop();
   }
 });
+
+test('barra «te necesitan»: la página trae su contenedor dentro de la cabecera fija y el código que la pinta', async () => {
+  const o = await startOffice();
+  try {
+    const html = await (await fetch(`${o.url}/`)).text();
+    const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+    assert.ok(header.includes('id="needbar"'), 'la barra va dentro de la cabecera fija');
+    const js = await (await fetch(`${o.url}/app.js`)).text();
+    assert.ok(js.includes('function renderNeedBar'), 'el armado incluye la barra');
+    assert.ok(js.includes('renderNeedBar();'), 'se repinta con las tarjetas');
+  } finally {
+    await o.stop();
+  }
+});

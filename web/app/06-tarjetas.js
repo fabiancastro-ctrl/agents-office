@@ -88,6 +88,7 @@ function scheduleCards() {
       renderKpis();
       renderCards();
       renderMini();
+      renderNeedBar();
       checkAlerts();
     });
 }
