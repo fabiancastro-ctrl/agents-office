@@ -62,7 +62,7 @@ function headActions(d) {
     out.push(
       `<button type="button" class="btn sm primary" data-act="hold-allow">Aprobar</button><button type="button" class="btn sm danger" data-act="hold-deny">Denegar</button>`
     );
-  else if (d.needsPermission && d.state === 'input')
+  else if (d.needsPermission)
     out.push(
       `<button type="button" class="btn sm primary" data-act="perm-approve">Aprobar</button><button type="button" class="btn sm danger" data-act="perm-reject">Rechazar</button>`
     );
