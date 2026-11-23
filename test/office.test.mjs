@@ -1560,6 +1560,19 @@ test('choques: dos robots vivos que editaron el mismo archivo se avisan; «Enten
   }
 });
 
+test('cables de choque: la página trae el interruptor de la vista y el código que dibuja la línea', async () => {
+  const o = await startOffice();
+  try {
+    const html = await (await fetch(`${o.url}/`)).text();
+    const js = await (await fetch(`${o.url}/app.js`)).text();
+    assert.match(html, /id="btn-cables"/);
+    assert.match(js, /function drawCables/);
+    assert.match(js, /function clashBox/);
+  } finally {
+    await o.stop();
+  }
+});
+
 test('limpiar relevos: quita del archivo solo a los relevados por contexto y manda sus resúmenes a la Papelera', async () => {
   const trash = fs.mkdtempSync(path.join(os.tmpdir(), 'office-trash-'));
   const sum = path.join(os.tmpdir(), `relevo-${Date.now()}.md`);
