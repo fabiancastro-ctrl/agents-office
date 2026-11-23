@@ -98,7 +98,10 @@ function robotMenu(d) {
   </div></details>`;
 }
 
-const closePm = () => $('#pm-menu', PANEL)?.removeAttribute('open');
+// «⋯» menus (robot window and inbox rows) are <details class="pm">: only one stays open at a time.
+const closePm = except => {
+  for (const m of PANEL.querySelectorAll('.pm[open]')) if (m !== except) m.removeAttribute('open');
+};
 // «Cambios» lives in the «⋯» menu: open its block, load git and bring it into view.
 onClick('[data-open-changes]', () => {
   chg.open = true;
@@ -109,16 +112,17 @@ onClick('[data-open-changes]', () => {
 // Picking an item closes the menu (the item's own handler runs first); so do a click outside it and Escape.
 PANEL.addEventListener('click', e => {
   if (e.target.closest('.pm-list .mi')) closePm();
-  else if (!e.target.closest('#pm-menu')) closePm();
+  else closePm(e.target.closest('.pm'));
 });
 PANEL.addEventListener(
   'keydown',
   e => {
-    if (e.key !== 'Escape' || !$('#pm-menu[open]', PANEL)) return;
+    const open = PANEL.querySelector('.pm[open]');
+    if (e.key !== 'Escape' || !open) return;
     e.stopPropagation();
     e.preventDefault();
     closePm();
-    $('#pm-menu > summary', PANEL)?.focus();
+    open.querySelector('summary')?.focus();
   },
   true
 );
@@ -296,11 +300,13 @@ function inboxPanel() {
         <b>${esc(fileName(i.path))}</b>${i.critical > 0 ? ` <span class="tagx crit">⚠ ${i.critical} crítico${i.critical === 1 ? '' : 's'}</span>` : ''}${i.updated ? ' <span class="tagx">actualizado</span>' : ''}${isTempDoc(i.path) ? ' <span class="tagx tmp">temporal</span>' : ''}
         <div class="pathx" title="${esc(i.path)}">${esc(shortPath(i.path))} · ${fmtWhen(i.at, { day: '2-digit' })}</div>
       </div>
-      <div class="row">
+      <div class="row inbox-acts">
         <button class="btn sm" data-inbox="open" data-id="${esc(i.id)}">Ver</button>
-        <button class="btn sm" data-inbox="${isNew ? 'seen' : 'unseen'}" data-id="${esc(i.id)}">${isNew ? 'Marcar visto' : 'Marcar nuevo'}</button>
-        <button class="btn sm" data-inbox="reveal" data-id="${esc(i.id)}">Finder</button>
-        <button class="btn sm danger" data-inbox="archive" data-id="${esc(i.id)}">Archivar</button>
+        <details class="pm"><summary class="btn sm ghost" title="Más acciones de este documento" aria-label="Más acciones de ${esc(fileName(i.path))}">⋯</summary><div class="pm-list" role="menu">
+          <button type="button" class="mi" role="menuitem" data-inbox="${isNew ? 'seen' : 'unseen'}" data-id="${esc(i.id)}">${isNew ? 'Marcar visto' : 'Marcar nuevo'}</button>
+          <button type="button" class="mi" role="menuitem" data-inbox="reveal" data-id="${esc(i.id)}">Mostrar en Finder</button>
+          <button type="button" class="mi" role="menuitem" data-inbox="archive" data-id="${esc(i.id)}">Archivar</button>
+        </div></details>
       </div>
     </div>`;
   };
@@ -364,18 +370,15 @@ function inboxPanel() {
     })
     .join('');
   const seg = (v, label) => `<label><input type="radio" name="inboxg" value="${v}" ${mode === v ? 'checked' : ''}>${label}</label>`;
-  return `<div class="dlg-head"><h3>Tu bandeja</h3><p>Documentos que te entregaron los robots, agrupados por ${mode === 'sala' ? 'sala' : mode === 'repo' ? 'repo' : 'robot'}, con el más viejo primero. Abrir uno lo marca como visto; archivar lo saca de la lista sin borrar el archivo.</p></div>
+  return `<div class="dlg-head"><h3>Tu bandeja</h3><p>Documentos que te entregaron los robots, agrupados por ${mode === 'sala' ? 'sala' : mode === 'repo' ? 'repo' : 'robot'}, con el más viejo primero. Abrir uno lo marca como visto; archivar lo saca de la lista sin borrar el archivo.</p><div class="row"><button type="button" class="btn sm" data-inbox="seen-all" ${n ? '' : 'disabled'}>Marcar todos como vistos</button></div></div>
     <div class="dlg-sec">
-      <div class="row between">
+      <div class="row between ib-filters">
         <div class="seg small" role="radiogroup" aria-label="Filtro">
           <label><input type="radio" name="inboxf" value="nuevos" ${filter === 'nuevos' ? 'checked' : ''}>Nuevos (${n})</label>
           <label><input type="radio" name="inboxf" value="todos" ${filter === 'todos' ? 'checked' : ''}>Todos (${shown.length})</label>
         </div>
         <div class="seg small" role="radiogroup" aria-label="Agrupar por">${seg('robot', 'Robot')}${seg('sala', 'Sala')}${seg('repo', 'Repo')}</div>
-        <div class="row">
-          ${temps || st.inboxTemp ? `<button class="btn sm" data-inbox="temp" title="Archivos en carpetas temporales (/tmp, scratchpads): borradores, láminas de un deck…">${st.inboxTemp ? 'Ocultar temporales' : `Mostrar temporales (${temps})`}</button>` : ''}
-          <button class="btn sm" data-inbox="seen-all" ${n ? '' : 'disabled'}>Marcar todos como vistos</button>
-        </div>
+        ${temps || st.inboxTemp ? `<div class="ib-temp"><span>Temporales${st.inboxTemp ? '' : ` (${temps})`}</span><button type="button" class="sw" data-inbox="temp" aria-pressed="${!!st.inboxTemp}" aria-label="Mostrar archivos temporales" data-on="Visibles" data-off="Ocultos" title="Archivos en carpetas temporales (/tmp, scratchpads): borradores, láminas de un deck…"></button></div>` : ''}
       </div>
       <div class="list">${rows || `<p>${filter === 'nuevos' ? 'No tienes documentos nuevos.' : 'La bandeja está vacía.'}${temps && !st.inboxTemp ? ` Hay ${temps} archivo${temps === 1 ? '' : 's'} temporal${temps === 1 ? '' : 'es'} oculto${temps === 1 ? '' : 's'}.` : ''}</p>`}</div>
     </div>`;

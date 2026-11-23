@@ -447,6 +447,13 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 .inbox-item{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;background:var(--panel-2);border-radius:8px;padding:9px 11px;border-left:3px solid transparent}
 .inbox-item.new{border-left-color:var(--amber)}
 .inbox-item .meta-i{cursor:pointer;min-width:0;flex:1 1 320px}
+/* In a row the «⋯» menu unfolds inline (the dialog scrolls, an absolute list would be clipped). */
+.inbox-acts{align-items:flex-start;justify-content:flex-end}
+.inbox-acts .pm-list{position:static;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-top:6px;min-width:0;padding:0;border:0;box-shadow:none;background:none}
+.inbox-acts .pm-list .mi{width:auto;min-height:var(--ctl-h-sm);padding:0 9px;font-size:var(--fs-2);border:1px solid var(--line);background:var(--panel)}
+.inbox-acts .pm-list .mi:hover,.inbox-acts .pm-list .mi:focus-visible{border-color:var(--wall)}
+.ib-filters{align-items:center;gap:8px 16px}
+.ib-temp{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-size:var(--fs-2);color:var(--muted)}
 .inbox-item b{font-family:var(--mono);font-size:12.5px;word-break:break-all}
 .inbox-item.new b{color:var(--amber)}
 .inbox-item .meta-i>div{font-size:12px;color:var(--muted)}
