@@ -220,14 +220,11 @@ $('#map-theme').addEventListener('change', async e => {
     setMapTheme(st.config.mapTheme || 'moderna');
   }
 });
-// Vista compacta: sin mapa; las tarjetas pasan a columnas (te necesitan · trabajando · listos). El aviso
-// flotante (toast) vive dentro del mapa: en compacta se muda al cuerpo de la página para seguir viéndose.
+// Vista compacta: sin mapa; las tarjetas pasan a columnas (te necesitan · trabajando · listos).
 function setCompact(on) {
   document.body.classList.toggle('compact', on);
   $('#btn-compact').setAttribute('aria-pressed', String(on));
   $('#btn-view').closest('.vm-row').hidden = on; // 2.5D makes no sense without the map
-  const t = $('#toast');
-  (on ? document.body : MAP).appendChild(t);
   prefSet('compact', on ? '1' : '0');
   $('#minimap')._html = null;
   scheduleCards();
