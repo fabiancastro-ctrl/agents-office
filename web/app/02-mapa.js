@@ -403,7 +403,7 @@ function salaRoute(f, t) {
   return pts;
 }
 // Tablero de la sala: por qué se creó, su CONTEXT.md y las últimas notas del hilo.
-const board = { ctx: '', at: 0, for: null, loading: false, noteFor: null, whyOpen: false, depFor: null };
+const board = { ctx: '', at: 0, for: null, loading: false, noteFor: null, whyOpen: false };
 async function loadBoard(force) {
   const s = st.salas.find(x => x.id === st.view);
   if (!s || board.loading || (!force && board.for === s.id && Date.now() - board.at < 15000)) return renderBoard();
@@ -446,11 +446,11 @@ function renderBoard() {
   const ta = el.querySelector('.sb-nf textarea'),
     draft = ta ? { v: ta.value, f: document.activeElement === ta, a: ta.selectionStart, b: ta.selectionEnd } : null;
   const prog = salaProgress(s);
-  el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><span><button type="button" class="btn sm ghost" data-sala-note-add ${mine.length >= 4 ? 'disabled title="Ya hay 4 notas tuyas: quita una con su ×"' : 'title="Pega una nota tuya en el tablero: es solo para ti, no se manda a los robots ni gasta tokens"'}>📌 Nota</button> ${depButton(s)}<button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></span></div>
+  el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><span><button type="button" class="btn sm ghost" data-sala-note-add ${mine.length >= 4 ? 'disabled title="Ya hay 4 notas tuyas: quita una con su ×"' : 'title="Pega una nota tuya en el tablero: es solo para ti, no se manda a los robots ni gasta tokens"'}>📌 Nota</button> <button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></span></div>
     <div class="sb-why${board.whyOpen ? ' open' : ''}" data-sala-why title="${board.whyOpen ? 'Clic para resumir' : `Por qué se creó esta sala. Clic para verlo completo.`}">${esc(why)}</div>
     ${s.spend && !s.roster?.length ? spendHtml(s) : ''}
     ${board.noteFor === s.id ? `<form class="sb-nf" data-sala-note-form><textarea rows="2" maxlength="240" placeholder="Tu nota (Enter pega, Esc cancela)…"></textarea><button class="btn sm">Pegar</button></form>` : ''}
-    ${s.roster?.length ? `<div class="sb-team"><b>Reparto${prog ? ` · ${prog.ok}/${prog.n} entregaron` : ''}</b>${s.spend ? spendHtml(s) : ''}${prog ? `<i class="sb-prog${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%"></i>` : ''}<span class="sb-chips">${s.roster.map(memChip).join('')}</span>${depRows(s)}</div>` : ''}
+    ${s.roster?.length ? `<div class="sb-team"><b>Reparto${prog ? ` · ${prog.ok}/${prog.n} entregaron` : ''}</b>${s.spend ? spendHtml(s) : ''}${prog ? `<i class="sb-prog${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%"></i>` : ''}<span class="sb-chips">${s.roster.map(e => `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}" title="${esc(`${e.name}${e.title ? ' · ' + e.title : ''} · ${e.state}`)}"><i class="sb-dot"></i><code>${esc(e.name)}</code></span>`).join('')}</span></div>` : ''}
     <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
     <div class="sb-notes">${mine.map(n => `<div class="sb-note mine" title="Tu nota (${esc(fmtWhen(n.at, { hour: 'numeric' }))}): solo la ves tú"><button type="button" class="sb-nx" data-sala-note-del="${esc(n.id)}" title="Quitar la nota" aria-label="Quitar la nota">×</button><b>📌 Tú</b>${esc(n.text)}</div>`).join('')}${notes.length ? notes.map(({ m, i }, k) => `<div class="sb-note n${k % 4}${salaMail.flying.has(m.id) ? ' arriving' : ''}" data-mid="${esc(m.id)}" data-note-i="${i}" role="button" tabindex="0" title="${esc(`${m.from} · ${hhmm(m.at)}\n${plainMd(m.text).slice(0, 500)}${m.text.length > 500 ? '…' : ''}\n\nClic: abrir el mensaje completo en el hilo`)}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 160))}</div>`).join('') : mine.length ? '' : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
   el.querySelector('.sb-ctx').scrollTop = keep;
@@ -465,39 +465,6 @@ function renderBoard() {
   } else if (nta && !draft) nta.focus();
   drawDoodles(s);
   flyNewMail(s);
-}
-// Dependencies inside the room: «⏸ espera a A» on the waiting member and «⏳ N lo esperan» on the one being waited for.
-const memChip = e => {
-  const wait = e.waits?.length
-    ? `<em class="sb-dep" title="Espera la entrega de ${esc(e.waits.join(', '))}">⏸ espera a ${esc(e.waits.join(', '))}</em>`
-    : '';
-  const blk = e.waitedBy
-    ? `<em class="sb-blk" title="Cuello de botella: ${e.waitedBy} robot${e.waitedBy === 1 ? '' : 's'} espera${e.waitedBy === 1 ? '' : 'n'} su entrega">⏳ ${e.waitedBy} lo ${e.waitedBy === 1 ? 'espera' : 'esperan'}</em>`
-    : '';
-  return `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}${e.waits?.length ? ' is-waiting' : ''}${e.waitedBy ? ' is-blocker' : ''}" title="${esc(`${e.name}${e.title ? ' · ' + e.title : ''} · ${e.state}`)}"><i class="sb-dot"></i><code>${esc(e.name)}</code>${wait}${blk}</span>`;
-};
-// Editor opened from the board: for each member, toggle buttons for the members it waits for.
-// The toggle lives in the board header next to «📌 Nota»; the editor rows open under the team chips.
-const depKids = s => (s.roster || []).filter(e => !e.owner && e.state !== 'no se lanzó');
-const depButton = s =>
-  depKids(s).length < 2
-    ? ''
-    : `<button type="button" class="btn sm ghost${board.depFor === s.id ? ' on' : ''}" data-sala-dep-open aria-expanded="${board.depFor === s.id}" title="Marca quién espera la entrega de quién. Solo informa: no detiene a nadie.">⏸ Esperas</button> `;
-function depRows(s) {
-  const kids = depKids(s);
-  if (kids.length < 2 || board.depFor !== s.id) return '';
-  return `<div class="sb-deps">${kids
-    .map(
-      b =>
-        `<div class="sb-dr"><b>${esc(b.name)}</b><span>espera a</span>${kids
-          .filter(a => a.name !== b.name)
-          .map(a => {
-            const on = (b.espera || []).includes(a.name);
-            return `<button type="button" class="sb-dt${on ? ' on' : ''}" data-sala-dep="${esc(b.name)}" data-sala-dep-on="${esc(a.name)}" aria-pressed="${on}">${esc(a.name)}</button>`;
-          })
-          .join('')}</div>`
-    )
-    .join('')}</div>`;
 }
 const spendHtml = s =>
   `<span class="sb-spend" title="Gasto del equipo: lo que gastaron todos los que pasaron por esta sala (padre e hijos, también los que ya se fueron, con sus subagentes) desde que se armó. Entrada + salida + caché escrita, como los KPI. Se recalcula cada minuto y no gasta cuota.">💸 <b>${fmtTok(s.spend)}</b></span>`;

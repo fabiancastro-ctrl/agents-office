@@ -1882,46 +1882,6 @@ test('barra «te necesitan»: la página trae su contenedor dentro de la cabecer
   }
 });
 
-test('dependencias en la sala: vienen del pedido o del tablero, se quitan solas al entregar y cuentan a los que esperan', async () => {
-  const o = await startOffice({ maxRobots: 5, env: { OFFICE_RESULT_DEBOUNCE_MS: '300' } });
-  try {
-    await o.api('POST', '/api/robots', libre('jefe'));
-    await turn(o, 'jefe', 'arranca', 'Pido robots');
-    const req = await o.api('POST', '/api/robots/jefe/encargos', {
-      encargos: [
-        { nombre: 'alfa', titulo: 'Uno', encargo: 'a' },
-        { nombre: 'beta', titulo: 'Dos', encargo: 'b', espera: ['alfa', 'fantasma', 'beta'] },
-        { nombre: 'gama', titulo: 'Tres', encargo: 'c' }
-      ]
-    });
-    const ok = await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' });
-    const id = ok.body.sala;
-    const sala = async () => (await o.snapshot()).salas.find(x => x.id === id);
-    const entry = async n => (await sala()).roster.find(e => e.name === n);
-    await waitFor(async () => (await entry('beta'))?.state === 'trabajando', { what: 'que beta trabaje' });
-    let beta = await entry('beta');
-    assert.deepEqual(beta.waits, ['alfa'], 'solo cuenta a un compañero real del reparto, no a sí mismo ni a un desconocido');
-    assert.equal((await entry('alfa')).waitedBy, 1, 'alfa es cuello de botella: lo espera beta');
-    // Manual: gama also waits for alfa; names are validated against the roster.
-    assert.equal((await o.api('POST', `/api/salas/${id}/espera`, { name: 'gama', espera: ['jefe'] })).status, 400);
-    assert.equal((await o.api('POST', `/api/salas/${id}/espera`, { name: 'nadie', espera: [] })).status, 404);
-    assert.equal((await o.api('POST', `/api/salas/${id}/espera`, { name: 'gama', espera: ['alfa'] })).status, 200);
-    assert.equal((await entry('alfa')).waitedBy, 2);
-    // When alfa delivers, both waits clear by themselves.
-    await turn(o, 'alfa', 'encargo', 'Hecho ALFA');
-    await waitFor(async () => (await entry('alfa')).delivered, { what: 'que alfa entregue' });
-    beta = await entry('beta');
-    assert.deepEqual(beta.waits, []);
-    assert.deepEqual((await entry('gama')).waits, []);
-    assert.equal((await entry('alfa')).waitedBy, 0);
-    // Clearing the marks removes them from the roster entry.
-    await o.api('POST', `/api/salas/${id}/espera`, { name: 'gama', espera: [] });
-    assert.deepEqual((await entry('gama')).espera, []);
-  } finally {
-    await o.stop();
-  }
-});
-
 test('edificio: el resumen de cada piso trae los robots con estado y prioridad, y la página pinta su miniatura', async () => {
   const net = await import('node:net');
   const { spawn } = await import('node:child_process');

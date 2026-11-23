@@ -38,19 +38,7 @@ function threadPath(s) {
   return path.join(SALAS_DIR, s.id, 'HILO.md');
 }
 
-// Dependencies inside a room: «B waits for the delivery of A». Stored as e.espera (names) on B's roster entry. A
-// dependency is active only while A is still working or queued; it clears by itself once A delivers (or is gone).
-const BLOCKING = new Set(['trabajando', 'esperando cupo']);
-function activeWaits(s, e) {
-  return (e.espera || []).filter(n => {
-    const a = (s.roster || []).find(x => x.name === n && !x.owner);
-    return a && n !== e.name && BLOCKING.has(rosterState(a)) && !(a.delivered || robots.get(a.name)?.reported);
-  });
-}
 function salaView(s) {
-  const waits = new Map((s.roster || []).map(e => [e.name, activeWaits(s, e)]));
-  const waitedBy = n =>
-    [...waits].filter(([b, l]) => b !== n && l.includes(n) && BLOCKING.has(rosterState(s.roster.find(x => x.name === b)))).length;
   return {
     id: s.id,
     name: s.name,
@@ -73,10 +61,7 @@ function salaView(s) {
       title: e.title || '',
       state: rosterState(e),
       owner: !!e.owner,
-      delivered: !!(e.delivered || robots.get(e.name)?.reported),
-      espera: e.espera || [],
-      waits: waits.get(e.name),
-      waitedBy: waitedBy(e.name)
+      delivered: !!(e.delivered || robots.get(e.name)?.reported)
     })),
     notes: s.notes || []
   };
@@ -616,20 +601,6 @@ async function salasApi(req, res, url, parts) {
       saveSalas();
       emitSalas();
       return send(res, 201, { ok: true });
-    }
-    // Dependencies: sets who a member of the room waits for ({name, espera: [names]}; empty list clears them).
-    if (req.method === 'POST' && parts[3] === 'espera') {
-      const b = await readBody(req);
-      const e = (s.roster || []).find(x => x.name === b.name && !x.owner);
-      if (!e) return send(res, 404, { error: 'Ese robot no está en el reparto de la sala.' });
-      const names = Array.isArray(b.espera) ? b.espera.map(String) : [];
-      const valid = new Set((s.roster || []).filter(x => !x.owner && x.name !== e.name).map(x => x.name));
-      if (names.some(n => !valid.has(n))) return send(res, 400, { error: 'Solo puede esperar a otros robots del reparto.' });
-      e.espera = [...new Set(names)];
-      if (!e.espera.length) delete e.espera;
-      saveSalas();
-      emitSalas();
-      return send(res, 200, { ok: true, espera: e.espera || [] });
     }
     if (req.method === 'DELETE' && parts[3] === 'notas' && parts[4]) {
       const before = (s.notes || []).length;

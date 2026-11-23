@@ -100,12 +100,7 @@ function requestSpawn(r, body) {
         text = String(x.encargo ?? x.text ?? x.tarea ?? '')
           .trim()
           .slice(0, 20000);
-      // Optional `espera`: names of the other requested robots whose delivery this one waits for.
-      const wait = []
-        .concat(x.espera ?? x.waits ?? [])
-        .map(validName)
-        .filter(Boolean);
-      return { title, text, name: validName(x.nombre ?? x.name) || kidName(title, text), reqWait: wait };
+      return { title, text, name: validName(x.nombre ?? x.name) || kidName(title, text) };
     })
     .filter(x => x.text);
   if (!items.length) throw new Error('Manda {"encargos":[{"titulo":"…","encargo":"…"}]} con al menos un encargo.');
@@ -125,19 +120,12 @@ function requestSpawn(r, body) {
     ...spawnQueue.map(q => q.name).filter(Boolean),
     ...[...robots.values()].flatMap(x => x.spawnReq?.items?.map(i => i.name) || [])
   ]);
-  const finalName = new Map(); // requested name → final name, so `espera` still points at the right robot after renames
   for (const it of items) {
     const base = (it.name || 'robot').slice(0, 17).replace(/-+$/, '');
     let n = it.name || base;
     for (let i = 2; used.has(n); i++) n = `${base}-${i}`;
-    if (it.name && !finalName.has(it.name)) finalName.set(it.name, n);
     it.name = n;
     used.add(n);
-  }
-  for (const it of items) {
-    const espera = [...new Set(it.reqWait.map(n => finalName.get(n)).filter(n => n && n !== it.name))];
-    delete it.reqWait;
-    if (espera.length) it.espera = espera;
   }
   r.toldNames = items.map(i => i.name); // si al aprobar cambian, se le aclara con sus primeros resultados
   r.spawnReq = { id: crypto.randomBytes(3).toString('hex'), at: now(), items, salaId, ...(context ? { context } : {}) };
@@ -156,7 +144,6 @@ const KID_PREAMBLE = parent =>
   `\n\n(Te lanzó el robot ${parent} desde la Oficina de Agentes. Arrancas sin su conversación: lo que necesitas está en este encargo y en el contexto compartido de la sala de tu equipo (abajo). Cuando termines, tu respuesta final se le envía a ${parent}, así que hazla completa y autosuficiente: resultado, archivos que tocaste o creaste y pendientes.)`;
 async function decideSpawn(r, id, approve, edited) {
   if (!r.spawnReq || r.spawnReq.id !== id) throw new Error('Esa petición ya no está pendiente.');
-  const original = r.spawnReq.items;
   const items = Array.isArray(edited)
     ? edited
         .map(x => ({
@@ -165,14 +152,7 @@ async function decideSpawn(r, id, approve, edited) {
           name: validName(x.name) || kidName(x.title, x.text)
         }))
         .filter(x => x.text)
-    : original;
-  if (Array.isArray(edited)) {
-    // Edited items keep the dependencies of the original with the same name, if their targets are still there.
-    for (const it of items) {
-      const espera = (original.find(o => o.name === it.name)?.espera || []).filter(n => n !== it.name && items.some(o => o.name === n));
-      if (espera.length) it.espera = espera;
-    }
-  }
+    : r.spawnReq.items;
   const context = r.spawnReq.context || '',
     salaId = r.spawnReq.salaId;
   r.spawnReq = null;
@@ -196,14 +176,10 @@ async function decideSpawn(r, id, approve, edited) {
     text: it.text,
     name: it.name || '',
     sala: sala.id,
-    at: now(),
-    ...(it.espera?.length ? { espera: it.espera } : {})
+    at: now()
   }));
   spawnQueue.push(...qs);
-  sala.roster = [
-    ...(sala.roster || []),
-    ...qs.map(q => ({ qid: q.id, name: q.name, title: q.title, parent: r.name, ...(q.espera ? { espera: q.espera } : {}) }))
-  ];
+  sala.roster = [...(sala.roster || []), ...qs.map(q => ({ qid: q.id, name: q.name, title: q.title, parent: r.name }))];
   saveSalas();
   writeRoster(sala);
   log(
