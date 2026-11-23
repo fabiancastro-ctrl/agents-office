@@ -87,6 +87,7 @@ function scheduleCards() {
       cardsRaf = 0;
       renderKpis();
       renderCards();
+      renderColumn();
       renderMini();
       renderNeedBar();
       checkAlerts();
@@ -479,7 +480,7 @@ function renderCards() {
   const html = !all.length
     ? `<div class="rc-zero"><b>La oficina está vacía</b><p>Lanza un encargo o haz clic en un robot de la sala de descanso.</p><button class="btn primary" data-card-act="new">Nuevo encargo</button></div>`
     : bar +
-      sec('need', '✋ Te necesitan', by.need, 'Nadie te espera.') +
+      sec('need', '✋ Te necesitan', by.need, '') +
       sec('work', '⚙ Trabajando', by.work, '') +
       sec('hold', '⏳ En espera', by.hold, '') +
       (by.done.length

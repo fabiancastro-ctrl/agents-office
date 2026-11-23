@@ -34,25 +34,30 @@ const needWhy = d =>
         : d.hold || d.needsPermission
           ? 'pide permiso'
           : 'espera tu respuesta';
+// Everything the cork-board notes and the «Salas» tab need to draw one room: its robots, who needs you, whether it
+// finished, the team progress and the note colour (never grey, grey means disconnected: amber needs you, green done,
+// teal working, cream empty).
+function salaInfo(s) {
+  const bots = salaRobots(s.id),
+    n = bots.length;
+  // Their robots are not visible in the office: if one needs you, the room says so.
+  const needers = bots
+      .map(a => a.data)
+      .filter(d => d.state === 'input' || d.spawnReq || d.consoleLost)
+      .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0)),
+    need = needers.length;
+  const done = s.done && !need; // team finished: everyone delivered
+  const prog = salaProgress(s); // team progress, visible without entering
+  const tone = need ? 'need' : done ? 'done' : n ? 'work' : 'empty';
+  return { bots, n, needers, need, done, prog, tone };
+}
 function renderSalaChips() {
   renderOutsideNeed();
   $('#sala-count').textContent = `${st.salas.length} sala${st.salas.length === 1 ? '' : 's'}`;
   $('#sala-chips').innerHTML =
     st.salas
       .map(s => {
-        // lista completa: la sala es chica y hace scroll
-        const bots = salaRobots(s.id),
-          n = bots.length;
-        // Sus robots no se ven en la oficina: si alguno te necesita, la sala lo avisa.
-        const needers = bots
-            .map(a => a.data)
-            .filter(d => d.state === 'input' || d.spawnReq || d.consoleLost)
-            .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0)),
-          need = needers.length;
-        const done = s.done && !need; // equipo terminado: todos entregaron
-        const prog = salaProgress(s); // 3 · avance del equipo, visible sin entrar
-        // Sticky-note colour by state (never grey: grey means disconnected): amber needs you, green done, teal working, cream empty.
-        const tone = need ? 'need' : done ? 'done' : n ? 'work' : 'empty';
+        const { bots, n, needers, need, done, prog, tone } = salaInfo(s);
         // Stable small tilt per room: hash of the id with >>> (unsigned), mapped to -2.4..+2.4 degrees.
         let h = 0;
         for (const ch of s.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -87,6 +92,7 @@ function renderSalaChips() {
       'sala-need',
       st.salas.some(s => salaRobots(s.id).some(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost))
     );
+  renderColumn();
 }
 
 function salasPanel() {

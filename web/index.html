@@ -104,7 +104,16 @@
     <div class="zoom-ui" id="zoom-ui"><div class="zu" role="group" aria-label="Zoom del mapa"><button type="button" data-zoom="out" title="Alejar (tecla −)" aria-label="Alejar">−</button><span id="zoom-n">100%</span><button type="button" data-zoom="in" title="Acercar (tecla +, o ⌘/Ctrl + rueda, o pellizco en el trackpad)" aria-label="Acercar">+</button><button type="button" data-zoom="reset" title="Ver todo (tecla 0)" aria-label="Ver todo">⤢</button></div><div class="zf" id="zoom-follow" hidden></div></div>
   </div>
  </div>
-  <aside class="cards" id="cards" aria-label="Robots de la oficina"></aside>
+  <aside class="cards" aria-label="Robots, salas y rutinas de la oficina">
+    <div class="ctabs" role="tablist" aria-label="Qué mostrar en la columna">
+      <button class="ctab" id="ctab-robots" type="button" role="tab" data-ctab="robots" aria-controls="cards">Robots <b class="ct-n" id="ct-robots"></b></button>
+      <button class="ctab" id="ctab-salas" type="button" role="tab" data-ctab="salas" aria-controls="pane-salas">Salas <b class="ct-n" id="ct-salas"></b></button>
+      <button class="ctab" id="ctab-rutinas" type="button" role="tab" data-ctab="rutinas" aria-controls="pane-rutinas">Rutinas <b class="ct-n" id="ct-rutinas"></b></button>
+    </div>
+    <div id="cards" role="tabpanel" aria-labelledby="ctab-robots"></div>
+    <div class="cpane" id="pane-salas" role="tabpanel" aria-labelledby="ctab-salas" hidden></div>
+    <div class="cpane" id="pane-rutinas" role="tabpanel" aria-labelledby="ctab-rutinas" hidden></div>
+  </aside>
 </div>
 
 <div class="dialog" id="dialog" hidden>

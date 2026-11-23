@@ -54,6 +54,7 @@ function renderRoutineChips() {
       )
       .join('') || '<div class="room-b">Sin rutinas. Clic para crear una.</div>';
   tickRoutines();
+  renderColumn();
 }
 function tickRoutines() {
   for (const rt of st.routines) {

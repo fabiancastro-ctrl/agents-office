@@ -555,7 +555,41 @@ code{font-family:var(--mono);font-size:11.5px;background:var(--panel-2);padding:
 .kbar::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--p);border-radius:2px;background:var(--k);transition:width .6s}
 
 /* ---------- tarjetas por robot ---------- */
-.cards{position:sticky;top:72px;max-height:calc(100vh - 88px);overflow:auto;display:grid;gap:12px;align-content:start;padding-right:2px;scrollbar-width:thin}
+.cards{position:sticky;top:68px;max-height:calc(100vh - 84px);overflow:auto;display:grid;gap:12px;align-content:start;padding-right:2px;scrollbar-width:thin}
+#cards{display:grid;gap:12px;align-content:start}
+/* Tabs Robots / Salas / Rutinas: sticky at the top of the column, with a counter (amber when something needs you) */
+.ctabs{position:sticky;top:0;z-index:3;display:flex;gap:4px;padding:2px 0 6px;background:var(--bg)}
+.ctab{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:var(--ctl-h);background:transparent;border:1px solid var(--line);border-radius:var(--ctl-r);color:var(--muted);font-size:var(--fs-3);font-weight:600}
+.ctab:hover{color:var(--ink);border-color:var(--wall)}
+.ctab.on{background:var(--panel-2);color:var(--ink);border-color:var(--amber)}
+.ct-n{min-width:18px;padding:0 5px;border-radius:9px;background:var(--panel);border:1px solid var(--line);color:var(--ink);font-family:var(--mono);font-size:var(--fs-1);font-weight:600;line-height:16px;text-align:center}
+.ct-n.need{background:var(--st-need);border-color:var(--st-need);color:#2a1d05}
+.cpane{display:grid;gap:8px;align-content:start}
+.cpane>.btn{justify-self:start}
+/* Salas list: same state colours and pieces as the cork-board notes, flat and compact */
+.sala-row{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:3px 8px;align-items:center;padding:8px 10px 10px;border-radius:8px;background:var(--nb,#fbf1d4);color:#2b2218;cursor:pointer;box-shadow:inset 3px 0 0 rgba(43,34,24,.35)}
+.sala-row:hover{box-shadow:inset 3px 0 0 #2b2218,0 0 0 2px var(--amber)}
+.sala-row.cur{outline:2px solid #1f8f7e;outline-offset:1px}
+.sala-row.sn-empty{--nb:#fbf1d4} .sala-row.sn-work{--nb:#c9f0e8} .sala-row.sn-done{--nb:#d4efb8} .sala-row.sn-need{--nb:#f8cf7a}
+.sala-row .sala-face{width:20px;height:20px;box-shadow:0 0 0 1.5px rgba(43,34,24,.35);background:rgba(255,255,255,.55)}
+.sala-row .sala-face svg{width:16px;height:16px}
+.sala-row .sn-name{font:700 var(--fs-2) var(--body)}
+.sala-row .sn-state{font:600 var(--fs-1) var(--body);color:#4a3b2a;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.sala-row.sn-need .sn-state{color:#7a4300}
+.sala-row.sn-done .sn-state{color:#256b1c}
+.sala-row .sn-bots{grid-column:1/-1}
+.sala-row .sn-bots:empty{display:none}
+.sala-row .rchip-bar{position:absolute;left:10px;right:10px;bottom:3px;height:3px;border-radius:2px;background:linear-gradient(90deg,#1f8f7e var(--p),rgba(43,34,24,.18) var(--p))}
+.sala-row .rchip-bar.full{background:#3d9a3d}
+/* Routines list */
+.rt-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1px 10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-left:3px solid var(--st-work);border-radius:8px;background:var(--panel);cursor:pointer}
+.rt-row:hover{background:var(--panel-2);border-color:var(--wall);border-left-color:var(--st-work)}
+.rt-row.paused{border-left-color:var(--st-hold)}
+.rt-row.bad{border-left-color:var(--st-need)}
+.rt-row .ring{grid-row:1/3}
+.rt-row .rr-n{font-size:var(--fs-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt-row small{font-size:var(--fs-1);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html.hc .sala-row .sn-state{color:#1a120a}
 .rc-sec{display:grid;gap:8px;border-radius:10px;transition:box-shadow .3s}
 .rc-sec.flash{animation:secflash 1s}
 @keyframes secflash{30%{box-shadow:0 0 0 2px var(--amber)}}
@@ -813,8 +847,9 @@ kbd{font-family:var(--mono);font-size:11px;background:#1d2533;border:1px solid v
 /* vista compacta: sin mapa, tarjetas en columnas por estado */
 body.compact .map-wrap{display:none}
 body.compact .office{grid-template-columns:minmax(0,1fr)}
-body.compact .cards{position:static;max-height:none;overflow:visible;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start;gap:14px}
-body.compact .cards>.rc-zero{grid-column:1/-1}
+body.compact .cards{position:static;max-height:none;overflow:visible}
+body.compact #cards{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start;gap:14px}
+body.compact #cards>.rc-zero{grid-column:1/-1}
 body.compact .main-col{order:2}
 body.compact>.toast,body>.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%)}
 
