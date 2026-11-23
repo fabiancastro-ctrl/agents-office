@@ -90,7 +90,7 @@ test('si la consola cancela la pregunta, la oficina la quita sola', async () => 
   }
 });
 
-test('consola caída: se detecta sin borrar al robot y «Revivir» abre su misma sesión', async () => {
+test('consola caída: se detecta sin borrar al robot y «Reanudar» abre su misma sesión, con la tarjeta que lo ofrece', async () => {
   const o = await startOffice({ robots: [{ name: 'vivo', sessionId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }] });
   try {
     fs.mkdirSync(path.dirname(o.data), { recursive: true });
@@ -99,12 +99,20 @@ test('consola caída: se detecta sin borrar al robot y «Revivir» abre su misma
     await waitFor(async () => (await o.robot('vivo'))?.consoleLost, { what: 'la consola caída' });
     const say = await o.api('POST', '/api/robots/vivo/say', { text: 'hola' });
     assert.equal(say.status, 409, 'no deja escribirle mientras está caído');
+    const js = await (await fetch(`${o.url}/app.js`)).text();
+    assert.match(js, /💥 se cayó/);
+    assert.match(js, /data-card-act="revive">↻ Reanudar/);
+    assert.doesNotMatch(js, /reanudar a todos|resume-all|reviveAll/i, 'resume is one robot at a time');
     const rv = await o.api('POST', '/api/robots/vivo/revivir');
     assert.equal(rv.status, 200);
     await waitFor(() => o.windows().includes('vivo'), { what: 'la consola nueva' });
     await waitFor(() => o.claudeCalls().some(c => c.includes('--resume aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')), {
       what: 'que se retome la misma sesión'
     });
+    assert.ok(
+      o.claudeCalls().some(c => c.includes('--resume aaaaaaaa') && c.includes('--settings')),
+      'same hooks settings as when it was launched'
+    );
     assert.equal((await o.robot('vivo')).consoleLost, false);
   } finally {
     await o.stop();

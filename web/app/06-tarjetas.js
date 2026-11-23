@@ -375,7 +375,7 @@ function cardHtml(a) {
     docs = d.docs.length,
     tok = tokOf(d);
   const pill = d.consoleLost
-    ? '<span class="pill p-input">⚠ consola caída</span>'
+    ? '<span class="pill p-input">💥 se cayó</span>'
     : d.spawnReq
       ? `<span class="pill p-input">pide ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}</span>`
       : d.state === 'input' && d.inputAt
@@ -383,7 +383,7 @@ function cardHtml(a) {
         : `<span class="pill p-${d.state}">${d.state === 'done' && d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : esc(stateLabel(d))}</span>`;
   const perm = d.hold || d.needsPermission;
   const line = d.consoleLost
-    ? 'Su consola se cerró (tmux). Su sesión sigue en disco: «Revivir» la abre de nuevo y recuerda todo.'
+    ? 'Su consola se cerró (tmux). Su sesión sigue en disco: «Reanudar» la abre de nuevo y recuerda todo.'
     : d.spawnReq
       ? `Quiere lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: ${d.spawnReq.items.map(i => i.title || plainMd(i.text).slice(0, 40)).join(' · ')}`
       : d.ask
@@ -399,7 +399,7 @@ function cardHtml(a) {
               : d.activity || (d.state === 'walking' ? 'Llegando a su escritorio' : 'Pensando…');
   let actions = '';
   if (d.consoleLost)
-    actions = `<button class="btn primary sm" data-card-act="revive">↻ Revivir</button><button class="btn sm" data-card-act="open">Ver</button><button class="btn sm danger" data-card-act="kill">Despedir</button>`;
+    actions = `<button class="btn primary sm" data-card-act="revive">↻ Reanudar</button><button class="btn sm" data-card-act="open">Ver</button><button class="btn sm danger" data-card-act="kill">Despedir</button>`;
   else if (d.spawnReq) actions = `<button class="btn primary sm" data-card-act="open">Revisar y lanzar</button>`;
   else if (d.ask) actions = askForm(d, 'c');
   else if (d.hold)

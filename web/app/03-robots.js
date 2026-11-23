@@ -303,7 +303,7 @@ function paint(a) {
   }
   a.wasLost = !!d.consoleLost;
   a.sign.textContent = d.consoleLost
-    ? '⚠ sin consola'
+    ? '💥 se cayó'
     : d.spawnReq
       ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?`
       : onHold(d)
@@ -318,7 +318,7 @@ function paint(a) {
               : '?'
             : '';
   const text = d.consoleLost
-    ? 'Se cerró mi consola: revíveme'
+    ? 'Se cayó mi consola: reanúdame'
     : d.relevoPending
       ? 'Escribo mi relevo y me sigue otro yo'
       : d.summaryPending

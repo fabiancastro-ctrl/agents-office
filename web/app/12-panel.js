@@ -605,7 +605,7 @@ async function revive(name, btn) {
   if (btn) btn.disabled = true;
   try {
     await api('POST', `/api/robots/${name}/revivir`);
-    toast(`${name} volvió con su sesión`);
+    toast(`${name} se reanudó con su misma sesión`);
   } catch {
     if (btn) btn.disabled = false;
   }

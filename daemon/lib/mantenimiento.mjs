@@ -187,7 +187,7 @@ async function healthView() {
     lost.length
       ? `Sin consola: ${lost.map(r => r.name).join(', ')}`
       : `${robots.size} robot${robots.size === 1 ? '' : 's'}, todos con su consola`,
-    'Abre cada robot y usa «Revivir» (retoma su misma sesión) o dalo de baja.'
+    'Abre cada robot y usa «Reanudar» (retoma su misma sesión) o dalo de baja.'
   );
   const q = readConfig().quota || {},
     qAt = Number(q.weekPctAt) || 0;
