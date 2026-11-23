@@ -1311,6 +1311,22 @@ html[data-theme=light] .lg.shell pre.x{background:#1d2533}
 .ph-row .rc-sleep{margin:0 4px}
 .ph-what{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph-what .origin{font-family:var(--body);margin:0}
+.ph-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none;align-self:flex-start;max-width:46%}
+.ph-side .pill{margin-left:0}
+.ph-acts{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+/* «⋯» menu of the robot window: a <details> so morph() keeps it open while the panel redraws. */
+.pm{position:relative}
+.pm>summary{list-style:none;cursor:pointer;min-width:34px}
+.pm>summary::-webkit-details-marker{display:none}
+.pm[open]>summary{border-color:var(--wall)}
+.pm-list{position:absolute;right:0;top:calc(100% + 4px);z-index:70;min-width:250px;max-width:min(320px,86vw);display:grid;gap:2px;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+.pm-sel{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:6px;padding:2px 10px;font-size:var(--fs-2);color:var(--muted)}
+.pm-sel .mt-sel{max-width:none;width:100%}
+/* One zone for every warning above the conversation. */
+.rp-alerts{display:grid;gap:8px}
+/* One bar for the buttons under the console; «Dar de baja» stays apart at the end. */
+.pbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--line)}
+.pbar-end{margin-left:auto}
 /* En la ventana alta (robot, sala, despedido) el panel es una columna: encabezado, avisos y, debajo, las dos
    columnas que se estiran. La conversación y la consola toman el alto que quede, sin importar cuántas
    etiquetas tenga el encabezado, así la caja para escribir siempre queda a la vista. */

@@ -55,6 +55,80 @@ function kidsBlock(d) {
   return `<div class="rp-block kids" id="kids"><h4>${d.parent ? `Lo lanzó <button type="button" class="kid inline" data-pick="${esc(d.parent)}">${esc(d.parent)}</button>` : 'Robots que lanzó'}</h4>${d.kids?.length ? `<div class="kid-l">${d.kids.map(kid).join('')}</div>` : ''}</div>`;
 }
 
+// Robot window header: up to 3 main actions that depend on the state (decide a permission, relieve or dismiss).
+function headActions(d) {
+  const out = [];
+  if (d.hold)
+    out.push(
+      `<button type="button" class="btn sm primary" data-act="hold-allow">Aprobar</button><button type="button" class="btn sm danger" data-act="hold-deny">Denegar</button>`
+    );
+  else if (d.needsPermission && d.state === 'input')
+    out.push(
+      `<button type="button" class="btn sm primary" data-act="perm-approve">Aprobar</button><button type="button" class="btn sm danger" data-act="perm-reject">Rechazar</button>`
+    );
+  if (d.relevo && !d.relevoPending && canSummary(d))
+    out.push(
+      `<button type="button" class="btn sm primary" data-act="relevar" title="Mucho contexto: cada turno lo relee entero. Escribe su resumen, se va y entra otro robot con su mismo nombre que sigue solo con ese resumen.">${relevoLabel(d)}</button>`
+    );
+  if (canSummary(d))
+    out.push(
+      `<button type="button" class="btn sm" data-act="sumkill" title="${isCold(d) ? 'Lleva más de una hora quieto: la oficina arma el resumen sin tokens, lo guarda y lo despide.' : 'Le pide un super resumen de lo que hacía, lo guarda como documento y lo despide.'}">📝 Despedir${isCold(d) ? ' (sin tokens)' : ''}</button>`
+    );
+  return out.join('');
+}
+// «⋯» menu of the robot window: everything that is not a main action. A <details>, so it keeps working with morph().
+function robotMenu(d) {
+  const item = (attrs, label, title = '') =>
+    `<button type="button" class="mi" role="menuitem" ${attrs}${title ? ` title="${esc(title)}"` : ''}>${label}</button>`;
+  const noteItem = d.note
+    ? item('data-note="edit"', '✎ Editar nota', 'Tu nota: qué espera, de quién, qué falta')
+    : item('data-note="edit"', '🗒 Nota', 'Una nota tuya: qué espera, de quién, qué falta');
+  return `<details class="pm" id="pm-menu"><summary class="btn sm" title="Más acciones de este robot" aria-label="Más acciones">⋯</summary><div class="pm-list" role="menu">
+    ${item('data-look="open"', '🎨 Apariencia', 'Cambiar color, antena, visor y accesorio')}
+    ${item(`data-copy-link="robot:${esc(d.name)}"`, '🔗 Copiar enlace', 'Copia un enlace que abre la oficina directo en este robot (solo funciona en este computador)')}
+    ${item('data-act="export"', '⬇ Exportar conversación', 'Guarda toda su conversación (tus mensajes y los suyos, sin herramientas) en docs/conversaciones-robots/ de tu carpeta de trabajo.')}
+    ${item('data-act="wake-me"', '⏰ Despiértame cuando…', 'Crea un despertador: cuando pase algo (un PR aprobado, un ticket que cambia, una hora), la oficina le escribe a este robot')}
+    ${item('data-act="follow"', '📍 Seguir en el mapa', 'Cierra esta ventana y la cámara del mapa sigue a este robot (tecla F, o Mayús + clic en el robot)')}
+    ${canCompact(d) ? item('data-act="compact"', `🧹 Compactar (${d.ctx.pct} %)`, `Contexto al ${d.ctx.pct} %: le manda /compact para resumir su conversación y liberar espacio`) : ''}
+    ${d.relevo && !d.relevoPending && canSummary(d) ? item('data-act="seguir-sin-relevo"', 'Seguir así (sin relevo)', 'No vuelve a ofrecer el relevo hasta que el contexto suba 100 k más') : ''}
+    ${d.files ? item('data-open-changes', '🧾 Cambios', 'Abre el bloque de cambios: los archivos que tocó y cómo están en git') : ''}
+    ${noteItem}
+    ${salaPicker(d) ? `<label class="pm-sel"><span>Sala</span>${salaPicker(d)}</label>` : ''}
+    ${sidePicker(d) ? `<label class="pm-sel"><span>Al lado</span>${sidePicker(d)}</label>` : ''}
+  </div></details>`;
+}
+
+const closePm = () => $('#pm-menu', PANEL)?.removeAttribute('open');
+// «Cambios» lives in the «⋯» menu: open its block, load git and bring it into view.
+onClick('[data-open-changes]', () => {
+  chg.open = true;
+  $('#chg-box', PANEL)?.setAttribute('open', '');
+  loadChanges(st.selected);
+  $('#chg-box', PANEL)?.scrollIntoView({ block: 'nearest' });
+});
+// Picking an item closes the menu (the item's own handler runs first); so do a click outside it and Escape.
+PANEL.addEventListener('click', e => {
+  if (e.target.closest('.pm-list .mi')) closePm();
+  else if (!e.target.closest('#pm-menu')) closePm();
+});
+PANEL.addEventListener(
+  'keydown',
+  e => {
+    if (e.key !== 'Escape' || !$('#pm-menu[open]', PANEL)) return;
+    e.stopPropagation();
+    e.preventDefault();
+    closePm();
+    $('#pm-menu > summary', PANEL)?.focus();
+  },
+  true
+);
+
+// One alert zone above the conversation: queue bar, permission / question / lost console, stalled and file clashes.
+function alertZone(parts) {
+  const html = parts.join('');
+  return html ? `<div class="rp-alerts" id="rp-alerts">${html}</div>` : '';
+}
+
 function robotPanel(a) {
   const d = a.data;
   const u = d.usage || {};
@@ -72,12 +146,12 @@ function robotPanel(a) {
   else if (d.spawnReq) alert = spawnBox(d);
   else if (d.ask) alert = `<div class="alert ask-box" id="rp-alert"><b>Te pregunta</b>${askForm(d, 'p')}</div>`;
   else if (d.hold)
-    alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
+    alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><span class="note">Decide con los botones de arriba (o las teclas A y D).</span></div>`;
   else if (d.needsPermission)
-    alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
+    alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir. Decide con los botones de arriba (o las teclas A y D).</span></div>`;
   return `
-    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}</div><div class="ph-main"><h3>${esc(d.name)}${d.tools?.includes('artifact') ? ' <span class="tool-mark" title="Tiene las herramientas de Artifact">📄</span>' : ''}</h3>${titleEditor(d)}<div class="ph-row" id="ph-row">${noteEditor(d)}${prioPicker(d)}${lookEditor(d)}${canCompact(d) ? `<button type="button" class="btn sm" data-act="compact" title="Contexto al ${d.ctx.pct} %: le manda /compact para resumir su conversación y liberar espacio">🧹 Compactar (${d.ctx.pct} %)</button>` : ''}${isSleepy(d) ? `<span class="rc-sleep">💤 ${fmtDur(sleepMs(d))} sin actividad</span>` : ''}<button type="button" class="btn sm ghost" data-act="wake-me" title="Crea un despertador: cuando pase algo (un PR aprobado, un ticket que cambia, una hora), la oficina le escribe a este robot">⏰ Despiértame cuando…</button><button type="button" class="btn sm ghost" data-act="follow" title="Cierra esta ventana y la cámara del mapa sigue a este robot (tecla F, o Mayús + clic en el robot)">📍 Seguir en el mapa</button><button type="button" class="btn sm ghost" data-copy-link="robot:${esc(d.name)}" title="Copia un enlace que abre la oficina directo en este robot (solo funciona en este computador)">🔗 Copiar enlace</button>${salaPicker(d)}${sidePicker(d)}</div><div class="sub-h ph-what" title="${esc(d.label)}">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)} <span class="origin">· ${esc(d.origin || 'Origen desconocido')}</span></div></div><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span></div>
-    ${queueBar(d)}${alert}${stalledBox(d)}${clashBox(d)}
+    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}</div><div class="ph-main"><h3>${esc(d.name)}${d.tools?.includes('artifact') ? ' <span class="tool-mark" title="Tiene las herramientas de Artifact">📄</span>' : ''}</h3>${titleEditor(d)}<div class="ph-row" id="ph-row">${noteUi.editing === d.name || d.note ? noteEditor(d) : ''}${prioPicker(d)}${lookUi.open === d.name ? lookEditor(d) : ''}${isSleepy(d) ? `<span class="rc-sleep">💤 ${fmtDur(sleepMs(d))} sin actividad</span>` : ''}</div><div class="sub-h ph-what" title="${esc(d.label)}">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)} <span class="origin">· ${esc(d.origin || 'Origen desconocido')}</span></div></div><div class="ph-side"><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span><div class="ph-acts" id="ph-acts">${headActions(d)}${robotMenu(d)}</div></div></div>
+    ${alertZone([queueBar(d), alert, stalledBox(d), clashBox(d)])}
     <div class="rp-grid" id="rp-grid">
       <div class="rp-col">
         <div class="log-h"><h4>Conversación</h4><span class="tmode" role="group" aria-label="Herramientas en la conversación"><small>Herramientas</small>${TOOL_MODES.map(([k, l]) => `<button type="button" class="${st.toolMode === k ? 'on' : ''}" data-toolmode="${k}" aria-pressed="${st.toolMode === k}">${l}</button>`).join('')}</span></div>
@@ -95,14 +169,12 @@ function robotPanel(a) {
         ${changesBlock(d)}
         <h4>Consola en vivo</h4>
         <pre class="term" id="pane">${esc(paneCache.get(d.name) ?? 'cargando…')}</pre>
-        <div class="row">
+        <div class="pbar" id="pbar">
           <button class="btn sm" data-act="console">Abrir consola en Terminal</button>
           <button class="btn sm" data-act="again" title="Abre «Nuevo encargo» con lo mismo que le pediste a este robot">↻ Lanzar otro igual</button>
           <button class="btn sm" data-act="fav" title="Guarda este encargo como acceso rápido en «Nuevo encargo»">★ Frecuente</button>
-          <button class="btn sm" data-act="export" title="Guarda toda su conversación (tus mensajes y los suyos, sin herramientas) en docs/conversaciones-robots/ de tu carpeta de trabajo. Por si un resumen falla o queda corto.">⬇ Exportar conversación</button>
-          ${relevoBtns(d, false)}${d.relevoPending ? '<span class="note">🔁 Escribiendo su relevo…</span>' : ''}
-          ${canSummary(d) ? `<button class="btn sm" data-act="sumkill" title="${isCold(d) ? 'Lleva más de una hora quieto: despertarlo le haría releer (y pagar) toda su conversación. La oficina arma el resumen sin tokens (objetivo, lo último que dijo, documentos, archivos que tocó y su sesión), lo guarda y lo despide.' : 'Le pide un super resumen de lo que hacía, lo guarda como documento en la oficina y lo despide. Con ese resumen otro robot puede retomar la tarea.'}">📝 Despedir con su resumen${isCold(d) ? ' (sin tokens)' : ''}</button>` : d.summaryPending ? '<span class="note">📝 Escribiendo su resumen para irse…</span>' : ''}
-          <button class="btn sm danger" data-act="kill" title="Lo despide ya, sin resumen. Si quieres que deje uno para retomar después, usa «📝 Despedir con su resumen».">Dar de baja</button>
+          ${d.relevoPending ? '<span class="note">🔁 Escribiendo su relevo…</span>' : d.summaryPending ? '<span class="note">📝 Escribiendo su resumen para irse…</span>' : ''}
+          <button class="btn sm danger pbar-end" data-act="kill" title="Lo despide ya, sin resumen. Si quieres que deje uno para retomar después, usa «📝 Despedir» (arriba).">Dar de baja</button>
         </div>
         <div class="stats">tokens · salida ${u.out ?? 0} · entrada ${u.in ?? 0} · caché leída ${u.cacheRead ?? 0} · caché escrita ${u.cacheWrite ?? 0}${spendText(d) ? ` · gasto: ${esc(spendText(d))}` : ''}${d.permissionMode ? ' · permisos: ' + esc(d.permissionMode) : ''}</div>
         <div class="note">tmux attach -t ${esc(st.config.session || 'office')}:${esc(d.name)} · sesión ${esc(d.sessionId)}</div>
