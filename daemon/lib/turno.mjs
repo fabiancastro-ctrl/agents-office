@@ -226,7 +226,9 @@ function robotFlags(r) {
 // System prompt for one robot: the shared hints, plus one short line for robots that lack the Artifact tools.
 const NO_ARTIFACT_HINT =
   ' No tienes las herramientas de Artifact: si te piden publicar una página o un artifact, pide un robot con "herramientas": ["artifact"] (ver robots-equipo.md) y pásale el contenido.';
-const robotHints = r => (normTools(r?.tools).includes('artifact') ? ROBOT_HINTS : ROBOT_HINTS + NO_ARTIFACT_HINT);
+// Only when the launch flags really drop Artifact (OFFICE_ROBOT_DISALLOWED may leave it in).
+const robotHints = r =>
+  robotFlags(r).some(f => /^--disallowedTools=(.*,)?Artifact(,|$)/.test(f)) ? ROBOT_HINTS + NO_ARTIFACT_HINT : ROBOT_HINTS;
 
 const cleanTitle = t =>
   String(t ?? '')
