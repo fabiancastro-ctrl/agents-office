@@ -1,6 +1,6 @@
 /* ---------- uso y estado de Claude ---------- */
 const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n);
-const weekLabel = w => new Date(w + 'T00:00:00').toLocaleDateString('es', {day: 'numeric', month: 'short'});
+const weekLabel = w => fmtDay(w + 'T00:00:00');
 const tokLine = w => `salida ${fmtTok(w.out)} · entrada ${fmtTok(w.in)} · caché leída ${fmtTok(w.cacheRead)} · caché escrita ${fmtTok(w.cacheWrite)}`;
 
 async function loadWeeks() {
@@ -32,10 +32,10 @@ function usagePanel() {
   const status = st.claudeError ? `<p class="err">${esc(st.claudeError)}</p>`
     : !c ? `<p>${st.claudeLoading ? 'Abriendo /usage en una consola aparte… (la primera vez tarda unos segundos)' : 'Sin datos todavía.'}</p>`
     : `${bars}${c.detail ? `<details><summary>Qué está consumiendo (según Claude)</summary><pre class="term">${esc(c.detail)}</pre></details>` : ''}
-       <div class="note">Leído ${new Date(c.at).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'})} · consola: tmux attach -t ${esc(st.config.session || 'office')}:_status</div>`;
+       <div class="note">Leído ${fmtTime(c.at)} · consola: tmux attach -t ${esc(st.config.session || 'office')}:_status</div>`;
   // 3 · Tu cuota semana a semana (lo más alto leído de /usage en cada semana; se arma solo mientras usas la oficina).
   const qh = st.config?.stats?.quotaHistory || [];
-  const hist = qh.length ? `<div class="dlg-sec"><h4>Tu cuota semana a semana</h4><div class="qh">${qh.map((w, i) => { const end = new Date(w.end + 'T12:00:00'); const cur = i === qh.length - 1; return `<div class="qh-c${cur ? ' cur' : ''}" title="Semana que termina el ${end.toLocaleDateString('es', {weekday: 'long', day: 'numeric', month: 'long'})}: ${w.pct} % usado${cur ? ' (en curso)' : ''}"><span class="qh-v">${w.pct}%</span><i class="${w.pct >= 90 ? 'hot' : w.pct >= 70 ? 'warm' : ''}" style="height:${Math.max(3, Math.min(100, w.pct))}%"></i><small>${end.toLocaleDateString('es', {day: 'numeric', month: 'short'})}</small></div>`; }).join('')}</div><p class="note">Lo más alto que marcó <code>/usage</code> en cada semana de tu cuota. La oficina lo relee cada hora mientras está abierta; no gasta tokens.</p></div>` : '';
+  const hist = qh.length ? `<div class="dlg-sec"><h4>Tu cuota semana a semana</h4><div class="qh">${qh.map((w, i) => { const end = new Date(w.end + 'T12:00:00'); const cur = i === qh.length - 1; return `<div class="qh-c${cur ? ' cur' : ''}" title="Semana que termina el ${end.toLocaleDateString('es', {weekday: 'long', day: 'numeric', month: 'long'})}: ${w.pct} % usado${cur ? ' (en curso)' : ''}"><span class="qh-v">${w.pct}%</span><i class="${w.pct >= 90 ? 'hot' : w.pct >= 70 ? 'warm' : ''}" style="height:${Math.max(3, Math.min(100, w.pct))}%"></i><small>${fmtDay(end)}</small></div>`; }).join('')}</div><p class="note">Lo más alto que marcó <code>/usage</code> en cada semana de tu cuota. La oficina lo relee cada hora mientras está abierta; no gasta tokens.</p></div>` : '';
   // 3 · Tiempo esperándote: los últimos 7 días, quién esperó más hoy y qué permisos hicieron esperar más.
   const {days: wd, today: wt} = waitDays(), wtop = Math.max(10 * 60e3, ...wd.map(w => w.total)), todayKey = new Date().toLocaleDateString('sv');
   const perms = {};
@@ -74,7 +74,7 @@ function usagePanel() {
       ${rows ? `<div class="tablewrap"><table class="usage"><thead><tr><th>Semana (lun–dom)</th><th>Robots</th><th>Salida</th><th>Entrada</th><th>Caché leída</th><th>Caché escrita</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p>Todavía no hay sesiones registradas.</p>'}
     </div>`;
 }
-PANEL.addEventListener('click', e => { if (e.target.closest('[data-usage=refresh]')) loadClaudeStatus(true); });
+onClick('[data-usage=refresh]', () => loadClaudeStatus(true));
 PANEL.addEventListener('change', e => { if (e.target.id === 'hours-on') api('POST', '/api/config', {hoursOn: e.target.checked}).then(c => { st.config = c; renderPanel(); }).catch(() => {}); });
 loadWeeks();
 setInterval(loadWeeks, 60000);

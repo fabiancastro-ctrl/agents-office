@@ -66,7 +66,7 @@ async function searchArchive() {
     const r = await (await fetch(q.length >= 2 ? `/api/despedidos?q=${encodeURIComponent(q)}` : '/api/despedidos')).json();
     if ($('#search-arch', PANEL) !== box || searchUi.q.trim() !== q) return;
     const av = a => robotHead(COLORS[(a.color || 0) % COLORS.length], lookOf(a.name, null, {look: a.look}));
-    const when = a => new Date(a.leftAt).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+    const when = a => fmtWhen(a.leftAt);
     if (!q || q.length < 2) {
       box.innerHTML = r.recent?.length ? `<section class="sr-g"><h4>Se fueron hace poco <small>${r.total} en el archivo · ábrelos para ver su resumen o retomarlos</small></h4>${r.recent.slice(0, 12).map(a => `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-w">${av(a)}${esc(a.name)} · se fue ${when(a)}</span><span class="sr-t">${esc(a.title || a.label)}${a.note ? ` · 🗒 ${esc(a.note)}` : ''}</span></button>`).join('')}</section>` : '';
       return;
@@ -82,7 +82,7 @@ async function searchClosedSalas(q, box) {
   try {
     const r = await (await fetch(`/api/salas-cerradas?q=${encodeURIComponent(q)}`)).json();
     if ($('#search-arch', PANEL) !== box || searchUi.q.trim() !== q || !r.results?.length) return;
-    const qn = norm(q), when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short'});
+    const qn = norm(q), when = t => fmtDay(t);
     box.insertAdjacentHTML('beforeend', `<h4 class="sr-sep">Salas cerradas</h4>` + r.results.map(s => `<section class="sr-g" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><h4>🚪 <b>${esc(s.name)}</b><small>cerrada ${when(s.closedAt)}</small></h4>${s.hits.length ? s.hits.map(h => `<button type="button" class="sr-hit" data-docpath="${esc(h.path)}"><span class="sr-w">${h.where === 'hilo' ? `💬 ${esc(h.who)}` : '📋 contexto'}</span><span class="sr-t">${snippet(h.text, qn) || esc(plainMd(h.text).slice(0, 160))}</span></button>`).join('') + (s.more ? `<small class="muted">y ${s.more} más</small>` : '') : `<button type="button" class="sr-hit" data-docpath="${esc(s.context)}"><span class="sr-t">${esc(s.purpose || 'Abrir su contexto')}</span></button>`}</section>`).join(''));
   } catch { /* sin archivo: solo no se muestra */ }
 }
@@ -127,7 +127,7 @@ function drawArchivo() {
   const sb = $('#arch-salas', PANEL);
   if (sb) {
     const ss = (archUi.salas || []).filter(s => !q || norm(`${s.name} ${s.purpose} ${s.owner || ''} ${s.key}`).includes(q));
-    const whenS = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+    const whenS = t => fmtWhen(t);
     sb.innerHTML = !ss.length ? `<p class="muted">${archUi.salas?.length ? 'Nada coincide con el filtro.' : 'Todavía no se cierra ninguna sala.'}</p>`
       : ss.map(s => `<article class="ac-item" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><div class="ac-h"><b>${esc(s.name)}</b>${s.key ? `<span class="ac-title">${esc(s.key)}</span>` : ''}<small>${esc(s.reason || 'cerrada')} · ${whenS(s.closedAt)}</small></div>
         ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button><button type="button" class="btn sm" data-sala-exp="${esc(s.id)}" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo">⬇ Exportar</button>${s.reopen ? `<button type="button" class="btn sm" data-sala-reopen="${esc(s.id)}" title="La vuelve a abrir con su contexto, su hilo y sus notas; después mudas a los robots desde su ventana («🚪 Mudar a una sala»). Ya no se cierra sola.">↩ Reabrir</button>` : ''}<button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">🗑 Borrar</button></div></article>`).join('');
@@ -135,7 +135,7 @@ function drawArchivo() {
   const nRelevos = archUi.list.filter(a => a.relevo).length, rb = $('#arch-relevos', PANEL);
   if (rb && !rb.classList.contains('armed')) { rb.hidden = !nRelevos; rb.textContent = `🧹 Limpiar relevos (${nRelevos})`; rb.disabled = false; }
   const list = archUi.list.filter(a => !q || norm(`${a.name} ${a.title} ${a.note} ${a.label} ${a.excerpt}`).includes(q));
-  const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+  const when = t => fmtWhen(t);
   box.innerHTML = !archUi.list.length ? '<p class="muted">Todavía no despides a ningún robot. Cuando lo hagas, su resumen queda aquí.</p>'
     : !list.length ? '<p class="muted">Nada coincide con el filtro.</p>'
     : list.map(a => `<article class="ac-item" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><div class="ac-h">${robotHead(COLORS[(a.color || 0) % COLORS.length], lookOf(a.name, null, {look: a.look}))}<b>${esc(a.name)}</b>${a.title ? `<span class="ac-title">📌 ${esc(a.title)}</span>` : ''}<span class="ac-by ${a.summaryBy === 'robot' ? 'r' : ''}">📝 ${a.summaryBy === 'robot' ? 'resumen del robot' : 'resumen de la oficina'}</span>${a.relevo ? '<span class="ac-by">🔁 relevo</span>' : ''}<small>se fue ${when(a.leftAt)}</small></div>
@@ -155,7 +155,7 @@ PANEL.addEventListener('click', async e => {
   }
   const sd = e.target.closest('[data-sala-del]');
   if (sd) { // dos clics: el primero arma, el segundo (en 3 s) borra
-    if (!sd.classList.contains('armed')) { sd.classList.add('armed'); sd.textContent = '¿Borrar?'; setTimeout(() => { sd.classList.remove('armed'); sd.textContent = '🗑 Borrar'; }, 3000); return; }
+    if (!armed(sd, '¿Borrar?', 3000, '🗑 Borrar')) return;
     sd.disabled = true;
     try {
       const r = await api('DELETE', `/api/salas-cerradas/${sd.dataset.salaDel}`);
@@ -167,7 +167,7 @@ PANEL.addEventListener('click', async e => {
   }
   const lr = e.target.closest('[data-arch-relevos]');
   if (lr) { // dos clics, como «Quitar»
-    if (!lr.classList.contains('armed')) { lr.classList.add('armed'); lr.textContent = '¿Limpiar todos los relevos?'; setTimeout(() => { lr.classList.remove('armed'); drawArchivo(); }, 3000); return; }
+    if (!armed(lr, '¿Limpiar todos los relevos?', 3000, drawArchivo)) return;
     lr.disabled = true; lr.classList.remove('armed');
     try {
       const r = await api('POST', '/api/despedidos/limpiar-relevos');
@@ -178,7 +178,7 @@ PANEL.addEventListener('click', async e => {
     return;
   }
   const b = e.target.closest('[data-arch-del]'); if (!b) return;
-  if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Quitar?'; setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Quitar'; }, 3000); return; }
+  if (!armed(b, '¿Quitar?', 3000, 'Quitar')) return;
   try { const r = await api('DELETE', `/api/despedidos/${b.dataset.archDel}`); if (r.papelera) toast('Quitado: su resumen quedó en la Papelera.'); } catch { /* toast ya mostrado */ }
 });
 
@@ -186,7 +186,7 @@ PANEL.addEventListener('click', async e => {
 function archPanel(a) {
   if (!a) return '<p class="muted">Abre un robot desde el buscador.</p>';
   const L = lookOf(a.name, null, {look: a.look});
-  const when = t => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+  const when = t => fmtWhen(t);
   return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % COLORS.length], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>📌 ${esc(a.title)}</b></div>` : ''}${a.note ? `<div class="rt-note"><span>🗒 ${esc(a.note)}</span></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="export-arch" title="Guarda su conversación en docs/conversaciones-robots/ (si su transcript sigue en disco, completa; si no, lo que guardó la oficina) con su resumen al final">⬇ Exportar</button><button type="button" class="btn sm" data-act="wake-arch" title="Crea un despertador que retoma esta tarea cuando pase algo (un PR aprobado, un ticket que cambia, una hora)">⏰ Retomar cuando…</button><button type="button" class="btn sm" data-act="arch-back">← Volver</button></div>
     <div class="rp-grid"><div class="rp-col"><h4>Conversación <small class="muted">(sin herramientas)</small></h4><div class="log" id="arch-log" data-src="@arch" style="--c:${COLORS[(a.color || 0) % COLORS.length]}">${renderLog(a.log, a.name)}</div></div>
     <div class="rp-col"><div class="sumbox lg agent" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><span class="w">📝 Super resumen · ${a.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'}</span><span class="lg-acts">${a.summaryPath ? `<button type="button" class="cp-btn" data-docpath="${esc(a.summaryPath)}" title="${esc(a.summaryPath)}">📄 Documento</button>` : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg">📋 Copiar</button></span><div class="x md-chat">${mdHtml(a.summary || '_Sin resumen._')}</div></div>

@@ -242,8 +242,7 @@ function appendLog(entry, a, lg = $('#log', PANEL)) {
   if (stick) lg.scrollTop = lg.scrollHeight;
 }
 PANEL.addEventListener('toggle', e => { const k = e.target.dataset?.k; if (k) e.target.open ? openTools.add(k) : openTools.delete(k); }, true);
-PANEL.addEventListener('click', e => {
-  const b = e.target.closest('[data-toolmode]'); if (!b) return;
+onClick('[data-toolmode]', b => {
   st.toolMode = b.dataset.toolmode; prefSet('toolMode', st.toolMode);
   const a = st.robots.get(st.selected), lg = $('#log', PANEL);
   if (a && lg) { lg.innerHTML = renderLog(a.log, a.data.name); lg.scrollTop = lg.scrollHeight; }
@@ -261,9 +260,8 @@ function lookEditor(d) {
   // Probador: el robot en grande con lo que vas eligiendo; da una vuelta en cada cambio.
   return `<div class="lk" id="look-ed"><span class="lk-prev" title="Así se ve ${esc(d.name)}">${robotSVG(COLORS[d.color % COLORS.length], L)}</span><span class="lk-sw">${COLORS.map((c, i) => `<button type="button" class="${d.color % COLORS.length === i ? 'on' : ''}" style="background:${c}" data-look="color" data-v="${i}" aria-label="Color ${COLOR_NAMES[i] || i + 1}" title="${COLOR_NAMES[i] || ""}"></button>`).join('')}</span>${cyc('ant', ANTENNAS.length, 'Antena')}${cyc('visor', VISORS.length, 'Visor', VISOR_NAMES)}${cyc('acc', HEAD_ACC.length, 'Accesorio', ACC_NAMES)}<button type="button" class="btn sm ghost" data-look="reset">Restablecer</button><button type="button" class="btn sm ghost" data-look="close">Listo</button></div>`;
 }
-PANEL.addEventListener('click', async e => {
-  const b = e.target.closest('[data-look]'); if (!b) return;
-  const d = st.robots.get(st.selected)?.data; if (!d) return;
+onClick('[data-look]', async b => {
+  const d =st.robots.get(st.selected)?.data; if (!d) return;
   const k = b.dataset.look;
   if (k === 'open' || k === 'close') { lookUi.open = k === 'open' ? d.name : null; return renderPanel(); }
   const L = lookOf(d.name, d.place, d), N = {ant: ANTENNAS.length, visor: VISORS.length, acc: HEAD_ACC.length};
@@ -282,9 +280,8 @@ function noteEditor(d) {
   return d.note ? `<div class="rt-note" id="note-view"><span>🗒 ${esc(d.note)}</span><button type="button" class="btn sm ghost" data-note="edit">✎</button><button type="button" class="btn sm ghost" data-note="clear" title="Quitar la nota">✕</button></div>`
     : `<button type="button" class="btn sm ghost" id="note-view" data-note="edit" title="Una nota tuya: qué espera, de quién, qué falta">🗒 Nota</button>`;
 }
-PANEL.addEventListener('click', e => {
-  const b = e.target.closest('[data-note]'); if (!b) return;
-  const d = st.robots.get(st.selected)?.data; if (!d) return;
+onClick('[data-note]', b => {
+  const d =st.robots.get(st.selected)?.data; if (!d) return;
   if (b.dataset.note === 'clear') return void api('POST', `/api/robots/${d.name}/note`, {note: ''}).catch(() => {});
   noteUi.editing = b.dataset.note === 'edit' ? d.name : null;
   renderPanel();
@@ -336,8 +333,7 @@ function titleEditor(d) {
   const sug = !d.title && titleOf(d);
   return `<div class="rt-title" id="title-view">${d.title ? `<b>📌 ${esc(d.title)}</b>` : sug ? `<b class="auto">📌 ${esc(sug)}</b><small class="muted">sugerido</small><button type="button" class="btn sm ghost" data-title="accept" title="Guardar este título">✓ Usar</button>` : '<span class="muted">Sin título</span>'}<button type="button" class="btn sm ghost" data-title="edit" title="Ponle un título para saber qué hace">${d.title || sug ? '✎ Cambiar' : '✎ Ponle un título'}</button></div>`;
 }
-PANEL.addEventListener('click', e => {
-  const b = e.target.closest('[data-title]'); if (!b) return;
+onClick('[data-title]', b => {
   if (b.dataset.title === 'accept') { const d = st.robots.get(st.selected)?.data; if (d) api('POST', `/api/robots/${d.name}/title`, {title: titleOf(d)}).catch(() => {}); return; }
   titleUi.editing = b.dataset.title === 'edit' ? st.selected : null;
   renderPanel();

@@ -1,11 +1,7 @@
 /* ---------- eventos ---------- */
 // Baja rápida desde el mapa: primer clic arma la ✕ («¿Baja?»), el segundo dentro de 3s la confirma.
 async function quickKill(btn, name) {
-  if (!btn.classList.contains('armed')) {
-    btn.classList.add('armed'); btn.textContent = '¿Baja?';
-    clearTimeout(btn._t); btn._t = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '×'; }, 3000);
-    return;
-  }
+  if (!armed(btn, '¿Baja?', 3000, '×')) return;
   clearTimeout(btn._t); btn.disabled = true; btn.textContent = '…';
   try { await api('DELETE', `/api/robots/${name}`); } catch { btn.disabled = false; btn.classList.remove('armed'); btn.textContent = '×'; }
 }
@@ -16,7 +12,8 @@ MAP.addEventListener('click', e => {
   const on = e.target.closest('[data-out-need]'); if (on?.dataset.outNeed) return select(on.dataset.outNeed);
   const sdm = e.target.closest('[data-sala-dismiss]');
   if (sdm) { // dos clics: el primero arma, el segundo (en 3 s) despide
-    if (!sdm.classList.contains('armed')) { sdm.classList.add('armed'); const t = sdm.textContent; sdm.textContent = '¿Seguro? Clic otra vez'; setTimeout(() => { sdm.classList.remove('armed'); sdm.textContent = t; renderBoard(); }, 3000); return; }
+    const t = sdm.textContent;
+    if (!armed(sdm, '¿Seguro? Clic otra vez', 3000, () => { sdm.textContent = t; renderBoard(); })) return;
     sdm.disabled = true;
     api('POST', `/api/salas/${sdm.dataset.salaDismiss}/despedir-equipo`).then(r => toast(r.despedidos.length ? `Despedí a ${r.despedidos.join(', ')}${r.quedan ? ` · quedan ${r.quedan} en la sala` : ''}` : 'No había nadie que ya entregara.')).catch(() => {}).finally(() => { sdm.disabled = false; sdm.classList.remove('armed'); });
     return;
@@ -74,7 +71,7 @@ function randomName() {
   }
   return 'robot' + Date.now() % 1000;
 }
-PANEL.addEventListener('click', e => { if (e.target.id === 'job-name-rand') { const el = $('#job-name'); el.value = randomName(); el.focus(); } });
+onClick('#job-name-rand', () => { const el = $('#job-name'); el.value = randomName(); el.focus(); });
 // El daemon solo acepta minúsculas, números y guiones: se corrige mientras escribes.
 PANEL.addEventListener('input', e => {
   if (e.target.id !== 'job-name') return;
@@ -294,11 +291,7 @@ $('#week-chip').addEventListener('click', () => $('#btn-usage').click());
 $('#btn-dismiss').addEventListener('click', async () => {
   const b = $('#btn-dismiss');
   const done = [...st.robots.values()].filter(a => a.data.state === 'done' && !onHold(a.data)).map(a => a.data.name);
-  if (!b.classList.contains('armed')) {
-    b.classList.add('armed'); b.textContent = `¿Despedir ${done.join(', ')}?`;
-    clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove('armed'); renderMeta(); }, 4000);
-    return;
-  }
+  if (!armed(b, `¿Despedir ${done.join(', ')}?`, 4000, renderMeta)) return;
   clearTimeout(b._t); b.classList.remove('armed');
   await Promise.allSettled(done.map(n => api('DELETE', `/api/robots/${n}`)));
   renderMeta();

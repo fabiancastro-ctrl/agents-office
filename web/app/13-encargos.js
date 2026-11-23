@@ -9,7 +9,7 @@ function spawnBox(d) {
     ${q.items.map((it, i) => `<fieldset class="sp-it"><label class="sp-on"><input type="checkbox" checked data-sp-on="${i}"> Lanzar</label><input class="sp-n" data-sp-n="${i}" maxlength="20" value="${esc(it.name || '')}" placeholder="nombre" title="Nombre del robot: minúsculas, números y guiones" pattern="[a-z0-9-]{1,20}"><input class="sp-t" data-sp-t="${i}" maxlength="60" value="${esc(it.title)}" placeholder="Título"><textarea class="sp-x" data-sp-x="${i}" rows="4">${esc(it.text)}</textarea></fieldset>`).join('')}
     <div class="row"><button class="btn primary sm" data-act="spawn-ok">Lanzar</button><button type="button" class="btn danger sm" data-act="spawn-no">No, gracias</button></div></form>`;
 }
-PANEL.addEventListener('click', e => { const b = e.target.closest('[data-unqueue]'); if (b && st.selected) api('POST', `/api/robots/${st.selected}/cola/${b.dataset.unqueue}`).catch(() => {}); });
+onClick('[data-unqueue]', b => { if (st.selected) api('POST', `/api/robots/${st.selected}/cola/${b.dataset.unqueue}`).catch(() => {}); });
 async function decideSpawn(d, allow) {
   const f = PANEL.querySelector(`form[data-spawn="${CSS.escape(d.spawnReq.id)}"]`);
   const items = f ? d.spawnReq.items.map((it, i) => ({name: f.querySelector(`[data-sp-n="${i}"]`)?.value.trim().toLowerCase() || '', title: f.querySelector(`[data-sp-t="${i}"]`).value, text: f.querySelector(`[data-sp-x="${i}"]`).value, on: f.querySelector(`[data-sp-on="${i}"]`).checked})).filter(x => x.on && x.text.trim()) : d.spawnReq.items;
@@ -98,10 +98,10 @@ function renderDoor() {
 function doorSection() {
   if (!st.door.length) return '';
   return `<section class="dlg-sec"><h4>🚪 En la puerta (${st.door.length})</h4><p class="note">Entran solos, en este orden, cuando se libera un escritorio. Lo que hayas subido con + entra de inmediato.</p>
-    <div class="kid-l">${st.door.map((q, i) => `<span class="kid q"><b>${i + 1}.</b> ${q.name ? `<b>${esc(q.name)}</b> · ` : ''}${esc(q.title || 'encargo')}<span class="pill">desde ${esc(new Date(q.at).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'}))}</span><button type="button" class="btn sm ghost" data-door-del="${esc(q.id)}" title="Sacarlo de la puerta: no se lanza">✕</button></span>`).join('')}</div></section>`;
+    <div class="kid-l">${st.door.map((q, i) => `<span class="kid q"><b>${i + 1}.</b> ${q.name ? `<b>${esc(q.name)}</b> · ` : ''}${esc(q.title || 'encargo')}<span class="pill">desde ${esc(fmtTime(q.at))}</span><button type="button" class="btn sm ghost" data-door-del="${esc(q.id)}" title="Sacarlo de la puerta: no se lanza">✕</button></span>`).join('')}</div></section>`;
 }
 $('#btn-door').addEventListener('click', () => select('@new'));
-PANEL.addEventListener('click', e => { const b = e.target.closest('[data-door-del]'); if (b) api('DELETE', `/api/puerta/${b.dataset.doorDel}`).catch(() => {}); });
+onClick('[data-door-del]', b => api('DELETE', `/api/puerta/${b.dataset.doorDel}`).catch(() => {}));
 
 function newPanel() {
   const max = st.config.maxRobots || 3;
@@ -164,7 +164,7 @@ function inboxPanel() {
     return `<div class="inbox-item ${isNew ? 'new' : ''}">
       <div class="meta-i" data-docpath="${esc(i.path)}" data-docid="${esc(i.id)}" role="button" tabindex="0">
         <b>${esc(fileName(i.path))}</b>${i.critical > 0 ? ` <span class="tagx crit">⚠ ${i.critical} crítico${i.critical === 1 ? '' : 's'}</span>` : ''}${i.updated ? ' <span class="tagx">actualizado</span>' : ''}${isTempDoc(i.path) ? ' <span class="tagx tmp">temporal</span>' : ''}
-        <div class="pathx" title="${esc(i.path)}">${esc(shortPath(i.path))} · ${new Date(i.at).toLocaleString('es', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})}</div>
+        <div class="pathx" title="${esc(i.path)}">${esc(shortPath(i.path))} · ${fmtWhen(i.at, {day: '2-digit'})}</div>
       </div>
       <div class="row">
         <button class="btn sm" data-inbox="open" data-id="${esc(i.id)}">Ver</button>

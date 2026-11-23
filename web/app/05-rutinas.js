@@ -3,7 +3,7 @@ const DAYN = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const daysTxt = ds => { const s = [...(ds || [])].sort().join(); return s === '0,1,2,3,4,5,6' ? 'todos los días' : s === '1,2,3,4,5' ? 'días hábiles' : (ds || []).map(d => DAYN[d]).join(', '); };
 function schedTxt(sch, everyMin) {
   if (!sch) return `cada ${everyMin} min`;
-  if (sch.mode === 'once') return `una sola vez, ${new Date(sch.at).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})}`;
+  if (sch.mode === 'once') return `una sola vez, ${fmtWhen(sch.at)}`;
   if (sch.mode === 'daily') return `${daysTxt(sch.days)} a las ${sch.time}`;
   return `cada ${sch.everyMin} min${sch.hours ? ` · ${daysTxt(sch.hours.days)} de ${sch.hours.from} a ${sch.hours.to}` : ''}`;
 }
@@ -54,7 +54,7 @@ function routineSummary(rt) {
     const c = rt.cond || {}, w = rt.wake || {};
     const cond = c.kind === 'pr' ? `cuando ${c.repo}#${c.number} ${WAKE_EV[c.event]}` : c.kind === 'nexus' ? `cuando ${c.key} ${c.to === 'any' ? 'cambie de estado' : c.to === 'completed' ? 'se complete' : `pase a «${c.to}»`}` : `a las ${new Date(c.at).toLocaleString('es')}`;
     const act = w.kind === 'say' ? `escribirle a ${w.robot}` : w.kind === 'retake' ? 'retomar un resumen del archivo' : w.kind === 'launch' ? 'lanzar un robot nuevo' : 'avisarte (sin gastar cuota)';
-    return [`Despertador ${cond} · revisa cada ${rt.schedule?.everyMin || 5} min`, `→ ${act}${w.text ? `: ${w.text}` : ''}`, ...(rt.status ? [`Ahora: ${rt.status}`] : []), ...(rt.fired ? [`✓ ${new Date(rt.fired.at).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})}: ${rt.fired.what} · ${rt.fired.done}`] : [])];
+    return [`Despertador ${cond} · revisa cada ${rt.schedule?.everyMin || 5} min`, `→ ${act}${w.text ? `: ${w.text}` : ''}`, ...(rt.status ? [`Ahora: ${rt.status}`] : []), ...(rt.fired ? [`✓ ${fmtWhen(rt.fired.at)}: ${rt.fired.what} · ${rt.fired.done}`] : [])];
   }
   const s = rt.source;
   const where = s.scope === 'org' ? `toda ${s.owner}` : s.repo;
@@ -66,7 +66,7 @@ function historyHtml(rt) {
   const h = rt.history || [];
   if (!h.length) return '';
   const tok = n => n == null ? '' : ` · ${fmtTok(n)} tokens`;
-  return `<details class="rt-hist"><summary>Historial (${h.length})</summary>${h.map(x => `<div class="rh ${x.error ? 'err' : ''}"><time>${new Date(x.at).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})}</time><span>${esc(x.note || '')}</span>${x.robots.length ? `<span class="rh-r">${x.robots.map(r => `${st.robots.has(r.name) ? `<button type="button" class="kid inline" data-pick="${esc(r.name)}">${esc(r.name)}</button>` : esc(r.name)} <small>${esc(r.state ? STATE_LABEL[r.state] || r.state : '')}${tok(r.tokens)}</small>`).join(' · ')}</span>` : ''}</div>`).join('')}</details>`;
+  return `<details class="rt-hist"><summary>Historial (${h.length})</summary>${h.map(x => `<div class="rh ${x.error ? 'err' : ''}"><time>${fmtWhen(x.at)}</time><span>${esc(x.note || '')}</span>${x.robots.length ? `<span class="rh-r">${x.robots.map(r => `${st.robots.has(r.name) ? `<button type="button" class="kid inline" data-pick="${esc(r.name)}">${esc(r.name)}</button>` : esc(r.name)} <small>${esc(r.state ? STATE_LABEL[r.state] || r.state : '')}${tok(r.tokens)}</small>`).join(' · ')}</span>` : ''}</div>`).join('')}</details>`;
 }
 
 // Formulario: crear, editar o duplicar. rtUi.edit = id de la rutina que se edita.
@@ -207,13 +207,12 @@ function fillRoutineForm(rt, dup) {
   }
   syncKind();
 }
-PANEL.addEventListener('click', async e => {
-  if (e.target.closest('[data-rt-cancel]')) { rtUi.edit = null; rtUi.preview = ''; PANEL.dataset.view = ''; return renderPanel(); }
-  const pv = e.target.closest('[data-rt-preview]'); if (!pv) return;
+onClick('[data-rt-cancel]', () => { rtUi.edit = null; rtUi.preview = ''; PANEL.dataset.view = ''; renderPanel(); });
+onClick('[data-rt-preview]', async pv => {
   const box = $('#rt-preview', PANEL); pv.disabled = true; box.innerHTML = '<p class="muted">Consultando… (no gasta cuota)</p>';
   try {
     const r = await api('POST', '/api/routines/preview', routineBody());
-    const when = t => new Date(t).toLocaleString('es', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+    const when = t => fmtWhen(t, {weekday: 'short'});
     box.innerHTML = r.kind === 'watch'
       ? `<b>Ahora coinciden ${r.open.length} PR${r.open.length === 1 ? '' : 's'} abiertos.</b> ${r.onlyNew ? 'Con «solo lo que pase desde ahora» hoy no lanzaría ninguno: los marca como vistos y espera novedades.' : r.fire.length ? `Al crearla lanzaría <b>${r.fire.length} robot${r.fire.length === 1 ? '' : 's'}</b> (uno por PR).` : 'No lanzaría ninguno.'}<ul>${r.open.slice(0, 15).map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.key)}</a> · ${esc(p.title)} <small>${esc(p.author)}${p.draft ? ' · draft' : ''}</small></li>`).join('')}${r.open.length > 15 ? `<li class="muted">…y ${r.open.length - 15} más</li>` : ''}</ul>`
       : r.kind === 'wake' ? `<b>Ahora:</b> ${esc(r.status)}. ${r.hit ? `<b class="rt-err">Ya se cumple</b>: al crearlo actuaría enseguida (${esc(r.what)}).` : 'Todavía no se cumple: queda esperando.'}`

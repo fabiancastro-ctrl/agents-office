@@ -54,7 +54,7 @@ function setupPanel() {
       </div>
     </form>`;
 }
-PANEL.addEventListener('click', e => { if (e.target.closest('[data-setup=check]')) checkWorkspace($('#ws-path').value); });
+onClick('[data-setup=check]', () => checkWorkspace($('#ws-path').value));
 PANEL.addEventListener('submit', async e => {
   if (e.target.id !== 'setup-form') return;
   e.preventDefault();

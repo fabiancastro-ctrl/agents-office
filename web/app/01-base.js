@@ -1,5 +1,35 @@
 const $ = (s, r = document) => r.querySelector(s);
 const MAP = $('#map'), PANEL = $('#panel');
+// Despachador de clics del panel: un solo listener sobre PANEL. onClick(selector, (el, e) => …) registra un manejador que
+// corre cuando el clic cae dentro de `selector` (el = e.target.closest(selector)). Cada manejador es independiente y corren
+// todos los que coincidan, en el orden en que se registraron. Los manejadores con varias ramas que dependen del `return`
+// entre ellas siguen con su propio PANEL.addEventListener('click', …).
+const clickRules = [];
+const onClick = (selector, fn) => { clickRules.push([selector, fn]); };
+PANEL.addEventListener('click', e => {
+  for (const [selector, fn] of clickRules) {
+    const el = e.target.closest(selector);
+    if (!el) continue;
+    try { fn(el, e); } catch (err) { queueMicrotask(() => { throw err; }); } // un manejador roto no deja sin clic a los demás
+  }
+});
+// Botón de «dos clics para confirmar»: el primer clic lo arma (clase `armed` + `label`) y devuelve false; el segundo, mientras
+// siga armado, devuelve true y quien llama ejecuta la acción. Pasado `ms` se desarma solo: `restore` es el texto con que
+// vuelve (por defecto el que tenía) o una función que lo repinta. El temporal queda en btn._t por si hay que cancelarlo.
+function armed(btn, label, ms = 3000, restore) {
+  if (btn.classList.contains('armed')) return true;
+  const prev = btn.textContent;
+  btn.classList.add('armed'); btn.textContent = label;
+  btn._t = setTimeout(() => {
+    btn.classList.remove('armed');
+    if (typeof restore === 'function') restore(); else btn.textContent = restore ?? prev;
+  }, ms);
+  return false;
+}
+// Fechas en español, un formato por función. `extra` agrega o cambia campos (p. ej. {weekday: 'short'}, {hour: 'numeric'}).
+const fmtWhen = (t, extra) => new Date(t).toLocaleString('es', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', ...extra}); // 3 may, 14:05
+const fmtTime = (t, extra) => new Date(t).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit', ...extra}); // 14:05
+const fmtDay = (t, opts = {day: 'numeric', month: 'short'}) => new Date(t).toLocaleDateString('es', opts); // 3 may
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const COLORS = ROBOT_COLORS; // web/robot-art.js
 const STATE_LABEL = {idle: 'en espera', walking: 'llegando', working: 'trabajando', delegating: 'con subagentes', input: 'te necesita', done: 'terminó'};

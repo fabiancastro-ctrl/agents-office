@@ -317,7 +317,7 @@ CARDS.addEventListener('click', async e => {
       case 'hold-allow': return a?.data.hold && await api('POST', `/api/decision/${a.data.hold.id}`, {decision: 'allow'});
       case 'hold-deny': return a?.data.hold && await api('POST', `/api/decision/${a.data.hold.id}`, {decision: 'deny'});
       case 'kill':
-        if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Seguro?'; setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Despedir'; }, 3000); return; }
+        if (!armed(b, '¿Seguro?', 3000, 'Despedir')) return;
         b.disabled = true; return await api('DELETE', `/api/robots/${name}`);
     }
   } catch { /* toast ya mostrado */ }

@@ -57,7 +57,7 @@ function renderCoffee() {
   el.style.setProperty('--lvl', `${left}%`);
   el.classList.toggle('low', left <= 30 && left > 10);
   el.classList.toggle('empty', left <= 10);
-  const at = s.quotaAt ? new Date(s.quotaAt).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'}) : '';
+  const at = s.quotaAt ? fmtTime(s.quotaAt) : '';
   el.title = `Cafetera: queda ${left} % de tu cuota semanal (usado ${pct} %${at ? `, medido a las ${at}` : ''}). Se vuelve a llenar cuando se renueva la cuota.`;
 }
 function renderGrowth() {
@@ -94,7 +94,7 @@ function renderGrowth() {
   const bars = days.map(x => { const dt = new Date(x.day + 'T12:00:00'); const future = x.day > todayKey; return `<i class="tb-bar${x.day === todayKey ? ' hoy' : ''}${future ? ' fut' : ''}" style="--h:${future ? 0 : Math.max(4, Math.round(x.n * 100 / top))}%" title="${dt.toLocaleDateString('es', {weekday: 'long', day: 'numeric'})}: ${x.n} tarea${x.n === 1 ? '' : 's'}"><u>${DOW[dt.getDay()]}</u></i>`; }).join('');
   $('#tboard').innerHTML = days.length ? `<small>HOY <b>${s.today}</b></small><span class="tb-bars">${bars}</span>` : `<small>HOY</small><b>${s.today}</b><small>tareas</small>`;
   const next = GROW_AT[lvl];
-  const until = s.weekTo ? new Date(s.weekTo).toLocaleString('es', {weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'}) : '';
+  const until = s.weekTo ? fmtWhen(s.weekTo, {weekday: 'short', hour: 'numeric'}) : '';
   $('#tboard').title = `Plantas nivel ${lvl} de 4 · ${week} tareas esta semana de la cuota${next ? ` · el siguiente nivel (más plantas) llega a las ${next}` : ' · nivel máximo'}${until ? ` · se cambian las materas al renovarse la cuota (${until})` : ''}. Hoy: ${s.today}. En total: ${s.total} (los trofeos cuentan el total).`;
 }
 // Cuadro «Empleado de la semana» en tu escritorio: el robot que más tokens gastó desde que se renovó tu cuota
@@ -109,7 +109,7 @@ function renderFame() {
   const look = lookOf(em.name, live?.place || null, live || {look: em.look, crown: 0});
   const html = `<button type="button" class="eotm-zoom" data-fame-wall title="Muro de la fama: los últimos 4 empleados de la semana" aria-label="Ver los últimos 4 empleados de la semana">🔍</button><small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % COLORS.length], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
   if (box._html !== html) { box._html = html; box.innerHTML = html; }
-  const p = st.fame.period, d = t => new Date(t).toLocaleString('es', {weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'});
+  const p = st.fame.period, d = t => fmtWhen(t, {weekday: 'short', hour: 'numeric'});
   box.title = `👑 Empleado de la semana: ${em.name}${em.title ? ` («${em.title}»)` : ''} · ${em.tokens.toLocaleString('es')} tokens desde ${d(p.from)}.\n`
     + `Se reinicia cuando se renueva tu cuota semanal: ${d(p.to)}${p.known ? '' : ' (aún sin leer /usage: se toma el lunes)'}.\n`
     + (em.present ? `Está en la oficina con la corona ${crown >= 2 ? 'de dos fuegos 🔥🔥: también es el que más gastó en esta sesión de 5 h' : 'de un fuego 🔥'}. Clic para verlo.` : 'Ya no está en la oficina (está en el archivo).');
@@ -123,7 +123,7 @@ $('#eotm').addEventListener('click', e => {
 const famaUi = {weeks: null};
 function famaPanel() {
   const w = famaUi.weeks;
-  const d = t => new Date(t).toLocaleDateString('es', {day: 'numeric', month: 'short'});
+  const d = t => fmtDay(t);
   const frames = !w ? '<p class="muted">Calculando…</p>' : w.map(x => x.name ? `<figure class="fame-f${x.current ? ' cur' : ''}"><small>${x.current ? 'ESTA SEMANA' : `${d(x.from)} – ${d(x.to)}`}</small><span class="fame-face">${robotHead(COLORS[(x.color || 0) % COLORS.length], lookOf(x.name, null, {look: x.look}))}</span><b>${esc(x.name)}</b><i>${fmtTok(x.tokens)} tokens</i>${x.title ? `<em>📌 ${esc(x.title)}</em>` : ''}<span class="fame-st">${x.present ? 'sigue en la oficina' : 'ya se fue'}</span></figure>` : `<figure class="fame-f empty"><small>${d(x.from)} – ${d(x.to)}</small><span class="fame-face">—</span><b>Nadie</b><i>sin gasto</i></figure>`).join('');
   return `<div class="dlg-head"><h3>🏆 Muro de la fama</h3><p>El robot que más tokens gastó en cada semana de tu cuota (con sus subagentes), las últimas 4. Sale de los transcripts: no gasta cuota.</p></div><div class="fame-wall">${frames}</div>`;
 }
@@ -167,7 +167,7 @@ $('#btn-theme').addEventListener('click', () => setTheme(document.documentElemen
 setTheme(prefGet('theme', 'dark') === 'light');
 
 // Hora corta (14:05) para el chat, el buscador y los mensajes fijados.
-const hhmm = t => new Date(t).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit'});
+const hhmm = t => fmtTime(t);
 
 // El tiempo de cada tarjeta avanza solo; los tokens de la semana y la cuota se refrescan cada 5 min.
 setInterval(() => document.querySelectorAll('#cards [data-start]').forEach(el => { if (el.dataset.start) el.textContent = fmtDur(Date.now() - Date.parse(el.dataset.start)); }), 20000);

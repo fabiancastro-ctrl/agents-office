@@ -21,7 +21,7 @@ function changesBlock(d) {
       const others = r.others.length ? `<div class="chg-sep">Otros cambios sin commit en este repo${r.othersMore ? ` (y ${r.othersMore} más)` : ''}</div>${r.others.map(chgRow).join('')}` : '';
       return `<div class="chg-repo"><div class="chg-h"><b>${esc(r.name)}</b>${r.branch ? `<code>${esc(r.branch)}</code>` : ''}<small>${r.pending ? `${r.pending} sin commit` : 'todo en commits'}</small></div>${mine}${others}</div>`;
     }).join('') + (c.outside.length ? `<div class="chg-repo"><div class="chg-h"><b>Fuera de git</b></div>${c.outside.map(f => chgRow({ ...f, status: 'fuera de git', pending: false })).join('')}</div>` : '')
-      + `<small class="muted chg-at">Consultado ${new Date(c.at).toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit', second: '2-digit'})}</small>`;
+      + `<small class="muted chg-at">Consultado ${fmtTime(c.at, {second: '2-digit'})}</small>`;
   }
   const pend = c ? c.repos.reduce((n, r) => n + r.files.filter(f => f.pending).length, 0) : null;
   const sum = `🧾 Cambios <small>${d.files} archivo${d.files === 1 ? '' : 's'} tocado${d.files === 1 ? '' : 's'}${pend != null ? ` · ${pend} sin commit` : ''}</small>`;
@@ -43,10 +43,8 @@ PANEL.addEventListener('toggle', e => {
   schedulePanel();
 }, true);
 
-PANEL.addEventListener('click', async e => {
-  if (e.target.closest('[data-chg-refresh]')) { e.preventDefault(); chg.open = true; $('#chg-box', PANEL)?.setAttribute('open', ''); return loadChanges(st.selected); }
-  const f = e.target.closest('[data-chg-open]');
-  if (!f) return;
+onClick('[data-chg-refresh]', (_, e) => { e.preventDefault(); chg.open = true; $('#chg-box', PANEL)?.setAttribute('open', ''); loadChanges(st.selected); });
+onClick('[data-chg-open]', async f => {
   const r = await api('POST', `/api/robots/${encodeURIComponent(st.selected)}/cambios-abrir`, { path: f.dataset.chgOpen }).catch(() => null);
   if (r) toast(r.mode === 'diff' ? 'Abierto en VS Code: el último commit a la izquierda, el archivo de hoy a la derecha' : 'Abierto en el editor');
 });
