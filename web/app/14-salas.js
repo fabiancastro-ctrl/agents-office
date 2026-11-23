@@ -51,20 +51,33 @@ function renderSalaChips() {
           need = needers.length;
         const done = s.done && !need; // equipo terminado: todos entregaron
         const prog = salaProgress(s); // 3 · avance del equipo, visible sin entrar
-        return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><span class="sala-face" style="--st:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}">${salaFace(s)}</span><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? '' : done ? ' · ✓ terminó' : prog ? ` · ${prog.ok}/${prog.n} entregaron` : ` · ${s.thread.length} msj`}</small>${
-          need
-            ? `<button type="button" class="rchip-alert" data-need-robot="${esc(needers[0].name)}" title="Abrir a ${esc(needers[0].name)} sin entrar a la sala${
-                need > 1
-                  ? ` (también: ${esc(
-                      needers
-                        .slice(1)
-                        .map(d => d.name)
-                        .join(', ')
-                    )})`
-                  : ''
-              }">⚠ ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}</button>`
-            : ''
-        }</span>${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
+        // Sticky-note colour by state (never grey: grey means disconnected): amber needs you, green done, teal working, cream empty.
+        const tone = need ? 'need' : done ? 'done' : n ? 'work' : 'empty';
+        // Stable small tilt per room: hash of the id with >>> (unsigned), mapped to -2.4..+2.4 degrees.
+        let h = 0;
+        for (const ch of s.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        const rot = (((h >>> 3) % 7) - 3) * 0.8;
+        const faces = bots
+          .slice(0, 5)
+          .map(a => {
+            const d = a.data;
+            return `<span class="sn-bot${d.state === 'done' ? ' ok' : ''}">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}${d.state === 'done' ? '<b aria-hidden="true">✓</b>' : ''}</span>`;
+          })
+          .join('');
+        const more = n > 5 ? `<span class="sn-more">+${n - 5}</span>` : '';
+        const alert = need
+          ? `<button type="button" class="rchip-alert" data-need-robot="${esc(needers[0].name)}" title="Abrir a ${esc(needers[0].name)} sin entrar a la sala${
+              need > 1
+                ? ` (también: ${esc(
+                    needers
+                      .slice(1)
+                      .map(d => d.name)
+                      .join(', ')
+                  )})`
+                : ''
+            }">⚠ ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}</button>`
+          : `<small class="sn-state">${done ? '✓ terminó' : prog ? `${prog.ok}/${prog.n} entregaron` : n ? `${s.thread.length} msj` : 'sin robots'}</small>`;
+        return `<div class="rchip sala-note sn-${tone}${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" style="--rot:${rot.toFixed(1)}deg" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'} · ${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><i class="sn-pin" aria-hidden="true">📌</i><span class="sn-head"><span class="sala-face">${salaFace(s)}</span><b class="sn-name">${esc(s.name)}</b></span><span class="sn-bots">${faces}${more}</span>${alert}${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
       })
       .join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';
   // Si alguien dentro de una sala te necesita, todo el cuarto «Salas de épica» late en ámbar (sus robots no se ven afuera).
