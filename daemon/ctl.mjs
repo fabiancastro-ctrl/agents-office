@@ -23,16 +23,29 @@ const USAGE = `Uso:
   node daemon/ctl.mjs kill <robot>`;
 
 switch (cmd) {
-  case 'skill': await call('POST', '/api/robots', { kind: 'skill', skill: arg, args: rest.join(' '), origin: 'Lanzado desde la terminal (ctl.mjs)' }); break;
-  case 'libre': await call('POST', '/api/robots', { kind: 'libre', text: [arg, ...rest].join(' '), origin: 'Lanzado desde la terminal (ctl.mjs)' }); break;
-  case 'say': await call('POST', `/api/robots/${arg}/say`, { text: rest.join(' ') }); break;
-  case 'approve': await call('POST', `/api/robots/${arg}/permission`, { decision: 'approve' }); break;
-  case 'reject': await call('POST', `/api/robots/${arg}/permission`, { decision: 'reject' }); break;
+  case 'skill':
+    await call('POST', '/api/robots', { kind: 'skill', skill: arg, args: rest.join(' '), origin: 'Lanzado desde la terminal (ctl.mjs)' });
+    break;
+  case 'libre':
+    await call('POST', '/api/robots', { kind: 'libre', text: [arg, ...rest].join(' '), origin: 'Lanzado desde la terminal (ctl.mjs)' });
+    break;
+  case 'say':
+    await call('POST', `/api/robots/${arg}/say`, { text: rest.join(' ') });
+    break;
+  case 'approve':
+    await call('POST', `/api/robots/${arg}/permission`, { decision: 'approve' });
+    break;
+  case 'reject':
+    await call('POST', `/api/robots/${arg}/permission`, { decision: 'reject' });
+    break;
   case 'pane': {
     const res = await fetch(`${BASE}/api/robots/${arg}/pane`);
     console.log((await res.json()).text ?? '');
     break;
   }
-  case 'kill': await call('DELETE', `/api/robots/${arg}`); break;
-  default: console.log(USAGE);
+  case 'kill':
+    await call('DELETE', `/api/robots/${arg}`);
+    break;
+  default:
+    console.log(USAGE);
 }

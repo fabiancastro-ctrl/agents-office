@@ -28,10 +28,17 @@ import { server } from './lib/http.mjs';
 boot();
 await guardSession();
 setWorkspace(initialWorkspace());
-if (WORKSPACE) { loadSessions(); await restore(); resumeResults(); migrateSummaries(); }
+if (WORKSPACE) {
+  loadSessions();
+  await restore();
+  resumeResults();
+  migrateSummaries();
+}
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Oficina de Agentes · http://127.0.0.1:${PORT}`);
-  console.log(WORKSPACE ? `Carpeta de trabajo: ${WORKSPACE}` : `Primera ejecución: abre http://127.0.0.1:${PORT} para elegir la carpeta de trabajo`);
+  console.log(
+    WORKSPACE ? `Carpeta de trabajo: ${WORKSPACE}` : `Primera ejecución: abre http://127.0.0.1:${PORT} para elegir la carpeta de trabajo`
+  );
   console.log(`Sesión de tmux de los robots: ${SESSION} (tmux attach -t ${SESSION})`);
   console.log(`Tope de robots simultáneos: ${maxRobots}`);
   console.log(`Aprobaciones retenidas por el daemon: ${APPROVAL ? 'activas' : 'apagadas (OFFICE_APPROVAL=1)'}`);

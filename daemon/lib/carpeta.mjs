@@ -7,17 +7,28 @@ import { CONFIG_FILE, LEGACY_RUNS, ROOT, RUNS, saveJson, WORKSPACE } from './bas
 import { listSkills } from './tmux.mjs';
 
 /* ---------- carpeta de trabajo ---------- */
-const expandHome = p => String(p || '').trim().replace(/^~(?=$|\/)/, os.homedir());
+const expandHome = p =>
+  String(p || '')
+    .trim()
+    .replace(/^~(?=$|\/)/, os.homedir());
 
 function initialWorkspace() {
   if (process.env.OFFICE_WORKSPACE) return path.resolve(expandHome(process.env.OFFICE_WORKSPACE));
-  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')).workspace || null; } catch { /* sin config */ }
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')).workspace || null;
+  } catch {
+    /* sin config */
+  }
   // Instalaciones de antes de esta opción: ya tenían estado y usaban la carpeta de dos niveles arriba.
   if (LEGACY_RUNS && fs.existsSync(path.join(RUNS, 'office-state.json'))) return saveWorkspace(path.resolve(ROOT, '../..'));
   return null;
 }
 function readConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
 }
 function saveConfig(patch) {
   saveJson(CONFIG_FILE, { ...readConfig(), ...patch }, { pretty: true });
@@ -29,13 +40,19 @@ function saveWorkspace(ws) {
 // Nombre de la oficina: solo estético, para distinguir varias oficinas (una por workspace) en el navegador.
 const OFFICE_NAME_MAX = 40;
 let officeName = String(readConfig().name || '').slice(0, OFFICE_NAME_MAX);
-const setOfficeName = v => { officeName = v; };
+const setOfficeName = v => {
+  officeName = v;
+};
 
 // Claude Code pide confirmar la confianza la primera vez que se abre en una carpeta (o en una superior);
 // mientras no se acepte, un robot quedaría detenido en esa pregunta.
 function trustAccepted(ws) {
   let projects = {};
-  try { projects = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')).projects || {}; } catch { return null; }
+  try {
+    projects = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')).projects || {};
+  } catch {
+    return null;
+  }
   for (let d = ws; ; d = path.dirname(d)) {
     if (projects[d]?.hasTrustDialogAccepted) return true;
     if (d === path.dirname(d)) return false;

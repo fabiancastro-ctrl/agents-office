@@ -4,14 +4,17 @@ const salaRobots = id => [...st.robots.values()].filter(a => a.data.place.sala =
 function salaFace(s) {
   if (!s.owner) return '<b class="sala-book" aria-hidden="true">📖</b>';
   const live = st.robots.get(s.owner)?.data;
-  return robotHead(COLORS[(live?.color ?? s.color ?? 0) % COLORS.length], lookOf(s.owner, null, {look: live?.look ?? s.ownerLook}));
+  return robotHead(COLORS[(live?.color ?? s.color ?? 0) % COLORS.length], lookOf(s.owner, null, { look: live?.look ?? s.ownerLook }));
 }
 // Dentro de una sala no se ven los demás robots: si alguno de afuera (en la oficina o en otra sala) te necesita, la sala
 // brilla en rojo y la cabecera dice quién; clic abre al que más lleva esperando, sin salir de la sala.
 function renderOutsideNeed() {
-  const room = st.view && MAP.querySelector('.r-sala.in-sala'), btn = room?.querySelector('[data-out-need]');
+  const room = st.view && MAP.querySelector('.r-sala.in-sala'),
+    btn = room?.querySelector('[data-out-need]');
   if (!room || !btn) return;
-  const out = [...st.robots.values()].map(a => a.data).filter(d => d.place?.sala !== st.view && (d.state === 'input' || d.spawnReq || d.consoleLost))
+  const out = [...st.robots.values()]
+    .map(a => a.data)
+    .filter(d => d.place?.sala !== st.view && (d.state === 'input' || d.spawnReq || d.consoleLost))
     .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0));
   room.classList.toggle('outside-need', !!out.length);
   btn.hidden = !out.length;
@@ -21,33 +24,70 @@ function renderOutsideNeed() {
   btn.title = `Fuera de esta sala te esperan: ${out.map(d => d.name + (d.place?.sala ? ` (en la sala «${st.salas.find(s => s.id === d.place.sala)?.name || 'otra'}»)` : '')).join(', ')}. Clic: abrir a ${out[0].name} (el que más lleva esperando) sin salir de la sala.`;
 }
 // Por qué te necesita, en pocas palabras (para el aviso de la sala en la lista «Salas de épica»).
-const needWhy = d => d.consoleLost ? 'perdió su consola' : d.spawnReq ? 'pide robots' : d.ask ? 'te pregunta' : d.hold || d.needsPermission ? 'pide permiso' : 'espera tu respuesta';
+const needWhy = d =>
+  d.consoleLost
+    ? 'perdió su consola'
+    : d.spawnReq
+      ? 'pide robots'
+      : d.ask
+        ? 'te pregunta'
+        : d.hold || d.needsPermission
+          ? 'pide permiso'
+          : 'espera tu respuesta';
 function renderSalaChips() {
   renderOutsideNeed();
   $('#sala-count').textContent = `${st.salas.length} sala${st.salas.length === 1 ? '' : 's'}`;
-  $('#sala-chips').innerHTML = st.salas.map(s => { // lista completa: la sala es chica y hace scroll
-    const bots = salaRobots(s.id), n = bots.length;
-    // Sus robots no se ven en la oficina: si alguno te necesita, la sala lo avisa.
-    const needers = bots.map(a => a.data).filter(d => d.state === 'input' || d.spawnReq || d.consoleLost)
-      .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0)), need = needers.length;
-    const done = s.done && !need; // equipo terminado: todos entregaron
-    const prog = salaProgress(s); // 3 · avance del equipo, visible sin entrar
-    return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><span class="sala-face" style="--st:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}">${salaFace(s)}</span><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? '' : done ? ' · ✓ terminó' : prog ? ` · ${prog.ok}/${prog.n} entregaron` : ` · ${s.thread.length} msj`}</small>${need ? `<button type="button" class="rchip-alert" data-need-robot="${esc(needers[0].name)}" title="Abrir a ${esc(needers[0].name)} sin entrar a la sala${need > 1 ? ` (también: ${esc(needers.slice(1).map(d => d.name).join(', '))})` : ''}">⚠ ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}</button>` : ''}</span>${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round(prog.ok * 100 / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
-  }).join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';
+  $('#sala-chips').innerHTML =
+    st.salas
+      .map(s => {
+        // lista completa: la sala es chica y hace scroll
+        const bots = salaRobots(s.id),
+          n = bots.length;
+        // Sus robots no se ven en la oficina: si alguno te necesita, la sala lo avisa.
+        const needers = bots
+            .map(a => a.data)
+            .filter(d => d.state === 'input' || d.spawnReq || d.consoleLost)
+            .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0)),
+          need = needers.length;
+        const done = s.done && !need; // equipo terminado: todos entregaron
+        const prog = salaProgress(s); // 3 · avance del equipo, visible sin entrar
+        return `<div class="rchip${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><span class="sala-face" style="--st:${need ? 'var(--amber)' : done ? '#b9d06a' : n ? 'var(--teal)' : 'var(--wall)'}">${salaFace(s)}</span><span>${esc(s.name)}<br><small>${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${need ? '' : done ? ' · ✓ terminó' : prog ? ` · ${prog.ok}/${prog.n} entregaron` : ` · ${s.thread.length} msj`}</small>${
+          need
+            ? `<button type="button" class="rchip-alert" data-need-robot="${esc(needers[0].name)}" title="Abrir a ${esc(needers[0].name)} sin entrar a la sala${
+                need > 1
+                  ? ` (también: ${esc(
+                      needers
+                        .slice(1)
+                        .map(d => d.name)
+                        .join(', ')
+                    )})`
+                  : ''
+              }">⚠ ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}</button>`
+            : ''
+        }</span>${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
+      })
+      .join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';
   // Si alguien dentro de una sala te necesita, todo el cuarto «Salas de épica» late en ámbar (sus robots no se ven afuera).
-  $('#sala-chips').closest('.room')?.classList.toggle('sala-need', st.salas.some(s => salaRobots(s.id).some(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost)));
+  $('#sala-chips')
+    .closest('.room')
+    ?.classList.toggle(
+      'sala-need',
+      st.salas.some(s => salaRobots(s.id).some(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost))
+    );
 }
 
 function salasPanel() {
-  const cards = st.salas.map(s => {
-    const last = s.thread[s.thread.length - 1];
-    return `<div class="rt-card" data-sala="${esc(s.id)}" role="button" tabindex="0" style="cursor:pointer">
+  const cards = st.salas
+    .map(s => {
+      const last = s.thread[s.thread.length - 1];
+      return `<div class="rt-card" data-sala="${esc(s.id)}" role="button" tabindex="0" style="cursor:pointer">
       <div class="top-r"><span class="sala-face big">${salaFace(s)}</span><b>${esc(s.name)}</b>${s.key ? `<span class="pill p-idle">${esc(s.key)}</span>` : ''}</div>
-      ${(p => p ? `<div class="sub-h">📦 ${p.ok}/${p.n} entregaron<i class="rt-prog${p.ok === p.n ? ' full' : ''}" style="--p:${Math.round(p.ok * 100 / p.n)}%"></i></div>` : '')(salaProgress(s))}
+      ${(p => (p ? `<div class="sub-h">📦 ${p.ok}/${p.n} entregaron<i class="rt-prog${p.ok === p.n ? ' full' : ''}" style="--p:${Math.round((p.ok * 100) / p.n)}%"></i></div>` : ''))(salaProgress(s))}
       <div class="sub-h">${salaRobots(s.id).length} robots · ${s.thread.length} mensajes · ${s.docs.length} documentos${s.folder ? ' · ' + esc(s.folder) : ''}</div>
       ${last ? `<div class="sub-h">Último: ${esc(last.from)} · ${esc(last.text.slice(0, 120))}</div>` : ''}
     </div>`;
-  }).join('');
+    })
+    .join('');
   return `<div class="dlg-head"><h3>Salas de épica</h3><p>Cada sala agrupa a los robots que trabajan sobre una épica de Jira. Comparten un <code>CONTEXT.md</code> (alcance, decisiones, estado verificado) que leen al entrar y corrigen al aprender algo, y un hilo donde queda lo que cada uno dice al cerrar su turno. Cuando un robot pide robots y los apruebas, él y los nuevos quedan en una sala de equipo que se cierra sola al irse todos.</p></div>
     ${cards ? `<section class="dlg-sec"><h4>Salas</h4><div class="rt-grid">${cards}</div></section>` : ''}
     <form class="dlg-sec" id="sala-new">
@@ -64,8 +104,19 @@ function salasPanel() {
 
 function salaPanel(s) {
   const present = salaRobots(s.id);
-  const thread = s.thread.map((m, i) => logRow({kind: m.from === 'Coordinador' ? 'user' : 'agent', text: m.text, at: m.at, who: m.from}, undefined, i)).join('');
-  const docs = s.docs.length ? `<h4>Documentos (${s.docs.length})</h4><div class="list doclist">${s.docs.slice().reverse().map(x => `<div class="item" data-docpath="${esc(x.path)}" title="${esc(x.path)}"><div class="meta-i"><b>${esc(fileName(x.path))}</b><div>${esc(x.robot)} · ${esc(shortPath(x.path))}</div></div></div>`).join('')}</div>` : '';
+  const thread = s.thread
+    .map((m, i) => logRow({ kind: m.from === 'Coordinador' ? 'user' : 'agent', text: m.text, at: m.at, who: m.from }, undefined, i))
+    .join('');
+  const docs = s.docs.length
+    ? `<h4>Documentos (${s.docs.length})</h4><div class="list doclist">${s.docs
+        .slice()
+        .reverse()
+        .map(
+          x =>
+            `<div class="item" data-docpath="${esc(x.path)}" title="${esc(x.path)}"><div class="meta-i"><b>${esc(fileName(x.path))}</b><div>${esc(x.robot)} · ${esc(shortPath(x.path))}</div></div></div>`
+        )
+        .join('')}</div>`
+    : '';
   const max = st.config.maxRobots || 3;
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done').length;
   return `<div class="ph"><div style="min-width:0"><h3>Sala «${esc(s.name)}»</h3><div class="sub-h">${esc(s.auto ? `Equipo que armó ${s.owner}: se cierra sola cuando se van todos` : s.key || 'sin clave de Jira')}${s.folder ? ' · documentos en ' + esc(s.folder) : ''}</div></div>
@@ -100,20 +151,30 @@ function salaPanel(s) {
     </div>`;
 }
 
-
 function renderPanel() {
-  const keep = {}; const focusId = PANEL.contains(document.activeElement) ? document.activeElement.id : null;
-  PANEL.querySelectorAll('input,select,textarea').forEach(el => { if (el.id) keep[el.id] = el.type === 'radio' ? el.checked : el.value; });
-  const logEl = $('#log', PANEL); const logScroll = logEl ? logEl.scrollTop : null; const atBottom = logEl ? logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 30 : true;
+  const keep = {};
+  const focusId = PANEL.contains(document.activeElement) ? document.activeElement.id : null;
+  PANEL.querySelectorAll('input,select,textarea').forEach(el => {
+    if (el.id) keep[el.id] = el.type === 'radio' ? el.checked : el.value;
+  });
+  const logEl = $('#log', PANEL);
+  const logScroll = logEl ? logEl.scrollTop : null;
+  const atBottom = logEl ? logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 30 : true;
   const sel = st.selected;
   const a = sel && st.robots.get(sel);
   const sala = sel?.startsWith('@sala:') ? st.salas.find(s => s.id === sel.slice(6)) : null;
-  if (sel?.startsWith('@sala:') && !sala) { st.selected = '@war'; return renderPanel(); } // la sala se cerró
+  if (sel?.startsWith('@sala:') && !sala) {
+    st.selected = '@war';
+    return renderPanel();
+  } // la sala se cerró
   if (!sel || (!a && !sel.startsWith('@'))) {
-    st.selected = null; st.side = null; renderSide();
+    st.selected = null;
+    st.side = null;
+    renderSide();
     clearInterval(paneTimer);
     $('#dialog').hidden = true;
-    PANEL.innerHTML = ''; PANEL.dataset.view = '';
+    PANEL.innerHTML = '';
+    PANEL.dataset.view = '';
     return;
   }
   const wasHidden = $('#dialog').hidden;
@@ -121,50 +182,115 @@ function renderPanel() {
   $('#dialog').hidden = false;
   $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war' || sel === '@oficina' || sel === '@cierre');
   $('#dlg-card').classList.toggle('tall', !!a || !!sala || sel === '@arch');
-  const html = a ? robotPanel(a) : sala ? salaPanel(sala) : sel === '@inbox' ? inboxPanel() : sel === '@usage' ? usagePanel() : sel === '@setup' ? setupPanel() : sel === '@cron' ? cronPanel() : sel === '@war' ? salasPanel() : sel === '@search' ? searchPanel() : sel === '@arch' ? archPanel(st.archView) : sel === '@archivo' ? archivoPanel() : sel === '@fama' ? famaPanel() : sel === '@cierre' ? cierrePanel() : sel === '@oficina' ? oficinaPanel() : sel === '@pins' ? pinsPanel() : newPanel();
+  const html = a
+    ? robotPanel(a)
+    : sala
+      ? salaPanel(sala)
+      : sel === '@inbox'
+        ? inboxPanel()
+        : sel === '@usage'
+          ? usagePanel()
+          : sel === '@setup'
+            ? setupPanel()
+            : sel === '@cron'
+              ? cronPanel()
+              : sel === '@war'
+                ? salasPanel()
+                : sel === '@search'
+                  ? searchPanel()
+                  : sel === '@arch'
+                    ? archPanel(st.archView)
+                    : sel === '@archivo'
+                      ? archivoPanel()
+                      : sel === '@fama'
+                        ? famaPanel()
+                        : sel === '@cierre'
+                          ? cierrePanel()
+                          : sel === '@oficina'
+                            ? oficinaPanel()
+                            : sel === '@pins'
+                              ? pinsPanel()
+                              : newPanel();
   if (sameView) {
-    if (html === PANEL._html) { tickRoutines(); return; }
-    const tpl = document.createElement('template'); tpl.innerHTML = html;
+    if (html === PANEL._html) {
+      tickRoutines();
+      return;
+    }
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
     PANEL._html = html;
-    const sl = $('#sala-log', PANEL), slBottom = sl && sl.scrollTop + sl.clientHeight >= sl.scrollHeight - 30;
+    const sl = $('#sala-log', PANEL),
+      slBottom = sl && sl.scrollTop + sl.clientHeight >= sl.scrollHeight - 30;
     // La conversación se queda abajo aunque aparezca o se vaya el aviso de permiso (si estabas leyendo arriba, no se mueve).
-    const lg0 = $('#log', PANEL), lgTop = lg0?.scrollTop, lgBottom = lg0 && lg0.scrollTop + lg0.clientHeight >= lg0.scrollHeight - 30;
+    const lg0 = $('#log', PANEL),
+      lgTop = lg0?.scrollTop,
+      lgBottom = lg0 && lg0.scrollTop + lg0.clientHeight >= lg0.scrollHeight - 30;
     morph(PANEL, tpl.content);
     if (sl && slBottom) sl.scrollTop = sl.scrollHeight;
     const lg1 = $('#log', PANEL);
     if (lg1 && (lgBottom || lg1 !== lg0)) lg1.scrollTop = lgBottom || lg0 == null ? lg1.scrollHeight : lgTop;
-    tickRoutines(); syncKind(); renderSide(); markPins(PANEL); doJump();
+    tickRoutines();
+    syncKind();
+    renderSide();
+    markPins(PANEL);
+    doJump();
     return;
   }
   clearInterval(paneTimer);
-  PANEL.dataset.view = sel; PANEL._html = html;
+  PANEL.dataset.view = sel;
+  PANEL._html = html;
   PANEL.innerHTML = html;
   if (wasHidden) PANEL.scrollTop = 0;
   tickRoutines();
-  Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if (el && PANEL.contains(el)) { if (el.type === 'radio') el.checked = v; else el.value = v; } });
+  Object.entries(keep).forEach(([id, v]) => {
+    const el = document.getElementById(id);
+    if (el && PANEL.contains(el)) {
+      if (el.type === 'radio') el.checked = v;
+      else el.value = v;
+    }
+  });
   if (focusId) document.getElementById(focusId)?.focus();
-  const lg = $('#log', PANEL) || $('#sala-log', PANEL); if (lg) lg.scrollTop = atBottom || logScroll == null ? lg.scrollHeight : logScroll;
+  const lg = $('#log', PANEL) || $('#sala-log', PANEL);
+  if (lg) lg.scrollTop = atBottom || logScroll == null ? lg.scrollHeight : logScroll;
   syncKind();
-  if (a) { refreshPane(a.data.name); paneTimer = setInterval(() => refreshPane(a.data.name), 2000); }
-  renderSide(); markPins(PANEL); doJump();
+  if (a) {
+    refreshPane(a.data.name);
+    paneTimer = setInterval(() => refreshPane(a.data.name), 2000);
+  }
+  renderSide();
+  markPins(PANEL);
+  doJump();
   if (sel === '@search') searchArchive();
   if (sel === '@archivo') loadArchivo();
-  if (sel === '@fama') { famaUi.weeks = null; loadFama(); }
+  if (sel === '@fama') {
+    famaUi.weeks = null;
+    loadFama();
+  }
   if (sel === '@oficina') loadSalud();
   if (sel === '@cron') cronOpened();
-  if (sel === '@arch' && st.focusRetake) { st.focusRetake = false; const t = $('#retake-in'); t?.scrollIntoView({block: 'center'}); t?.focus(); }
-  if (wasHidden) (PANEL.querySelector('#search-in, #rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();
+  if (sel === '@arch' && st.focusRetake) {
+    st.focusRetake = false;
+    const t = $('#retake-in');
+    t?.scrollIntoView({ block: 'center' });
+    t?.focus();
+  }
+  if (wasHidden)
+    (PANEL.querySelector('#search-in, #rp-alert input, #chat-in, #job-skill, #job-text, #sala-in, #sn-name') || $('#dlg-close')).focus();
 }
 
 async function refreshPane(name) {
   try {
     const res = await fetch(`/api/robots/${name}/pane`);
     if (!res.ok) return;
-    const {text} = await res.json();
+    const { text } = await res.json();
     const last = text.split('\n').slice(-60).join('\n');
     paneCache.set(name, last);
     const pre = $('#pane', PANEL);
-    if (pre && st.selected === name && pre.textContent !== last) { pre.textContent = last; pre.scrollTop = pre.scrollHeight; }
-  } catch { /* el robot pudo haberse ido */ }
+    if (pre && st.selected === name && pre.textContent !== last) {
+      pre.textContent = last;
+      pre.scrollTop = pre.scrollHeight;
+    }
+  } catch {
+    /* el robot pudo haberse ido */
+  }
 }
-

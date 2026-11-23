@@ -13,7 +13,9 @@ const WEB = path.join(ROOT, 'web');
 // Carpeta donde trabajan los robots (y de donde salen las skills del proyecto). Se elige en la primera
 // ejecución desde la página y se guarda en runs/config.json; OFFICE_WORKSPACE manda si está definida.
 let WORKSPACE = null;
-const setWorkspace = v => { WORKSPACE = v; };
+const setWorkspace = v => {
+  WORKSPACE = v;
+};
 const PORT = Number(process.env.OFFICE_PORT || 4777);
 // Sesión de tmux donde viven los robots. Cada oficina del mismo equipo necesita la suya (y su puerto),
 // o se pisarían las ventanas de los robots y la consola de /usage.
@@ -28,9 +30,14 @@ const SETTINGS = path.join(RUNS, 'office-settings.json');
 // Tope de robots trabajando a la vez: todos gastan de la misma cuota de la suscripcion.
 // Se ajusta desde la oficina (− / +) y se guarda en office-state.json.
 let maxRobots = Number(process.env.OFFICE_MAX_ROBOTS || 3);
-const setMaxRobots = n => { maxRobots = n; };
+const setMaxRobots = n => {
+  maxRobots = n;
+};
 // Reemplaza el contenido de una lista compartida sin reasignarla (los demás módulos la tienen importada).
-const replaceList = (list, items) => { list.splice(0, list.length, ...items); return list; };
+const replaceList = (list, items) => {
+  list.splice(0, list.length, ...items);
+  return list;
+};
 const MAX_ROBOTS_LIMIT = 20;
 const APPROVAL = process.env.OFFICE_APPROVAL === '1';
 const HOLD_TOOLS = new Set(['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -39,7 +46,8 @@ const HOLD_TOOLS = new Set(['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit'
 const NEVER_ALLOW = [/\brm\s+-[a-z]*r/i, /\bmv\s/, /\bgit\s+push\b/, /--force\b/, /--no-verify\b/, /\bgit\s+commit\b.*--amend\b/];
 const APPROVAL_TIMEOUT_MS = 9 * 60 * 1000;
 // Las preguntas (AskUserQuestion) tienen su propio hook de 8 h: puedes contestarlas cuando vuelvas, no en 9 minutos.
-const ASK_HOOK_S = 8 * 60 * 60, ASK_TIMEOUT_MS = (ASK_HOOK_S - 120) * 1000;
+const ASK_HOOK_S = 8 * 60 * 60,
+  ASK_TIMEOUT_MS = (ASK_HOOK_S - 120) * 1000;
 const PERMISSION_MODES = new Set(['default', 'acceptEdits', 'plan', 'auto']);
 const NAMES = ['rex', 'nova', 'bolt', 'atlas', 'pixel', 'kiro', 'lumo', 'zeta', 'orbi', 'juno', 'milo', 'vega', 'ciro', 'indi', 'brio'];
 const ROUTINE_TICK_MS = Number(process.env.OFFICE_ROUTINE_TICK_MS) || 15000;
@@ -83,36 +91,64 @@ function boot() {
     // PreToolUse: el hook general (10 min, para los permisos retenidos) y uno solo para las preguntas, de 8 h.
     // Los dos le llegan al daemon con AskUserQuestion; el general se hace a un lado (ver onHook, via).
     const askHook = { type: 'command', command: `"${hook.command}" ask`, timeout: ASK_HOOK_S };
-    const settings = { hooks: {
-      SessionStart: ev(10), UserPromptSubmit: ev(10), PreToolUse: [...ev(600, '*'), { matcher: 'AskUserQuestion', hooks: [askHook] }], PostToolUse: ev(10, '*'),
-      SubagentStop: ev(10), Notification: ev(10), Stop: ev(10)
-    } };
+    const settings = {
+      hooks: {
+        SessionStart: ev(10),
+        UserPromptSubmit: ev(10),
+        PreToolUse: [...ev(600, '*'), { matcher: 'AskUserQuestion', hooks: [askHook] }],
+        PostToolUse: ev(10, '*'),
+        SubagentStop: ev(10),
+        Notification: ev(10),
+        Stop: ev(10)
+      }
+    };
     saveJson(SETTINGS, settings, { pretty: true, eol: true });
   }
   // Una copia de la carpeta = una oficina: dos daemons sobre el mismo runs/ se pisarían el estado y la bandeja.
   try {
     const lock = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8'));
     let alive = false;
-    try { process.kill(lock.pid, 0); alive = lock.pid !== process.pid; } catch { /* proceso muerto: candado viejo */ }
+    try {
+      process.kill(lock.pid, 0);
+      alive = lock.pid !== process.pid;
+    } catch {
+      /* proceso muerto: candado viejo */
+    }
     if (alive) {
       console.error(`Esta oficina ya está corriendo (pid ${lock.pid}, puerto ${lock.port}, datos en ${RUNS}).`);
       console.error('Para otra oficina usa el edificio: bin/office create <nombre> --workspace <carpeta> y bin/office start <nombre>.');
       process.exit(1);
     }
-  } catch { /* sin candado */ }
+  } catch {
+    /* sin candado */
+  }
   saveJson(LOCK_FILE, { pid: process.pid, port: PORT, session: SESSION });
   // Al salir: suelta el candado y deja en el registro cómo terminó (señal, error o código). Si una oficina aparece
   // detenida y su registro no dice nada, la mataron sin aviso (kill -9, el sistema). Las conversaciones las guarda
   // persistencia.mjs con su propio aviso de salida.
   const hhmm = () => new Date().toTimeString().slice(0, 8);
   process.on('exit', code => {
-    try { if (JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8')).pid === process.pid) fs.unlinkSync(LOCK_FILE); } catch { /* ya no está */ }
+    try {
+      if (JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8')).pid === process.pid) fs.unlinkSync(LOCK_FILE);
+    } catch {
+      /* ya no está */
+    }
     console.log(`${hhmm()} oficina detenida (código de salida ${code})`);
   });
-  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { console.log(`${hhmm()} se detiene: recibió ${sig}`); process.exit(0); });
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'])
+    process.on(sig, () => {
+      console.log(`${hhmm()} se detiene: recibió ${sig}`);
+      process.exit(0);
+    });
   // Un error que nadie atrapó la tumba igual que antes, pero con hora y detalle en el registro.
-  process.on('uncaughtException', e => { console.error(`${hhmm()} se cayó por un error: ${e?.stack || e}`); process.exit(1); });
-  process.on('unhandledRejection', e => { console.error(`${hhmm()} se cayó por un error (promesa): ${e?.stack || e}`); process.exit(1); });
+  process.on('uncaughtException', e => {
+    console.error(`${hhmm()} se cayó por un error: ${e?.stack || e}`);
+    process.exit(1);
+  });
+  process.on('unhandledRejection', e => {
+    console.error(`${hhmm()} se cayó por un error (promesa): ${e?.stack || e}`);
+    process.exit(1);
+  });
 }
 const CONFIG_FILE = path.join(RUNS, 'config.json');
 const EVENTS_FILE = path.join(RUNS, `events-${new Date().toISOString().slice(0, 10)}.jsonl`);
@@ -122,11 +158,15 @@ const pending = new Map();
 const inbox = [];
 const clients = new Set();
 let colorSeq = 0;
-const setColorSeq = n => { colorSeq = n; };
+const setColorSeq = n => {
+  colorSeq = n;
+};
 const nextColor = () => colorSeq++;
 
 const trunc = (s, n = 160) => {
-  const t = String(s ?? '').replace(/\s+/g, ' ').trim();
+  const t = String(s ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return t.length > n ? t.slice(0, n - 1) + '…' : t;
 };
 const now = () => new Date().toISOString();
@@ -145,4 +185,48 @@ function describeTool(tool, input = {}) {
   return tool;
 }
 
-export { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, ATTACH_DIR, ATTACH_MAX_BYTES, ATTACH_TTL_MS, boot, CLAUDE_BIN, clients, colorSeq, CONFIG_FILE, console_, describeTool, EVENTS_FILE, HOLD_TOOLS, inbox, LEGACY_RUNS, MAX_ROBOTS_LIMIT, maxRobots, NAMES, NEVER_ALLOW, nextColor, now, pending, PERMISSION_MODES, PORT, replaceList, robots, ROOT, ROUTINE_TICK_MS, run, RUNS, saveJson, saveJsonAsync, SESSION, setColorSeq, setMaxRobots, SETTINGS, setWorkspace, TIMELINE_MAX, trunc, WEB, WORKSPACE };
+export {
+  APPROVAL,
+  APPROVAL_TIMEOUT_MS,
+  ASK_TIMEOUT_MS,
+  ATTACH_DIR,
+  ATTACH_MAX_BYTES,
+  ATTACH_TTL_MS,
+  boot,
+  CLAUDE_BIN,
+  clients,
+  colorSeq,
+  CONFIG_FILE,
+  console_,
+  describeTool,
+  EVENTS_FILE,
+  HOLD_TOOLS,
+  inbox,
+  LEGACY_RUNS,
+  MAX_ROBOTS_LIMIT,
+  maxRobots,
+  NAMES,
+  NEVER_ALLOW,
+  nextColor,
+  now,
+  pending,
+  PERMISSION_MODES,
+  PORT,
+  replaceList,
+  robots,
+  ROOT,
+  ROUTINE_TICK_MS,
+  run,
+  RUNS,
+  saveJson,
+  saveJsonAsync,
+  SESSION,
+  setColorSeq,
+  setMaxRobots,
+  SETTINGS,
+  setWorkspace,
+  TIMELINE_MAX,
+  trunc,
+  WEB,
+  WORKSPACE
+};

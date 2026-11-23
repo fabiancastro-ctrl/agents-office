@@ -22,12 +22,20 @@ function attachmentNote(list) {
 function cleanAttachments() {
   const walk = dir => {
     let entries = [];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const e of entries) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) {
         walk(p);
-        try { if (!fs.readdirSync(p).length) fs.rmdirSync(p); } catch { /* en uso */ }
+        try {
+          if (!fs.readdirSync(p).length) fs.rmdirSync(p);
+        } catch {
+          /* en uso */
+        }
       } else if (Date.now() - fs.statSync(p).mtimeMs > ATTACH_TTL_MS) {
         fs.unlinkSync(p);
       }

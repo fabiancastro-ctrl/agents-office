@@ -28,14 +28,28 @@ function trackFile(r, tool, file) {
 function filesFromTranscript(file) {
   const out = [];
   let text = '';
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return out; }
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return out;
+  }
   for (const line of text.split('\n')) {
     if (!line.includes('"tool_use"') || !/"(Write|Edit|MultiEdit|NotebookEdit)"/.test(line)) continue;
-    let o; try { o = JSON.parse(line); } catch { continue; }
+    let o;
+    try {
+      o = JSON.parse(line);
+    } catch {
+      continue;
+    }
     for (const c of o.message?.content || []) {
       if (c?.type === 'tool_use' && EDIT_TOOLS.includes(c.name)) {
         const p = c.input?.file_path || c.input?.notebook_path;
-        if (p) { const a = path.resolve(p); const i = out.indexOf(a); if (i >= 0) out.splice(i, 1); out.push(a); }
+        if (p) {
+          const a = path.resolve(p);
+          const i = out.indexOf(a);
+          if (i >= 0) out.splice(i, 1);
+          out.push(a);
+        }
       }
     }
   }
@@ -48,19 +62,44 @@ async function topOf(dir) {
   if (tops.has(dir)) return tops.get(dir);
   let top = '';
   let d = dir;
-  while (d && !fs.existsSync(d)) { const up = path.dirname(d); if (up === d) break; d = up; } // un archivo borrado o una carpeta que ya no existe
-  try { top = (await git(d, ['rev-parse', '--show-toplevel'])).trim(); } catch { top = ''; }
+  while (d && !fs.existsSync(d)) {
+    const up = path.dirname(d);
+    if (up === d) break;
+    d = up;
+  } // un archivo borrado o una carpeta que ya no existe
+  try {
+    top = (await git(d, ['rev-parse', '--show-toplevel'])).trim();
+  } catch {
+    top = '';
+  }
   tops.set(dir, top);
   return top;
 }
 
 // La ruta real (git da /private/var/… donde el robot escribió /var/…); si el archivo ya no existe, la de su carpeta.
 function real(p) {
-  try { return fs.realpathSync(p); } catch { /* borrado */ }
-  try { return path.join(fs.realpathSync(path.dirname(p)), path.basename(p)); } catch { return p; }
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    /* borrado */
+  }
+  try {
+    return path.join(fs.realpathSync(path.dirname(p)), path.basename(p));
+  } catch {
+    return p;
+  }
 }
 
-const STATUS = { M: 'modificado', A: 'nuevo', '?': 'nuevo', D: 'borrado', R: 'renombrado', C: 'copiado', U: 'en conflicto', T: 'modificado' };
+const STATUS = {
+  M: 'modificado',
+  A: 'nuevo',
+  '?': 'nuevo',
+  D: 'borrado',
+  R: 'renombrado',
+  C: 'copiado',
+  U: 'en conflicto',
+  T: 'modificado'
+};
 const shown = p => (WORKSPACE && p.startsWith(WORKSPACE + path.sep) ? path.relative(WORKSPACE, p) : p.replace(os.homedir(), '~'));
 
 async function repoChanges(top) {
@@ -74,9 +113,10 @@ async function repoChanges(top) {
   for (let i = 0; i < parts.length; i++) {
     const e = parts[i];
     if (e.length < 4) continue;
-    const xy = e.slice(0, 2), rel = e.slice(3);
+    const xy = e.slice(0, 2),
+      rel = e.slice(3);
     if (xy[0] === 'R' || xy[0] === 'C') i++; // -z: la ruta de origen va en la entrada siguiente
-    const k = xy === '??' ? '?' : xy.includes('U') ? 'U' : (xy[1] !== ' ' ? xy[1] : xy[0]);
+    const k = xy === '??' ? '?' : xy.includes('U') ? 'U' : xy[1] !== ' ' ? xy[1] : xy[0];
     pending.set(path.join(top, rel), { status: STATUS[k] || 'modificado', add: null, del: null });
   }
   // numstat -z: «add\tdel\truta\0» o, en un renombre, «add\tdel\t\0origen\0destino\0»
@@ -85,16 +125,25 @@ async function repoChanges(top) {
     const m = /^(-|\d+)\t(-|\d+)\t(.*)$/.exec(ns[i]);
     if (!m) continue;
     let rel = m[3];
-    if (!rel) { rel = ns[i + 2]; i += 2; }
+    if (!rel) {
+      rel = ns[i + 2];
+      i += 2;
+    }
     const p = path.join(top, rel || '');
     const x = pending.get(p) || { status: 'modificado' };
     x.add = m[1] === '-' ? null : Number(m[1]);
     x.del = m[2] === '-' ? null : Number(m[2]);
     pending.set(p, x);
   }
-  for (const [p, x] of pending) if (x.status === 'nuevo' && x.add == null) {
-    try { const st = fs.statSync(p); if (st.isFile() && st.size < 2e6) x.add = fs.readFileSync(p, 'utf8').split('\n').length - 1 || 1; } catch { /* binario o ya no está */ }
-  }
+  for (const [p, x] of pending)
+    if (x.status === 'nuevo' && x.add == null) {
+      try {
+        const st = fs.statSync(p);
+        if (st.isFile() && st.size < 2e6) x.add = fs.readFileSync(p, 'utf8').split('\n').length - 1 || 1;
+      } catch {
+        /* binario o ya no está */
+      }
+    }
   return { branch: branch.trim(), pending };
 }
 
@@ -105,7 +154,10 @@ async function robotChanges(r) {
   for (const f0 of files) {
     const f = real(f0);
     const top = await topOf(path.dirname(f));
-    if (!top) { outside.push(f); continue; }
+    if (!top) {
+      outside.push(f);
+      continue;
+    }
     if (!byTop.has(top)) byTop.set(top, []);
     byTop.get(top).push(f);
   }
@@ -115,23 +167,47 @@ async function robotChanges(r) {
   for (const [top, mine] of byTop) {
     const { branch, pending } = await repoChanges(top);
     const own = new Set(mine);
-    const row = p => { const x = pending.get(p); return { path: p, shown: path.relative(top, p), status: x ? x.status : 'sin cambios pendientes', add: x?.add ?? null, del: x?.del ?? null, pending: !!x }; };
+    const row = p => {
+      const x = pending.get(p);
+      return {
+        path: p,
+        shown: path.relative(top, p),
+        status: x ? x.status : 'sin cambios pendientes',
+        add: x?.add ?? null,
+        del: x?.del ?? null,
+        pending: !!x
+      };
+    };
     const others = [...pending.keys()].filter(p => !own.has(p)).sort();
     repos.push({
-      top, name: shown(top), branch,
+      top,
+      name: shown(top),
+      branch,
       files: mine.slice().reverse().map(row), // lo último que tocó, primero
-      others: others.slice(0, 40).map(row), othersMore: Math.max(0, others.length - 40),
+      others: others.slice(0, 40).map(row),
+      othersMore: Math.max(0, others.length - 40),
       pending: pending.size
     });
   }
-  return { repos, outside: outside.slice().reverse().map(p => ({ path: p, shown: shown(p) })), total: files.length };
+  return {
+    repos,
+    outside: outside
+      .slice()
+      .reverse()
+      .map(p => ({ path: p, shown: shown(p) })),
+    total: files.length
+  };
 }
 
 // Abrir en el editor: un archivo con cambios sin commit se abre como diff contra HEAD; uno nuevo, limpio o fuera de git, tal cual.
 const CODE_APP = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code';
 async function editorBin() {
   if (process.env.OFFICE_EDITOR) return process.env.OFFICE_EDITOR;
-  try { return (await run('/bin/sh', ['-lc', 'command -v code'])).stdout.trim() || (fs.existsSync(CODE_APP) ? CODE_APP : ''); } catch { return fs.existsSync(CODE_APP) ? CODE_APP : ''; }
+  try {
+    return (await run('/bin/sh', ['-lc', 'command -v code'])).stdout.trim() || (fs.existsSync(CODE_APP) ? CODE_APP : '');
+  } catch {
+    return fs.existsSync(CODE_APP) ? CODE_APP : '';
+  }
 }
 
 async function allowedPath(r, p) {

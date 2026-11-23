@@ -4,7 +4,22 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { CLAUDE_BIN, console_, maxRobots, NAMES, nextColor, now, PERMISSION_MODES, PORT, robots, run, SESSION, SETTINGS, trunc, WORKSPACE } from './base.mjs';
+import {
+  CLAUDE_BIN,
+  console_,
+  maxRobots,
+  NAMES,
+  nextColor,
+  now,
+  PERMISSION_MODES,
+  PORT,
+  robots,
+  run,
+  SESSION,
+  SETTINGS,
+  trunc,
+  WORKSPACE
+} from './base.mjs';
 import { emit } from './estado.mjs';
 import { freeDesk, log, roomSeat, setState } from './persistencia.mjs';
 import { cleanTitle, ROBOT_FLAGS, ROBOT_HINTS } from './turno.mjs';
@@ -25,40 +40,110 @@ async function ensureSession() {
 
 // Si la sesión de tmux ya es de otra oficina que sigue viva en otro puerto, no arrancar: le robaríamos los robots.
 async function guardSession() {
-  try { await run('tmux', ['has-session', '-t', SESSION]); } catch { return; } // la sesión se crea al lanzar el primer robot
+  try {
+    await run('tmux', ['has-session', '-t', SESSION]);
+  } catch {
+    return;
+  } // la sesión se crea al lanzar el primer robot
   let owner = '';
-  try { owner = (await run('tmux', ['show-options', '-v', '-t', SESSION, '@office_port'])).stdout.trim(); } catch { /* sin dueño */ }
+  try {
+    owner = (await run('tmux', ['show-options', '-v', '-t', SESSION, '@office_port'])).stdout.trim();
+  } catch {
+    /* sin dueño */
+  }
   if (owner && owner !== String(PORT)) {
     let alive = true;
-    try { await fetch(`http://127.0.0.1:${owner}/api/setup`, { signal: AbortSignal.timeout(1500) }); } catch { alive = false; }
+    try {
+      await fetch(`http://127.0.0.1:${owner}/api/setup`, { signal: AbortSignal.timeout(1500) });
+    } catch {
+      alive = false;
+    }
     if (alive) {
       console.error(`La sesión de tmux «${SESSION}» ya la usa otra oficina que corre en el puerto ${owner}.`);
-      console.error('Arranca esta con otra sesión y otro puerto, por ejemplo: OFFICE_SESSION=office-2 OFFICE_PORT=4778 node daemon/daemon.mjs');
+      console.error(
+        'Arranca esta con otra sesión y otro puerto, por ejemplo: OFFICE_SESSION=office-2 OFFICE_PORT=4778 node daemon/daemon.mjs'
+      );
       process.exit(1);
     }
   }
   await run('tmux', ['set-option', '-t', SESSION, '@office_port', String(PORT)]).catch(() => {});
 }
 
-async function launch({ kind, skill, args, text, permissionMode, name, origin, label: customLabel, title, leaveWhenDone, attachments, routine, sala: salaId, parent, color, look }) {
+async function launch({
+  kind,
+  skill,
+  args,
+  text,
+  permissionMode,
+  name,
+  origin,
+  label: customLabel,
+  title,
+  leaveWhenDone,
+  attachments,
+  routine,
+  sala: salaId,
+  parent,
+  color,
+  look
+}) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
   const active = [...robots.values()].filter(x => x.state !== 'done');
-  if (active.filter(x => !x.consoleLost).length + launching.size >= maxRobots) throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
+  if (active.filter(x => !x.consoleLost).length + launching.size >= maxRobots)
+    throw new Error(`Ya hay ${maxRobots} robots trabajando (tope de la cuota). Súbelo con + en la barra o espera a que alguno termine.`);
   const taken = n => robots.has(n) || launching.has(n);
   name = (name || NAMES.find(n => !taken(n)) || `robot-${Date.now() % 1000}`).toLowerCase();
   if (!/^[a-z0-9-]{1,20}$/.test(name)) throw new Error('Nombre inválido: usa minúsculas, números y guiones.');
   if (taken(name)) throw new Error(`Ya existe un robot llamado ${name}.`);
   // El nombre queda apartado desde ya: dos pedidos casi simultáneos (doble clic) no abren dos consolas iguales.
   launching.add(name);
-  try { return await launchReserved({ kind, skill, args, text, permissionMode, name, origin, customLabel, title, leaveWhenDone, attachments, routine, salaId, parent, color, look }); }
-  finally { launching.delete(name); }
+  try {
+    return await launchReserved({
+      kind,
+      skill,
+      args,
+      text,
+      permissionMode,
+      name,
+      origin,
+      customLabel,
+      title,
+      leaveWhenDone,
+      attachments,
+      routine,
+      salaId,
+      parent,
+      color,
+      look
+    });
+  } finally {
+    launching.delete(name);
+  }
 }
 const launching = new Set();
-async function launchReserved({ kind, skill, args, text, permissionMode, name, origin, customLabel, title, leaveWhenDone, attachments, routine, salaId, parent, color, look }) {
-
+async function launchReserved({
+  kind,
+  skill,
+  args,
+  text,
+  permissionMode,
+  name,
+  origin,
+  customLabel,
+  title,
+  leaveWhenDone,
+  attachments,
+  routine,
+  salaId,
+  parent,
+  color,
+  look
+}) {
   let prompt, label;
   if (kind === 'skill') {
-    skill = String(skill || '').replace(/^\//, '').trim();
+    skill = String(skill || '')
+      .replace(/^\//, '')
+      .trim();
     if (!/^[a-z0-9:_-]+$/i.test(skill)) throw new Error('Elige una skill válida.');
     prompt = `/${skill} ${args || ''}`.trim();
     label = prompt;
@@ -82,19 +167,72 @@ async function launchReserved({ kind, skill, args, text, permissionMode, name, o
   await ensureSession();
   const sessionId = crypto.randomUUID();
   const r = {
-    name, kind, skill, label, title: cleanTitle(title), prompt, color: Number.isInteger(color) ? color : nextColor() % 8, look: look || null, place,
-    request: { kind, skill, args: kind === 'skill' ? String(args || '') : '', text: kind === 'libre' ? String(text || '').trim() : '', permissionMode: permissionMode || '' }, permissionMode: permissionMode || '', leaveWhenDone: !!leaveWhenDone,
+    name,
+    kind,
+    skill,
+    label,
+    title: cleanTitle(title),
+    prompt,
+    color: Number.isInteger(color) ? color : nextColor() % 8,
+    look: look || null,
+    place,
+    request: {
+      kind,
+      skill,
+      args: kind === 'skill' ? String(args || '') : '',
+      text: kind === 'libre' ? String(text || '').trim() : '',
+      permissionMode: permissionMode || ''
+    },
+    permissionMode: permissionMode || '',
+    leaveWhenDone: !!leaveWhenDone,
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
-    routine: routine || null, sessionId, transcript: null, offset: 0, partial: '', msgUsage: new Map(), startedAt: now(),
-    alive: true, state: 'walking', timeline: [{ at: now(), s: 'walking' }], subs: [], pendingSubs: 0, bubble: '', activity: '',
-    needsPermission: false, hold: null, docs: [], log: [], parent: parent || null
+    routine: routine || null,
+    sessionId,
+    transcript: null,
+    offset: 0,
+    partial: '',
+    msgUsage: new Map(),
+    startedAt: now(),
+    alive: true,
+    state: 'walking',
+    timeline: [{ at: now(), s: 'walking' }],
+    subs: [],
+    pendingSubs: 0,
+    bubble: '',
+    activity: '',
+    needsPermission: false,
+    hold: null,
+    docs: [],
+    log: [],
+    parent: parent || null
   };
   robots.set(name, r);
   // env -u: si ANTHROPIC_API_KEY esta en el entorno, `claude` la usa en vez del login de la suscripcion.
-  const tmuxArgs = ['new-window', '-d', '-t', `${SESSION}:`, '-n', name, '-c', WORKSPACE,
-    '-e', `OFFICE_ROBOT=${name}`, '-e', `OFFICE_PORT=${PORT}`,
-    'env', '-u', 'ANTHROPIC_API_KEY',
-    CLAUDE_BIN, '--settings', SETTINGS, '--session-id', sessionId, '--append-system-prompt', ROBOT_HINTS, ...ROBOT_FLAGS];
+  const tmuxArgs = [
+    'new-window',
+    '-d',
+    '-t',
+    `${SESSION}:`,
+    '-n',
+    name,
+    '-c',
+    WORKSPACE,
+    '-e',
+    `OFFICE_ROBOT=${name}`,
+    '-e',
+    `OFFICE_PORT=${PORT}`,
+    'env',
+    '-u',
+    'ANTHROPIC_API_KEY',
+    CLAUDE_BIN,
+    '--settings',
+    SETTINGS,
+    '--session-id',
+    sessionId,
+    '--append-system-prompt',
+    ROBOT_HINTS,
+    ...ROBOT_FLAGS
+  ];
   if (permissionMode) tmuxArgs.push('--permission-mode', permissionMode);
   tmuxArgs.push(prompt);
   try {
@@ -154,7 +292,11 @@ function listSkills(ws = WORKSPACE) {
   ];
   for (const [dir, filesOnly] of dirs) {
     let entries = [];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
     for (const e of entries) {
       if (filesOnly && e.name.endsWith('.md')) out.add(e.name.slice(0, -3));
       if (!filesOnly && !e.name.startsWith('.') && e.name !== 'synced') out.add(e.name);

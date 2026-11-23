@@ -1,20 +1,61 @@
 // Dibujo de los robots, compartido por la oficina (web/app.js) y el edificio (edificio/index.html).
 // Script clásico: estas constantes quedan en el ámbito global y app.js las usa desde su IIFE.
 // Los 8 primeros son los de siempre (la oficina reparte esos a los robots nuevos); los demás se eligen en «🎨 Apariencia».
-const ROBOT_COLORS = ['#5fcbb9','#f3b74f','#ef8f7a','#7cb6f0','#b9d06a','#d99ad6','#9fd3f0','#f0c38f',
-  '#a99cf2','#ef7f8a','#6fd08c','#5b8def','#e0b43c','#e9e4d8','#8a96aa','#ff9f4a'];
-const COLOR_NAMES = ['Menta', 'Ámbar', 'Coral', 'Celeste', 'Lima', 'Orquídea', 'Cielo', 'Durazno', 'Lavanda', 'Rubí', 'Hoja', 'Cobalto', 'Oro', 'Perla', 'Acero', 'Naranja'];
+const ROBOT_COLORS = [
+  '#5fcbb9',
+  '#f3b74f',
+  '#ef8f7a',
+  '#7cb6f0',
+  '#b9d06a',
+  '#d99ad6',
+  '#9fd3f0',
+  '#f0c38f',
+  '#a99cf2',
+  '#ef7f8a',
+  '#6fd08c',
+  '#5b8def',
+  '#e0b43c',
+  '#e9e4d8',
+  '#8a96aa',
+  '#ff9f4a'
+];
+const COLOR_NAMES = [
+  'Menta',
+  'Ámbar',
+  'Coral',
+  'Celeste',
+  'Lima',
+  'Orquídea',
+  'Cielo',
+  'Durazno',
+  'Lavanda',
+  'Rubí',
+  'Hoja',
+  'Cobalto',
+  'Oro',
+  'Perla',
+  'Acero',
+  'Naranja'
+];
 // Aspecto por nombre: antena, visor y accesorio salen de un hash del nombre (cada robot siempre se ve igual),
 // salvo que le elijas otro (d.look). Los de una rutina o sala llevan pañoleta del color de su sala; el uniforme
 // depende de su trabajo (outfitOf) y el gorro de la temporada sale solo según la fecha (seasonNow).
 function lookOf(name, place, d) {
   let h = 7;
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  const o = d?.look || {}, pick = (v, n, def) => Number.isInteger(v) ? ((v % n) + n) % n : def;
+  const o = d?.look || {},
+    pick = (v, n, def) => (Number.isInteger(v) ? ((v % n) + n) % n : def);
   // Por nombre salen de las opciones originales (4 antenas, 3 visores, 4 accesorios): así nadie cambia de cara al
   // sumar opciones. Las nuevas solo aparecen si se las eliges.
-  return {ant: pick(o.ant, ANTENNAS.length, h % 4), visor: pick(o.visor, VISORS.length, (h >>> 3) % 3), acc: pick(o.acc, HEAD_ACC.length, (h >>> 6) % 4),
-    uniform: place?.type === 'room' ? (place.sala ? '#ef8f7a' : '#a99cf2') : '', outfit: outfitOf(d, place), season: seasonNow(), crown: Number(d?.crown) || 0};
+  return {
+    ant: pick(o.ant, ANTENNAS.length, h % 4),
+    visor: pick(o.visor, VISORS.length, (h >>> 3) % 3),
+    acc: pick(o.acc, HEAD_ACC.length, (h >>> 6) % 4),
+    uniform: place?.type === 'room' ? (place.sala ? '#ef8f7a' : '#a99cf2') : '',
+    outfit: outfitOf(d, place),
+    season: seasonNow(),
+    crown: Number(d?.crown) || 0
+  };
 }
 // Uniforme según el trabajo: inspector (reviews y auditorías), escritor (documentación) o casco (rutinas).
 function outfitOf(d, place) {
@@ -28,7 +69,8 @@ function outfitOf(d, place) {
 function seasonNow(t = new Date()) {
   const q = typeof location !== 'undefined' && new URLSearchParams(location.search).get('temporada'); // ?temporada=santa para verlo antes
   if (q) return q;
-  const m = t.getMonth(), day = t.getDate();
+  const m = t.getMonth(),
+    day = t.getDate();
   if ((m === 11 && day === 31) || (m === 0 && day === 1)) return 'party';
   if (m === 11) return 'santa';
   if (m === 9 && day >= 24) return 'witch';
@@ -113,8 +155,10 @@ const OUTFIT_HAND = {
 const BOLTS = `<circle cx="7.4" cy="16" r="2" fill="#8b98ad" ${OUT}/><circle cx="32.6" cy="16" r="2" fill="#8b98ad" ${OUT}/><circle cx="7" cy="15.5" r=".6" fill="#fff" opacity=".5"/><circle cx="32.2" cy="15.5" r=".6" fill="#fff" opacity=".5"/>`;
 const VENTS = `<path d="M24.6 10.6h4M25.4 12h3.2" stroke="#0b1018" stroke-width=".7" stroke-linecap="round" opacity=".25"/>`;
 const CHEST = `<rect x="14.4" y="29.4" width="11.2" height="6.2" rx="1.6" fill="#0f141c" opacity=".55"/><circle class="led l1" cx="17" cy="32.5" r=".95" fill="#5fcbb9"/><circle class="led l2" cx="20" cy="32.5" r=".95" fill="#f3b74f"/><circle class="led l3" cx="23" cy="32.5" r=".95" fill="#ef7f8a"/><rect x="10.4" y="36.6" width="19.2" height="1.3" fill="#0b1018" opacity=".22"/>`;
-const leg = (cls, x) => `<g class="${cls}"><rect x="${x}" y="40" width="5" height="6" rx="2" fill="#56627a" ${OUT}/><rect class="hd" x="${x}" y="40" width="5" height="6" rx="2" fill="url(#hd-cyl)"/><rect x="${x + .6}" y="43.6" width="3.8" height="1.6" rx=".8" fill="#0b1018" opacity=".25"/><rect x="${x - 1}" y="45" width="7" height="3" rx="1.3" fill="#3b4252" ${OUT}/><rect class="hd" x="${x - .4}" y="45.4" width="5.4" height=".9" rx=".45" fill="#fff" opacity=".22"/></g>`;
-const arm = (cls, x, color, extra = '') => `<g class="${cls}"><rect x="${x}" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect class="hd" x="${x}" y="27" width="5" height="11" rx="2.5" fill="url(#hd-cyl)"/><rect x="${x + .4}" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/><circle cx="${x + 2.5}" cy="28.4" r="2.1" fill="#8b98ad" ${OUT}/><circle cx="${x + 2.5}" cy="38.6" r="1.9" fill="#56627a" ${OUT}/>${cls === 'arm-l' ? `<rect x="${x + 1}" y="29.4" width="1.4" height="3.4" rx=".7" fill="#fff" opacity=".35"/>` : ''}${extra}</g>`;
+const leg = (cls, x) =>
+  `<g class="${cls}"><rect x="${x}" y="40" width="5" height="6" rx="2" fill="#56627a" ${OUT}/><rect class="hd" x="${x}" y="40" width="5" height="6" rx="2" fill="url(#hd-cyl)"/><rect x="${x + 0.6}" y="43.6" width="3.8" height="1.6" rx=".8" fill="#0b1018" opacity=".25"/><rect x="${x - 1}" y="45" width="7" height="3" rx="1.3" fill="#3b4252" ${OUT}/><rect class="hd" x="${x - 0.4}" y="45.4" width="5.4" height=".9" rx=".45" fill="#fff" opacity=".22"/></g>`;
+const arm = (cls, x, color, extra = '') =>
+  `<g class="${cls}"><rect x="${x}" y="27" width="5" height="11" rx="2.5" fill="${color}" ${OUT}/><rect class="hd" x="${x}" y="27" width="5" height="11" rx="2.5" fill="url(#hd-cyl)"/><rect x="${x + 0.4}" y="33" width="4.2" height="4.6" rx="2" fill="#0b1018" opacity=".2"/><circle cx="${x + 2.5}" cy="28.4" r="2.1" fill="#8b98ad" ${OUT}/><circle cx="${x + 2.5}" cy="38.6" r="1.9" fill="#56627a" ${OUT}/>${cls === 'arm-l' ? `<rect x="${x + 1}" y="29.4" width="1.4" height="3.4" rx=".7" fill="#fff" opacity=".35"/>` : ''}${extra}</g>`;
 // Modo HD (botón «HD» de la oficina): capas de volumen, cristal del visor, brillo de los ojos, reflejo del monitor
 // y juntas. Siempre se dibujan pero la hoja de estilos solo las muestra con html.hd-on, así cambiar de modo no
 // redibuja nada. Los degradados son grises sobre el color del robot: sirven para cualquier color y viven una sola vez
@@ -136,10 +180,20 @@ const HD_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden
   ${VISOR_SHAPES.map((sh, i) => `<clipPath id="hd-v${i}">${sh}</clipPath>`).join('\n  ')}
 </defs></svg>`;
 if (typeof document !== 'undefined') {
-  const addDefs = () => { if (!document.getElementById('hd-vol')) document.body.insertAdjacentHTML('afterbegin', HD_DEFS); };
-  if (document.body) addDefs(); else document.addEventListener('DOMContentLoaded', addDefs);
+  const addDefs = () => {
+    if (!document.getElementById('hd-vol')) document.body.insertAdjacentHTML('afterbegin', HD_DEFS);
+  };
+  if (document.body) addDefs();
+  else document.addEventListener('DOMContentLoaded', addDefs);
 }
-const EYES = [[16, 16, 24, 16], [15.5, 16, 24.5, 16], [15.5, 16, 24.5, 16], [20, 16, 20, 16], [14.25, 16, 25.75, 16], [16, 16, 24, 16]];
+const EYES = [
+  [16, 16, 24, 16],
+  [15.5, 16, 24.5, 16],
+  [15.5, 16, 24.5, 16],
+  [20, 16, 20, 16],
+  [14.25, 16, 25.75, 16],
+  [16, 16, 24, 16]
+];
 function hdHead(v) {
   const e = EYES[v] || EYES[0];
   const glass = (VISOR_SHAPES[v] || VISOR_SHAPES[0]).replace(/\/>/g, ' fill="url(#hd-glass)"/>');
@@ -148,22 +202,26 @@ function hdHead(v) {
     <circle cx="10.3" cy="10.1" r=".5" fill="#0b1018" opacity=".4"/><circle cx="29.7" cy="22.1" r=".5" fill="#0b1018" opacity=".4"/>
     <circle cx="${e[0]}" cy="${e[1]}" r="3.4" fill="url(#hd-glow)"/><circle cx="${e[2]}" cy="${e[3]}" r="3.4" fill="url(#hd-glow)"/>
     ${glass}<g clip-path="url(#hd-v${v})"><rect class="hd-refl" x="6" y="11" width="3.2" height="10" fill="#9ff0e4" transform="skewX(-18)"/></g>
-    <circle class="eye" cx="${e[0] - .7}" cy="${e[1] - .8}" r=".5" fill="#fff" opacity=".85"/><circle class="eye" cx="${e[2] - .7}" cy="${e[3] - .8}" r=".5" fill="#fff" opacity=".85"/></g>`;
+    <circle class="eye" cx="${e[0] - 0.7}" cy="${e[1] - 0.8}" r=".5" fill="#fff" opacity=".85"/><circle class="eye" cx="${e[2] - 0.7}" cy="${e[3] - 0.8}" r=".5" fill="#fff" opacity=".85"/></g>`;
 }
 const HD_BODY = `<g class="hd"><rect x="10" y="26" width="20" height="14" rx="4" fill="url(#hd-vol)"/><path d="M29.1 28.4v8.4" stroke="#fff" stroke-opacity=".32" stroke-width=".6" stroke-linecap="round"/>
   <path d="M10.6 31h3.4M26 31h3.4" stroke="#0b1018" stroke-opacity=".22" stroke-width=".45"/><circle cx="11.9" cy="38.3" r=".45" fill="#0b1018" opacity=".4"/><circle cx="28.1" cy="38.3" r=".45" fill="#0b1018" opacity=".4"/></g>`;
 const HD_NECK = `<path class="hd" d="M17 24.1h6M17 25.5h6" stroke="#0b1018" stroke-opacity=".35" stroke-width=".5"/>`;
 // Accesorio secreto del robot del mes (lo decide el daemon: d.crown). Corona dorada con un fuego en la punta del
 // centro o, si además es el que más gastó esta semana, dos fuegos en las puntas de los lados. Le gana a cualquier gorro.
-const flame = (x, y) => `<g class="flame" style="transform-origin:${x}px ${y}px"><path d="M${x} ${y - 7.5}q3.6 3.8 2.6 6q-.8 1.6-2.6 1.6t-2.6-1.6q-1-2.2 2.6-6z" fill="#ff7a2f" stroke="rgba(120,30,0,.35)" stroke-width=".4"/><path d="M${x} ${y - 4.6}q1.9 2.2 1.3 3.4q-.5.9-1.3.9t-1.3-.9q-.6-1.2 1.3-3.4z" fill="#ffd36b"/></g>`;
+const flame = (x, y) =>
+  `<g class="flame" style="transform-origin:${x}px ${y}px"><path d="M${x} ${y - 7.5}q3.6 3.8 2.6 6q-.8 1.6-2.6 1.6t-2.6-1.6q-1-2.2 2.6-6z" fill="#ff7a2f" stroke="rgba(120,30,0,.35)" stroke-width=".4"/><path d="M${x} ${y - 4.6}q1.9 2.2 1.3 3.4q-.5.9-1.3.9t-1.3-.9q-.6-1.2 1.3-3.4z" fill="#ffd36b"/></g>`;
 function crownSVG(n) {
   return `<g class="crown"><path d="M10 9.6V2.6l5 3.2 5-6.2 5 6.2 5-3.2v7z" fill="#f2c230" stroke="#9a6d10" stroke-width=".8" stroke-linejoin="round"/>
     <path d="M10.6 8.2h18.8" stroke="#ffe48a" stroke-width=".9" opacity=".8"/><circle cx="20" cy="6.6" r="1.4" fill="#ef4f5c"/><circle cx="14.6" cy="7.2" r="1" fill="#5fcbb9"/><circle cx="25.4" cy="7.2" r="1" fill="#5fcbb9"/>
-    ${n >= 2 ? flame(10, 2.6) + flame(30, 2.6) : flame(20, -.4)}</g>`;
+    ${n >= 2 ? flame(10, 2.6) + flame(30, 2.6) : flame(20, -0.4)}</g>`;
 }
-function hatOf(look) { return look.crown ? crownSVG(look.crown) : HATS[look.season] || HATS[look.outfit] || ''; }
-function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
-  const u = look.uniform, hat = hatOf(look);
+function hatOf(look) {
+  return look.crown ? crownSVG(look.crown) : HATS[look.season] || HATS[look.outfit] || '';
+}
+function robotSVG(color, look = { ant: 0, visor: 0, acc: 0, uniform: '' }) {
+  const u = look.uniform,
+    hat = hatOf(look);
   return `<svg viewBox="0 0 40 48" aria-hidden="true">
     <g class="legs">${leg('leg-l', 13)}${leg('leg-r', 22)}</g>
     ${arm('arm-l', 4, color, OUTFIT_HAND[look.outfit] || '')}
@@ -178,7 +236,7 @@ function robotSVG(color, look = {ant: 0, visor: 0, acc: 0, uniform: ''}) {
 }
 
 // Solo la cabeza (antena, visor y accesorio o gorro): avatar pequeño para el chat.
-function robotHead(color, look = {ant: 0, visor: 0, acc: 0}) {
+function robotHead(color, look = { ant: 0, visor: 0, acc: 0 }) {
   const hat = hatOf(look);
   return `<svg class="rhead" viewBox="${look.crown ? '4 -9 32 35' : '4 -5 32 31'}" aria-hidden="true">${hat ? '' : ANTENNAS[look.ant]}${BOLTS}<rect x="8" y="8" width="24" height="16" rx="5" fill="${color}" ${OUT}/>${SHADE_HEAD}${VENTS}${VISORS[look.visor]}${VISOR_GLARE}${hdHead(look.visor)}${hat || HEAD_ACC[look.acc]}</svg>`;
 }
@@ -190,20 +248,36 @@ function suggestTitle(req) {
   if (!req) return '';
   const src = req.kind === 'skill' ? String(req.args || '') : String(req.text || '');
   const refs = [];
-  const add = x => { if (x && !refs.includes(x)) refs.push(x); };
-  for (const m of src.matchAll(/(?:github\.com|bitbucket\.org)\/[\w.-]+\/([\w.-]+)\/(?:pull|pull-requests)\/(\d+)/gi)) add(`${m[1]}#${m[2]}`);
+  const add = x => {
+    if (x && !refs.includes(x)) refs.push(x);
+  };
+  for (const m of src.matchAll(/(?:github\.com|bitbucket\.org)\/[\w.-]+\/([\w.-]+)\/(?:pull|pull-requests)\/(\d+)/gi))
+    add(`${m[1]}#${m[2]}`);
   for (const m of src.matchAll(/\b([A-Z][A-Z0-9]{1,9}-\d{1,6})\b/g)) add(m[1]);
   if (!refs.length) for (const m of src.matchAll(/\bPR\s*#?\s*(\d{1,6})\b/gi)) add(`PR #${m[1]}`);
-  const cut = (t, n) => t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, '') + '…';
+  const cut = (t, n) => (t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, '') + '…');
   if (req.kind === 'skill') {
-    const target = refs[0] || (src.split(/\s+/).find(w => w && !w.startsWith('-') && !/^origin\//.test(w)) || '').replace(/\/$/, '').split('/').pop();
+    const target =
+      refs[0] || (src.split(/\s+/).find(w => w && !w.startsWith('-') && !/^origin\//.test(w)) || '').replace(/\/$/, '').split('/').pop();
     return cut([req.skill, target].filter(Boolean).join(' · '), 60);
   }
-  const lines = src.replace(/<[^>]+>/g, '\n').replace(/https?:\/\/\S+/g, ' ').split('\n').map(l => l.replace(/^\s*(#+|>|[-*+]|\d+\.)\s+/, '').replace(/[`*_]/g, '').replace(/\s+/g, ' ').trim());
+  const lines = src
+    .replace(/<[^>]+>/g, '\n')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .split('\n')
+    .map(l =>
+      l
+        .replace(/^\s*(#+|>|[-*+]|\d+\.)\s+/, '')
+        .replace(/[`*_]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
   let t = lines.find(l => l.length > 2) || '';
   t = t.split(/(?<=[.!?])\s/)[0];
-  t = t.replace(/^(hola|buenas|buenos días|oye|bueno|ok|dale|por favor|porfa)[,!.]?\s+/i, '')
-       .replace(/^(me (puedes|podrías) ayudar (a|con) |ay[uú]dame (a|con) )/i, '').trim();
+  t = t
+    .replace(/^(hola|buenas|buenos días|oye|bueno|ok|dale|por favor|porfa)[,!.]?\s+/i, '')
+    .replace(/^(me (puedes|podrías) ayudar (a|con) |ay[uú]dame (a|con) )/i, '')
+    .trim();
   if (!t) return refs.join(' · ');
   t = t[0].toUpperCase() + t.slice(1);
   const extra = refs.filter(r => !t.includes(r.replace(/^PR #/, ''))).join(' ');

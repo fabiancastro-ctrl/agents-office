@@ -2,58 +2,109 @@
 st.favorites = [];
 function fillJob(req) {
   select('@new');
-  const set = (id, v) => { const el = $('#' + id, PANEL); if (el) el.value = v ?? ''; };
+  const set = (id, v) => {
+    const el = $('#' + id, PANEL);
+    if (el) el.value = v ?? '';
+  };
   ($(req.kind === 'libre' ? '#kind-libre' : '#kind-skill', PANEL) || {}).checked = true;
-  set('job-skill', req.skill ? req.skill : ''); set('job-args', req.args); set('job-text', req.text);
-  set('job-mode', req.permissionMode); set('job-title', req.title); set('job-name', '');
+  set('job-skill', req.skill ? req.skill : '');
+  set('job-args', req.args);
+  set('job-text', req.text);
+  set('job-mode', req.permissionMode);
+  set('job-title', req.title);
+  set('job-name', '');
   syncKind();
   const focus = req.kind === 'libre' ? $('#job-text', PANEL) : $('#job-args', PANEL);
-  focus?.focus(); focus?.setSelectionRange?.(focus.value.length, focus.value.length);
+  focus?.focus();
+  focus?.setSelectionRange?.(focus.value.length, focus.value.length);
 }
-const launchAgain = d => fillJob({...d.request, title: d.title});
+const launchAgain = d => fillJob({ ...d.request, title: d.title });
 PANEL.addEventListener('click', async e => {
-  const use = e.target.closest('[data-fav]'), del = e.target.closest('[data-fav-del]'), save = e.target.closest('[data-fav-save]');
-  if (use) { const f = st.favorites.find(x => x.id === use.dataset.fav); if (f) fillJob(f); return; }
-  if (del) { try { await api('DELETE', `/api/favorites/${del.dataset.favDel}`); } catch { /* toast ya mostrado */ } return; }
+  const use = e.target.closest('[data-fav]'),
+    del = e.target.closest('[data-fav-del]'),
+    save = e.target.closest('[data-fav-save]');
+  if (use) {
+    const f = st.favorites.find(x => x.id === use.dataset.fav);
+    if (f) fillJob(f);
+    return;
+  }
+  if (del) {
+    try {
+      await api('DELETE', `/api/favorites/${del.dataset.favDel}`);
+    } catch {
+      /* toast ya mostrado */
+    }
+    return;
+  }
   if (!save) return;
   const libre = $('#kind-libre', PANEL)?.checked;
   try {
-    await api('POST', '/api/favorites', {kind: libre ? 'libre' : 'skill', skill: $('#job-skill').value, args: $('#job-args').value, text: $('#job-text').value, permissionMode: $('#job-mode').value, title: $('#job-title').value});
+    await api('POST', '/api/favorites', {
+      kind: libre ? 'libre' : 'skill',
+      skill: $('#job-skill').value,
+      args: $('#job-args').value,
+      text: $('#job-text').value,
+      permissionMode: $('#job-mode').value,
+      title: $('#job-title').value
+    });
     toast('Guardado en frecuentes');
-  } catch { /* toast ya mostrado */ }
+  } catch {
+    /* toast ya mostrado */
+  }
 });
 
 function syncKind() {
   const libre = $('#kind-libre', PANEL)?.checked;
   if ($('#f-text', PANEL)) {
-    $('#f-text').hidden = !libre; $('#f-skill').hidden = !!libre; $('#f-args').hidden = !!libre;
+    $('#f-text').hidden = !libre;
+    $('#f-skill').hidden = !!libre;
+    $('#f-args').hidden = !!libre;
   }
   if ($('#f-sk-text', PANEL)) {
     const skill = $('#sk-skill-r', PANEL).checked;
-    $('#f-sk-text').hidden = skill; $('#f-sk-skill').hidden = !skill; $('#f-sk-args').hidden = !skill;
+    $('#f-sk-text').hidden = skill;
+    $('#f-sk-skill').hidden = !skill;
+    $('#f-sk-args').hidden = !skill;
   }
   const rtLibre = $('#rt-kind-libre', PANEL)?.checked;
   if ($('#f-rt-text', PANEL)) {
-    $('#f-rt-text').hidden = !rtLibre; $('#f-rt-skill').hidden = !!rtLibre; $('#f-rt-args').hidden = !!rtLibre;
-    const agenda = $('#rt-type-agenda').checked, wake = $('#rt-type-wake').checked;
-    $('#g-agenda').hidden = !agenda; $('#g-watch').hidden = agenda || wake; $('#g-wake').hidden = !wake; $('#g-sched').hidden = wake;
+    $('#f-rt-text').hidden = !rtLibre;
+    $('#f-rt-skill').hidden = !!rtLibre;
+    $('#f-rt-args').hidden = !!rtLibre;
+    const agenda = $('#rt-type-agenda').checked,
+      wake = $('#rt-type-wake').checked;
+    $('#g-agenda').hidden = !agenda;
+    $('#g-watch').hidden = agenda || wake;
+    $('#g-wake').hidden = !wake;
+    $('#g-sched').hidden = wake;
     const org = $('#rt-where').value === 'org';
-    $('#f-rt-owner').hidden = !org; $('#f-rt-repo').hidden = org;
+    $('#f-rt-owner').hidden = !org;
+    $('#f-rt-repo').hidden = org;
     const when = $('#rt-when-daily').checked ? 'daily' : $('#rt-when-once').checked ? 'once' : 'every';
-    $('#f-every').hidden = when !== 'every'; $('#f-hours').hidden = when !== 'every'; $('#f-daily').hidden = when !== 'daily'; $('#f-once').hidden = when !== 'once';
+    $('#f-every').hidden = when !== 'every';
+    $('#f-hours').hidden = when !== 'every';
+    $('#f-daily').hidden = when !== 'daily';
+    $('#f-once').hidden = when !== 'once';
     $('#f-hours-r').hidden = !$('#rt-hours').checked;
     const ck = $('#rt-c-kind').value;
-    $('#f-c-ref').hidden = ck !== 'pr'; $('#f-c-event').hidden = ck !== 'pr'; $('#f-c-key').hidden = ck !== 'nexus'; $('#f-c-to').hidden = ck !== 'nexus'; $('#f-c-at').hidden = ck !== 'time';
+    $('#f-c-ref').hidden = ck !== 'pr';
+    $('#f-c-event').hidden = ck !== 'pr';
+    $('#f-c-key').hidden = ck !== 'nexus';
+    $('#f-c-to').hidden = ck !== 'nexus';
+    $('#f-c-at').hidden = ck !== 'time';
     $('#rt-c-tostate').hidden = $('#rt-c-to').value !== 'custom';
     const wk = $('#rt-w-kind').value;
-    $('#f-w-robot').hidden = wk !== 'say'; $('#f-w-arch').hidden = wk !== 'retake'; $('#f-w-text').hidden = wk === 'notify';
+    $('#f-w-robot').hidden = wk !== 'say';
+    $('#f-w-arch').hidden = wk !== 'retake';
+    $('#f-w-text').hidden = wk === 'notify';
     $('#f-w-text label').textContent = wk === 'launch' ? 'Qué debe hacer el robot nuevo' : 'Qué decirle (opcional)';
   }
 }
 
 /* ---------- nube al pasar el mouse ---------- */
-const hover = {el: document.createElement('div'), name: null, timer: null, line: ''};
-hover.el.className = 'hovercard sv'; hover.el.hidden = true; // sv: también se ve dentro de una sala
+const hover = { el: document.createElement('div'), name: null, timer: null, line: '' };
+hover.el.className = 'hovercard sv';
+hover.el.hidden = true; // sv: también se ve dentro de una sala
 MAP.appendChild(hover.el);
 
 // Ultima linea "util" de la consola: se saltan bordes, el prompt y la barra de modo de Claude Code.
@@ -102,25 +153,32 @@ function clampHover() {
   const el = hover.el;
   el.style.setProperty('--hx', '0px');
   if (MAP.closest('.map-wrap')?.classList.contains('iso')) return;
-  const r = el.getBoundingClientRect(), m = MAP.getBoundingClientRect(), w = MAP.parentElement.getBoundingClientRect();
-  const left = Math.max(m.left, w.left) + 6, right = Math.min(m.right, w.right) - 6;
+  const r = el.getBoundingClientRect(),
+    m = MAP.getBoundingClientRect(),
+    w = MAP.parentElement.getBoundingClientRect();
+  const left = Math.max(m.left, w.left) + 6,
+    right = Math.min(m.right, w.right) - 6;
   const dx = r.left < left ? left - r.left : r.right > right ? right - r.right : 0;
   if (dx) el.style.setProperty('--hx', Math.round(dx / zoom.z) + 'px');
 }
 
 async function refreshHoverLine() {
-  const name = hover.name; if (!name) return;
+  const name = hover.name;
+  if (!name) return;
   try {
     const res = await fetch(`/api/robots/${name}/pane`);
     if (!res.ok || hover.name !== name) return;
     hover.line = lastConsoleLine((await res.json()).text);
     renderHover();
-  } catch { /* el robot pudo irse */ }
+  } catch {
+    /* el robot pudo irse */
+  }
 }
 
 function showHover(name) {
   if (hover.name === name) return;
-  hover.name = name; hover.line = '';
+  hover.name = name;
+  hover.line = '';
   renderHover();
   refreshHoverLine();
   clearInterval(hover.timer);
@@ -140,4 +198,3 @@ MAP.addEventListener('mouseout', e => {
   const r = e.target.closest('.robot');
   if (r && !r.contains(e.relatedTarget)) hideHover();
 });
-

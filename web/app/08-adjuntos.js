@@ -1,10 +1,15 @@
 /* ---------- adjuntos ---------- */
 // Clave 'job' = formulario de nuevo encargo; cualquier otra = nombre del robot (chat).
 const attList = key => (st.att[key] ||= []);
-const fmtSize = n => n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+const fmtSize = n => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 function trayHtml(key) {
-  return attList(key).map((f, i) => `<div class="att">${f.url ? `<img src="${f.url}" alt="">` : `<span class="fi">${esc((f.name.split('.').pop() || 'archivo').slice(0, 4).toUpperCase())}</span>`}<span class="an" title="${esc(f.path)}">${esc(f.name)} · ${fmtSize(f.size)}</span><button type="button" data-unatt="${esc(key)}" data-i="${i}" aria-label="Quitar ${esc(f.name)}">✕</button></div>`).join('');
+  return attList(key)
+    .map(
+      (f, i) =>
+        `<div class="att">${f.url ? `<img src="${f.url}" alt="">` : `<span class="fi">${esc((f.name.split('.').pop() || 'archivo').slice(0, 4).toUpperCase())}</span>`}<span class="an" title="${esc(f.path)}">${esc(f.name)} · ${fmtSize(f.size)}</span><button type="button" data-unatt="${esc(key)}" data-i="${i}" aria-label="Quitar ${esc(f.name)}">✕</button></div>`
+    )
+    .join('');
 }
 function refreshTray(key) {
   const el = document.querySelector(`[data-tray="${CSS.escape(key)}"]`);
@@ -13,17 +18,30 @@ function refreshTray(key) {
 
 async function upload(files, key) {
   for (const file of files) {
-    if (file.size > ATTACH_MAX) { toast(`${file.name} supera 20 MB.`); continue; }
+    if (file.size > ATTACH_MAX) {
+      toast(`${file.name} supera 20 MB.`);
+      continue;
+    }
     let name = file.name || 'adjunto';
-    if (/^image\.(png|jpe?g|gif|webp)$/i.test(name)) name = `captura-${new Date().toTimeString().slice(0, 8).replace(/:/g, '')}.${name.split('.').pop()}`;
+    if (/^image\.(png|jpe?g|gif|webp)$/i.test(name))
+      name = `captura-${new Date().toTimeString().slice(0, 8).replace(/:/g, '')}.${name.split('.').pop()}`;
     const scope = key === 'job' ? 'encargos' : key;
     try {
-      const res = await fetch(`/api/attachments?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`, {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: file});
+      const res = await fetch(`/api/attachments?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file
+      });
       const data = await res.json();
-      if (!res.ok) { toast(data.error || 'No se pudo subir el archivo.'); continue; }
-      attList(key).push({...data, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null});
+      if (!res.ok) {
+        toast(data.error || 'No se pudo subir el archivo.');
+        continue;
+      }
+      attList(key).push({ ...data, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
       refreshTray(key);
-    } catch { toast('No se pudo subir el archivo.'); }
+    } catch {
+      toast('No se pudo subir el archivo.');
+    }
   }
 }
 
@@ -46,7 +64,9 @@ PANEL.addEventListener('dragover', e => {
   e.preventDefault();
   form.classList.add('dragover');
 });
-PANEL.addEventListener('dragleave', e => { e.target.closest('#chat-form, #job-form')?.classList.remove('dragover'); });
+PANEL.addEventListener('dragleave', e => {
+  e.target.closest('#chat-form, #job-form')?.classList.remove('dragover');
+});
 PANEL.addEventListener('drop', e => {
   const form = e.target.closest('#chat-form, #job-form');
   if (!form) return;
@@ -62,4 +82,3 @@ PANEL.addEventListener('change', e => {
     e.target.value = '';
   }
 });
-

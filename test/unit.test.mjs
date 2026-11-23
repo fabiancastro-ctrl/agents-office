@@ -45,9 +45,13 @@ test('replaceList y trunc', () => {
 });
 
 test('papelera: mueve archivos y carpetas a OFFICE_TRASH con su nombre y hora', () => {
-  const f = path.join(tmp, 'resumen.md'); fs.writeFileSync(f, 'hola');
-  const d = path.join(tmp, 'sala'); fs.mkdirSync(d); fs.writeFileSync(path.join(d, 'CONTEXT.md'), 'ctx');
-  const a = salas.toTrash(f, 'resumen-x'), b = salas.toTrash(d, 'sala-x');
+  const f = path.join(tmp, 'resumen.md');
+  fs.writeFileSync(f, 'hola');
+  const d = path.join(tmp, 'sala');
+  fs.mkdirSync(d);
+  fs.writeFileSync(path.join(d, 'CONTEXT.md'), 'ctx');
+  const a = salas.toTrash(f, 'resumen-x'),
+    b = salas.toTrash(d, 'sala-x');
   assert.ok(!fs.existsSync(f) && !fs.existsSync(d));
   assert.match(path.basename(a), /^resumen-x-.*\.md$/);
   assert.equal(fs.readFileSync(a, 'utf8'), 'hola');
@@ -70,7 +74,13 @@ test('semana de la cuota: sin dato de /usage cuenta desde el lunes y dura 7 día
 
 test('relevo por contexto: la decisión (oferta a los 300 k, automático en espera, exclusiones)', async () => {
   const { decideRelevo, blockedBy, isWait } = await import('../daemon/lib/relevo.mjs');
-  for (const cmd of ['~/nr-fabi/.claude/skills/nr-ci/nr-esperar-ci nr-qa#310', 'gh pr checks 12 --watch', 'gh run watch 123', 'until gh pr view 3 | grep -q MERGED; do sleep 60; done', 'sleep 600'])
+  for (const cmd of [
+    '~/nr-fabi/.claude/skills/nr-ci/nr-esperar-ci nr-qa#310',
+    'gh pr checks 12 --watch',
+    'gh run watch 123',
+    'until gh pr view 3 | grep -q MERGED; do sleep 60; done',
+    'sleep 600'
+  ])
     assert.ok(isWait({ kind: 'shell', cmd }), cmd);
   for (const cmd of ['go test ./...', 'terraform apply -auto-approve', 'npm run build && sleep 5 && npm test', ''])
     assert.ok(!isWait({ kind: 'shell', cmd }), cmd);
@@ -92,6 +102,7 @@ test('relevo por contexto: la decisión (oferta a los 300 k, automático en espe
   assert.equal(d({ tokens: 400000, nextAt: 400000 }), 'oferta');
   assert.equal(d({ tokens: 80000, offerK: 50 }), 'oferta', 'umbral configurable');
   assert.equal(blockedBy({}), null);
-  for (const k of ['hold', 'ask', 'needsPermission', 'spawnReq', 'summaryPending', 'relevoPending', 'routine', 'consoleLost']) assert.ok(blockedBy({ [k]: 'x' }), k);
+  for (const k of ['hold', 'ask', 'needsPermission', 'spawnReq', 'summaryPending', 'relevoPending', 'routine', 'consoleLost'])
+    assert.ok(blockedBy({ [k]: 'x' }), k);
   assert.ok(blockedBy({ pendingSubs: 1 }));
 });

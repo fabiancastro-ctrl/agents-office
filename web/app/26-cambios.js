@@ -2,10 +2,25 @@
 // con «↻»; el resto del tiempo se dibuja de lo último que trajo. Clic en un archivo → VS Code (diff contra HEAD).
 const chg = { open: false, cache: new Map(), loading: new Set() };
 
-const CHG_CLASS = { 'modificado': 'm', 'nuevo': 'n', 'borrado': 'd', 'renombrado': 'm', 'copiado': 'n', 'en conflicto': 'd', 'sin cambios pendientes': 'ok' };
+const CHG_CLASS = {
+  modificado: 'm',
+  nuevo: 'n',
+  borrado: 'd',
+  renombrado: 'm',
+  copiado: 'n',
+  'en conflicto': 'd',
+  'sin cambios pendientes': 'ok'
+};
 function chgRow(f) {
-  const nums = f.add != null || f.del != null ? `<span class="chg-n">${f.add != null ? `<i class="a">+${f.add}</i>` : ''}${f.del ? `<i class="d">−${f.del}</i>` : ''}</span>` : '';
-  const tip = f.pending ? (f.status === 'nuevo' ? 'Archivo nuevo: se abre tal cual' : 'Abre en VS Code el diff contra el último commit') : 'Ya está en un commit (o volvió a como estaba): se abre tal cual';
+  const nums =
+    f.add != null || f.del != null
+      ? `<span class="chg-n">${f.add != null ? `<i class="a">+${f.add}</i>` : ''}${f.del ? `<i class="d">−${f.del}</i>` : ''}</span>`
+      : '';
+  const tip = f.pending
+    ? f.status === 'nuevo'
+      ? 'Archivo nuevo: se abre tal cual'
+      : 'Abre en VS Code el diff contra el último commit'
+    : 'Ya está en un commit (o volvió a como estaba): se abre tal cual';
   return `<button type="button" class="chg-f ${CHG_CLASS[f.status] || 'm'}" data-chg-open="${esc(f.path)}" title="${esc(tip)}\n${esc(f.path)}"><b>${esc(fileName(f.shown))}</b><span class="chg-dir">${esc(f.shown.includes('/') ? f.shown.slice(0, f.shown.lastIndexOf('/')) : '')}</span>${nums}<span class="chg-s">${esc(f.status)}</span></button>`;
 }
 
@@ -16,12 +31,20 @@ function changesBlock(d) {
   let body = '';
   if (chg.loading.has(d.name) && !c) body = '<p class="muted">Consultando git…</p>';
   else if (c) {
-    body = c.repos.map(r => {
-      const mine = r.files.length ? r.files.map(chgRow).join('') : '<p class="muted">No editó archivos aquí.</p>';
-      const others = r.others.length ? `<div class="chg-sep">Otros cambios sin commit en este repo${r.othersMore ? ` (y ${r.othersMore} más)` : ''}</div>${r.others.map(chgRow).join('')}` : '';
-      return `<div class="chg-repo"><div class="chg-h"><b>${esc(r.name)}</b>${r.branch ? `<code>${esc(r.branch)}</code>` : ''}<small>${r.pending ? `${r.pending} sin commit` : 'todo en commits'}</small></div>${mine}${others}</div>`;
-    }).join('') + (c.outside.length ? `<div class="chg-repo"><div class="chg-h"><b>Fuera de git</b></div>${c.outside.map(f => chgRow({ ...f, status: 'fuera de git', pending: false })).join('')}</div>` : '')
-      + `<small class="muted chg-at">Consultado ${fmtTime(c.at, {second: '2-digit'})}</small>`;
+    body =
+      c.repos
+        .map(r => {
+          const mine = r.files.length ? r.files.map(chgRow).join('') : '<p class="muted">No editó archivos aquí.</p>';
+          const others = r.others.length
+            ? `<div class="chg-sep">Otros cambios sin commit en este repo${r.othersMore ? ` (y ${r.othersMore} más)` : ''}</div>${r.others.map(chgRow).join('')}`
+            : '';
+          return `<div class="chg-repo"><div class="chg-h"><b>${esc(r.name)}</b>${r.branch ? `<code>${esc(r.branch)}</code>` : ''}<small>${r.pending ? `${r.pending} sin commit` : 'todo en commits'}</small></div>${mine}${others}</div>`;
+        })
+        .join('') +
+      (c.outside.length
+        ? `<div class="chg-repo"><div class="chg-h"><b>Fuera de git</b></div>${c.outside.map(f => chgRow({ ...f, status: 'fuera de git', pending: false })).join('')}</div>`
+        : '') +
+      `<small class="muted chg-at">Consultado ${fmtTime(c.at, { second: '2-digit' })}</small>`;
   }
   const pend = c ? c.repos.reduce((n, r) => n + r.files.filter(f => f.pending).length, 0) : null;
   const sum = `🧾 Cambios <small>${d.files} archivo${d.files === 1 ? '' : 's'} tocado${d.files === 1 ? '' : 's'}${pend != null ? ` · ${pend} sin commit` : ''}</small>`;
@@ -30,21 +53,42 @@ function changesBlock(d) {
 
 async function loadChanges(name) {
   if (chg.loading.has(name)) return;
-  chg.loading.add(name); schedulePanel();
-  try { const data = await api('GET', `/api/robots/${encodeURIComponent(name)}/cambios`); chg.cache.set(name, { ...data, at: Date.now() }); }
-  catch { /* el robot pudo haberse ido; api() ya avisó */ }
-  finally { chg.loading.delete(name); schedulePanel(); }
+  chg.loading.add(name);
+  schedulePanel();
+  try {
+    const data = await api('GET', `/api/robots/${encodeURIComponent(name)}/cambios`);
+    chg.cache.set(name, { ...data, at: Date.now() });
+  } catch {
+    /* el robot pudo haberse ido; api() ya avisó */
+  } finally {
+    chg.loading.delete(name);
+    schedulePanel();
+  }
 }
 
-PANEL.addEventListener('toggle', e => {
-  if (e.target.id !== 'chg-box') return;
-  chg.open = e.target.open;
-  if (chg.open && st.robots.has(st.selected)) loadChanges(st.selected);
-  schedulePanel();
-}, true);
+PANEL.addEventListener(
+  'toggle',
+  e => {
+    if (e.target.id !== 'chg-box') return;
+    chg.open = e.target.open;
+    if (chg.open && st.robots.has(st.selected)) loadChanges(st.selected);
+    schedulePanel();
+  },
+  true
+);
 
-onClick('[data-chg-refresh]', (_, e) => { e.preventDefault(); chg.open = true; $('#chg-box', PANEL)?.setAttribute('open', ''); loadChanges(st.selected); });
+onClick('[data-chg-refresh]', (_, e) => {
+  e.preventDefault();
+  chg.open = true;
+  $('#chg-box', PANEL)?.setAttribute('open', '');
+  loadChanges(st.selected);
+});
 onClick('[data-chg-open]', async f => {
-  const r = await api('POST', `/api/robots/${encodeURIComponent(st.selected)}/cambios-abrir`, { path: f.dataset.chgOpen }).catch(() => null);
-  if (r) toast(r.mode === 'diff' ? 'Abierto en VS Code: el último commit a la izquierda, el archivo de hoy a la derecha' : 'Abierto en el editor');
+  const r = await api('POST', `/api/robots/${encodeURIComponent(st.selected)}/cambios-abrir`, { path: f.dataset.chgOpen }).catch(
+    () => null
+  );
+  if (r)
+    toast(
+      r.mode === 'diff' ? 'Abierto en VS Code: el último commit a la izquierda, el archivo de hoy a la derecha' : 'Abierto en el editor'
+    );
 });

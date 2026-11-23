@@ -11,7 +11,11 @@ import { addBg, bgDone, bgOutput } from './hooks.mjs';
 function pumpTranscript(r) {
   if (!r.transcript) return;
   let size;
-  try { size = fs.statSync(r.transcript).size; } catch { return; }
+  try {
+    size = fs.statSync(r.transcript).size;
+  } catch {
+    return;
+  }
   if (size <= r.offset) return;
   const fd = fs.openSync(r.transcript, 'r');
   const buf = Buffer.alloc(size - r.offset);
@@ -27,9 +31,17 @@ function pumpTranscript(r) {
     if (!line.trim()) continue;
     // Un aviso de fin de tarea de fondo puede llegar en medio de un turno: Claude Code lo guarda como entrada interna
     // (attachment o queue-operation) y no pasa por el hook de tus mensajes. Se busca en cualquier línea.
-    if (r.bg && line.includes('<task-notification>')) { const n = Object.keys(r.bg).length; bgDone(r, line.replace(/\\n/g, '\n').replace(/\\\//g, '/')); if (!r.restoring && Object.keys(r.bg).length !== n) emit(r); }
+    if (r.bg && line.includes('<task-notification>')) {
+      const n = Object.keys(r.bg).length;
+      bgDone(r, line.replace(/\\n/g, '\n').replace(/\\\//g, '/'));
+      if (!r.restoring && Object.keys(r.bg).length !== n) emit(r);
+    }
     let e;
-    try { e = JSON.parse(line); } catch { continue; }
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
     onTranscript(r, e);
   }
 }
@@ -37,20 +49,31 @@ function pumpTranscript(r) {
 // Comandos que escribes en su consola y no pasan por el hook de tus mensajes: «!comando» (modo bash) y los
 // comandos locales de Claude (/context, /compact, /model…). Solo quedan en el transcript: se muestran como «shell».
 const tagOf = (t, k) => (new RegExp(`<${k}>([\\s\\S]*?)</${k}>`).exec(t) || [])[1];
-const cutKeep = (t, n) => t.length > n ? t.slice(0, n) + '\n…' : t; // como trunc, pero respeta los saltos de línea
-const stripAnsi = t => String(t ?? '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r/g, '');
+const cutKeep = (t, n) => (t.length > n ? t.slice(0, n) + '\n…' : t); // como trunc, pero respeta los saltos de línea
+const stripAnsi = t =>
+  String(t ?? '')
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+    .replace(/\r/g, '');
 function shellLog(r, text) {
   const bi = tagOf(text, 'bash-input');
-  if (bi != null) { log(r, 'shell', bi.trim(), { cmd: true }); return true; }
-  const bo = tagOf(text, 'bash-stdout'), be = tagOf(text, 'bash-stderr');
+  if (bi != null) {
+    log(r, 'shell', bi.trim(), { cmd: true });
+    return true;
+  }
+  const bo = tagOf(text, 'bash-stdout'),
+    be = tagOf(text, 'bash-stderr');
   if (bo != null || be != null) {
     const out = [stripAnsi(bo).trim(), stripAnsi(be).trim()].filter(Boolean).join('\n');
     log(r, 'shell', cutKeep(out, 6000) || '(sin salida)', { err: !!stripAnsi(be).trim() });
     return true;
   }
   const name = tagOf(text, 'command-name');
-  if (name) { log(r, 'shell', `${name.trim()} ${(tagOf(text, 'command-args') || '').trim()}`.trim(), { cmd: true, slash: true }); return true; }
-  const lo = tagOf(text, 'local-command-stdout'), le = tagOf(text, 'local-command-stderr');
+  if (name) {
+    log(r, 'shell', `${name.trim()} ${(tagOf(text, 'command-args') || '').trim()}`.trim(), { cmd: true, slash: true });
+    return true;
+  }
+  const lo = tagOf(text, 'local-command-stdout'),
+    le = tagOf(text, 'local-command-stderr');
   if (lo != null || le != null) {
     const out = [stripAnsi(lo).trim(), stripAnsi(le).trim()].filter(Boolean).join('\n');
     log(r, 'shell', cutKeep(out, 6000) || '(sin salida)', { err: !!stripAnsi(le).trim() });
@@ -60,18 +83,31 @@ function shellLog(r, text) {
 }
 function onTranscript(r, e) {
   if (e.isSidechain) return;
-  if (e.type === 'system' && e.subtype === 'local_command') { if (shellLog(r, String(e.content ?? ''))) { r.lastEventAt = now(); emit(r); } return; }
+  if (e.type === 'system' && e.subtype === 'local_command') {
+    if (shellLog(r, String(e.content ?? ''))) {
+      r.lastEventAt = now();
+      emit(r);
+    }
+    return;
+  }
   // /compact (o el automático): Claude anota cuánto contexto quedó. Hasta su próxima respuesta, el medidor usa eso.
   if (e.type === 'system' && e.subtype === 'compact_boundary') {
     const post = Number(e.compactMetadata?.postTokens);
     r.ctxPost = Number.isFinite(post) && post > 0 ? post : 0;
-    log(r, 'sys', `Compactó su contexto${e.compactMetadata?.preTokens ? `: de ${fmtK(e.compactMetadata.preTokens)} a ${fmtK(r.ctxPost)} tokens` : ''}`);
+    log(
+      r,
+      'sys',
+      `Compactó su contexto${e.compactMetadata?.preTokens ? `: de ${fmtK(e.compactMetadata.preTokens)} a ${fmtK(r.ctxPost)} tokens` : ''}`
+    );
     if (!r.restoring) emit(r); // el medidor del escritorio baja ya, sin esperar otro evento del robot
     return;
   }
   if (e.type === 'assistant' && e.message) {
     // Un mensaje llega en varias lineas con el mismo id; la ultima trae el usage final.
-    if (e.message.id && e.message.usage) { r.msgUsage.set(e.message.id, e.message.usage); r.ctxPost = null; }
+    if (e.message.id && e.message.usage) {
+      r.msgUsage.set(e.message.id, e.message.usage);
+      r.ctxPost = null;
+    }
     if (e.message.model && e.message.model !== '<synthetic>') r.model = e.message.model;
     for (const c of e.message.content || []) {
       // Tareas de fondo (shell, Monitor, despertador, cron): quedan anotadas aunque se hayan lanzado antes de reiniciar.
@@ -86,8 +122,16 @@ function onTranscript(r, e) {
   if (e.type === 'user' && e.message) {
     const content = e.message.content;
     const text = typeof content === 'string' ? content : (content || []).map(c => c.text || '').join(' ');
-    if (r.bg && Array.isArray(content)) for (const c of content) if (c.type === 'tool_result' && r.bg[c.tool_use_id]) bgOutput(r, c.tool_use_id, typeof c.content === 'string' ? c.content : JSON.stringify(c.content));
-    if (/<bash-(input|stdout|stderr)>/.test(text)) { shellLog(r, text); r.lastEventAt = now(); emit(r); return; }
+    if (r.bg && Array.isArray(content))
+      for (const c of content)
+        if (c.type === 'tool_result' && r.bg[c.tool_use_id])
+          bgOutput(r, c.tool_use_id, typeof c.content === 'string' ? c.content : JSON.stringify(c.content));
+    if (/<bash-(input|stdout|stderr)>/.test(text)) {
+      shellLog(r, text);
+      r.lastEventAt = now();
+      emit(r);
+      return;
+    }
     // Esc no dispara Stop: la interrupcion solo se ve en el transcript.
     if (/\[Request interrupted/.test(text) && !r.restoring) {
       log(r, 'sys', 'Interrumpido');
@@ -98,6 +142,8 @@ function onTranscript(r, e) {
   }
 }
 
-setInterval(() => { for (const r of robots.values()) pumpTranscript(r); }, 1000);
+setInterval(() => {
+  for (const r of robots.values()) pumpTranscript(r);
+}, 1000);
 
 export { pumpTranscript };
