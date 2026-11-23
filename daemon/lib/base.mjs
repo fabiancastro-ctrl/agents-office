@@ -51,6 +51,23 @@ const ATTACH_MAX_BYTES = 20 * 1024 * 1024;
 const ATTACH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const LOCK_FILE = path.join(RUNS, 'daemon.lock');
+// Guarda JSON de forma atómica: escribe a `file.tmp` y lo renombra, así un corte a media escritura no deja el archivo cortado.
+// { pretty } indenta con 2 espacios (como los archivos que se editan a mano); { eol } agrega el salto de línea final.
+const toJson = (data, { pretty = false, eol = false } = {}) => JSON.stringify(data, null, pretty ? 2 : 0) + (eol ? '\n' : '');
+function saveJson(file, data, opts) {
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, toJson(data, opts));
+  fs.renameSync(tmp, file);
+}
+// Igual que saveJson pero sin bloquear el bucle de eventos: para archivos grandes (archivo de despedidos). El que llama decide si ignora el error.
+// El temporal lleva un número propio: dos guardados seguidos del mismo archivo no deben escribir sobre el mismo temporal.
+let tmpSeq = 0;
+async function saveJsonAsync(file, data, opts) {
+  const tmp = `${file}.${tmpSeq++}.tmp`;
+  await fs.promises.writeFile(tmp, toJson(data, opts));
+  await fs.promises.rename(tmp, file);
+}
+
 // Lo que el daemon hace al arrancar y que ningún otro módulo debe hacer al cargarse: revisar la sesión, preparar la
 // carpeta de datos y los hooks de los robots, tomar el candado y escuchar señales. Lo llama daemon.mjs antes que nada;
 // así los módulos se pueden importar sueltos (p. ej. en test/unit.test.mjs) sin tomar el candado ni salir del proceso.
@@ -70,7 +87,7 @@ function boot() {
       SessionStart: ev(10), UserPromptSubmit: ev(10), PreToolUse: [...ev(600, '*'), { matcher: 'AskUserQuestion', hooks: [askHook] }], PostToolUse: ev(10, '*'),
       SubagentStop: ev(10), Notification: ev(10), Stop: ev(10)
     } };
-    fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + '\n');
+    saveJson(SETTINGS, settings, { pretty: true, eol: true });
   }
   // Una copia de la carpeta = una oficina: dos daemons sobre el mismo runs/ se pisarían el estado y la bandeja.
   try {
@@ -83,7 +100,7 @@ function boot() {
       process.exit(1);
     }
   } catch { /* sin candado */ }
-  fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, port: PORT, session: SESSION }));
+  saveJson(LOCK_FILE, { pid: process.pid, port: PORT, session: SESSION });
   // Al salir: suelta el candado y deja en el registro cómo terminó (señal, error o código). Si una oficina aparece
   // detenida y su registro no dice nada, la mataron sin aviso (kill -9, el sistema). Las conversaciones las guarda
   // persistencia.mjs con su propio aviso de salida.
@@ -128,4 +145,4 @@ function describeTool(tool, input = {}) {
   return tool;
 }
 
-export { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, ATTACH_DIR, ATTACH_MAX_BYTES, ATTACH_TTL_MS, boot, CLAUDE_BIN, clients, colorSeq, CONFIG_FILE, console_, describeTool, EVENTS_FILE, HOLD_TOOLS, inbox, LEGACY_RUNS, MAX_ROBOTS_LIMIT, maxRobots, NAMES, NEVER_ALLOW, nextColor, now, pending, PERMISSION_MODES, PORT, replaceList, robots, ROOT, ROUTINE_TICK_MS, run, RUNS, SESSION, setColorSeq, setMaxRobots, SETTINGS, setWorkspace, TIMELINE_MAX, trunc, WEB, WORKSPACE };
+export { APPROVAL, APPROVAL_TIMEOUT_MS, ASK_TIMEOUT_MS, ATTACH_DIR, ATTACH_MAX_BYTES, ATTACH_TTL_MS, boot, CLAUDE_BIN, clients, colorSeq, CONFIG_FILE, console_, describeTool, EVENTS_FILE, HOLD_TOOLS, inbox, LEGACY_RUNS, MAX_ROBOTS_LIMIT, maxRobots, NAMES, NEVER_ALLOW, nextColor, now, pending, PERMISSION_MODES, PORT, replaceList, robots, ROOT, ROUTINE_TICK_MS, run, RUNS, saveJson, saveJsonAsync, SESSION, setColorSeq, setMaxRobots, SETTINGS, setWorkspace, TIMELINE_MAX, trunc, WEB, WORKSPACE };

@@ -2,7 +2,7 @@
 // Parte de daemon/daemon.mjs, que carga los módulos de daemon/lib/ en orden y arranca la oficina.
 import fs from 'node:fs';
 import path from 'node:path';
-import { APPROVAL, clients, inbox, MAX_ROBOTS_LIMIT, maxRobots, now, robots, RUNS, SESSION, WORKSPACE } from './base.mjs';
+import { APPROVAL, clients, inbox, MAX_ROBOTS_LIMIT, maxRobots, now, robots, RUNS, saveJson, SESSION, WORKSPACE } from './base.mjs';
 import { crownOf, quotaPeriods } from './uso.mjs';
 import { officeName, readConfig } from './carpeta.mjs';
 import { saveState } from './persistencia.mjs';
@@ -99,7 +99,7 @@ function rollWeek() {
   const first = !stats.week;
   stats.week = { from, count: first ? (stats.day === localDay() ? stats.today : 0) : 0, n: first ? 0 : (stats.week.n || 0) + 1 };
   if (!first) stats.repotAt = now();
-  try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
+  try { saveJson(STATS_FILE, stats, { pretty: true }); } catch { /* sin disco: solo no se guarda */ }
   return !first;
 }
 // Tareas por día (para la pizarra de la semana de la sala de descanso): se guardan los últimos 21 días. La primera vez
@@ -129,7 +129,7 @@ function bumpStats(r) {
   days[d] = (days[d] || 0) + 1;
   for (const k of Object.keys(days).sort().slice(0, -21)) delete days[k]; // solo los últimos 21 días
   if (/review|audit|security/i.test(String(r.skill || ''))) stats.reviews++;
-  try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
+  try { saveJson(STATS_FILE, stats, { pretty: true }); } catch { /* sin disco: solo no se guarda */ }
   broadcast({ type: 'config', config: configView() });
 }
 // 3 · Tiempo esperándote: cuánto pasaron los robots esperando un permiso, una pregunta o tu respuesta, por día (7 días).
@@ -147,7 +147,7 @@ function addWait(name, startIso, kind, perm) {
   const keys = Object.keys(w.perms);
   if (keys.length > 20) for (const k of keys.sort((a, b) => w.perms[a].ms - w.perms[b].ms).slice(0, keys.length - 20)) delete w.perms[k];
   for (const k of Object.keys(all).sort().slice(0, -7)) delete all[k]; // solo los últimos 7 días
-  try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco: solo no se guarda */ }
+  try { saveJson(STATS_FILE, stats, { pretty: true }); } catch { /* sin disco: solo no se guarda */ }
   broadcast({ type: 'config', config: configView() });
 }
 // 6 · Horas de trabajo: minutos-robot trabajando y esperándote por hora del día (últimos 14 días). Se puede apagar
@@ -164,7 +164,7 @@ setInterval(() => {
     else if (r.state === 'input') day.i[h]++;
   }
   for (const k of Object.keys(all).sort().slice(0, -HOURS_DAYS)) delete all[k];
-  if (++hoursDirty >= 10) { hoursDirty = 0; try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2)); } catch { /* sin disco */ } broadcast({ type: 'config', config: configView() }); }
+  if (++hoursDirty >= 10) { hoursDirty = 0; try { saveJson(STATS_FILE, stats, { pretty: true }); } catch { /* sin disco */ } broadcast({ type: 'config', config: configView() }); }
 }, Number(process.env.OFFICE_HOURS_TICK_MS) || 60e3);
 function hoursView() {
   const all = stats.hours || {}, days = Object.keys(all).sort().slice(-HOURS_DAYS);

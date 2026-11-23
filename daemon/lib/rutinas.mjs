@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { now, PERMISSION_MODES, PORT, replaceList, robots, ROUTINE_TICK_MS, run, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { now, PERMISSION_MODES, PORT, replaceList, robots, ROUTINE_TICK_MS, run, RUNS, saveJson, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, usage } from './estado.mjs';
 import { log } from './persistencia.mjs';
 import { archive } from './turno.mjs';
@@ -37,7 +37,7 @@ for (const rt of routines) {
 
 function saveRoutines() {
   const data = routines.map(({ running, ...rest }) => rest);
-  fs.writeFileSync(ROUTINES_FILE, JSON.stringify(data, null, 2));
+  saveJson(ROUTINES_FILE, data, { pretty: true });
 }
 
 /* horarios */

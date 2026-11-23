@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { console_, now, replaceList, robots, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { console_, now, replaceList, robots, RUNS, saveJson, saveJsonAsync, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { lookFromName } from './equipo.mjs';
 import { ARCH_FILE, ARCH_MAX, archive, normText, sumDir } from './turno.mjs';
@@ -106,7 +106,7 @@ function migrateSummaries() {
     }
     if (!fs.readdirSync(old).length) fs.rmdirSync(old);
   } catch (e) { console.error(`No se pudieron mudar los resúmenes a ${sumDir()}: ${e.message}`); }
-  if (moved) { fs.writeFileSync(ARCH_FILE, JSON.stringify(archive)); console.log(`Resúmenes mudados a ${sumDir()}: ${moved}`); }
+  if (moved) { saveJson(ARCH_FILE, archive); console.log(`Resúmenes mudados a ${sumDir()}: ${moved}`); }
 }
 function writeSummary(r, summary, by) {
   const day = now().slice(0, 10);
@@ -142,7 +142,7 @@ function archiveRobot(r, reason, robotSummary, by = 'robot') {
     summary, summaryBy: by, summaryPath, permissionMode: r.permissionMode || '', request: r.request || null, transcript: r.transcript || null, sessionId: r.sessionId || null,
     startedAt: r.startedAt, leftAt: now(), reason, docs: r.docs.map(d => d.path), log });
   if (archive.length > ARCH_MAX) replaceList(archive, archive.slice(-ARCH_MAX));
-  fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+  saveJsonAsync(ARCH_FILE, archive).catch(() => {});
   emitArchive();
 }
 const RELEVO_REASON = 'relevado por contexto'; // el motivo con que relevo.mjs da de baja al robot relevado
@@ -203,7 +203,7 @@ async function despedidosApi(req, res, url, parts) {
       const gone = archive.filter(x => x.reason === RELEVO_REASON);
       if (!gone.length) return send(res, 200, { ok: true, quitados: 0, papelera: 0 });
       replaceList(archive, archive.filter(x => x.reason !== RELEVO_REASON));
-      fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+      saveJsonAsync(ARCH_FILE, archive).catch(() => {});
       emitArchive();
       let papelera = 0;
       for (const a of gone) if (a.summaryPath && !archive.some(x => x.summaryPath === a.summaryPath) && toTrash(a.summaryPath, path.basename(a.summaryPath, '.md'))) papelera++;
@@ -213,7 +213,7 @@ async function despedidosApi(req, res, url, parts) {
       const a = archive.find(x => x.id === parts[2]);
       if (!a) return send(res, 404, { error: 'Ese robot ya no está en el archivo.' });
       replaceList(archive, archive.filter(x => x !== a));
-      fs.promises.writeFile(ARCH_FILE, JSON.stringify(archive)).catch(() => {});
+      saveJsonAsync(ARCH_FILE, archive).catch(() => {});
       emitArchive();
       // Solo si ningún otro despedido usa ese mismo .md (no debería, pero no se borra lo que otro necesita).
       const moved = a.summaryPath && !archive.some(x => x.summaryPath === a.summaryPath) ? toTrash(a.summaryPath, path.basename(a.summaryPath, '.md')) : null;

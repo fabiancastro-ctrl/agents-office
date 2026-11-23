@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { inbox, now, replaceList, robots, ROOT, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { inbox, now, replaceList, robots, ROOT, RUNS, saveJson, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, bumpStats, emit, view } from './estado.mjs';
 import { log, saveState, setState } from './persistencia.mjs';
 import { maybeFlush, pendingResults, reportToParent } from './equipo.mjs';
@@ -121,13 +121,13 @@ function requestOf(r) {
 const FAV_FILE = path.join(RUNS, 'frecuentes.json');
 let favorites = [];
 try { favorites = JSON.parse(fs.readFileSync(FAV_FILE, 'utf8')); } catch { /* sin frecuentes */ }
-function saveFavorites() { fs.writeFileSync(FAV_FILE, JSON.stringify(favorites, null, 2)); broadcast({ type: 'favorites', favorites }); }
+function saveFavorites() { saveJson(FAV_FILE, favorites, { pretty: true }); broadcast({ type: 'favorites', favorites }); }
 // «Para enviar»: mensajes de robots que fijaste para pegarlos después en Google Chat o Slack. Guardan el texto,
 // así siguen aunque el robot se vaya.
 const PIN_FILE = path.join(RUNS, 'para-enviar.json');
 let pins = [];
 try { pins = JSON.parse(fs.readFileSync(PIN_FILE, 'utf8')); } catch { /* sin fijados */ }
-function savePins() { fs.writeFileSync(PIN_FILE, JSON.stringify(pins, null, 2)); broadcast({ type: 'pins', pins }); }
+function savePins() { saveJson(PIN_FILE, pins, { pretty: true }); broadcast({ type: 'pins', pins }); }
 
 // Indicaciones que la oficina le suma a cada robot nuevo: los mensajes para enviar van en una cita (>) para que la
 // oficina les ponga «📋 Copiar»; al copiar se convierten al formato del chat, así que el robot escribe Markdown normal.

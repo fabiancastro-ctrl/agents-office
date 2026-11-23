@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { colorSeq, console_, inbox, maxRobots, now, robots, run, RUNS, SESSION, setColorSeq, setMaxRobots, TIMELINE_MAX, WORKSPACE } from './base.mjs';
+import { colorSeq, console_, inbox, maxRobots, now, robots, run, RUNS, saveJson, SESSION, setColorSeq, setMaxRobots, TIMELINE_MAX, WORKSPACE } from './base.mjs';
 import { addWait, broadcast, emit } from './estado.mjs';
 import { pendingResults, spawnQueue } from './equipo.mjs';
 import { criticalOf } from './turno.mjs';
@@ -31,7 +31,7 @@ function saveState() {
       spawnQueue,
       pendingResults: [...pendingResults]
     };
-    fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
+    saveJson(STATE_FILE, data, { pretty: true });
   }, 500);
 }
 
@@ -116,7 +116,7 @@ function flushConvs() {
   for (const name of convDirty) {
     const r = robots.get(name);
     if (!r) continue;
-    try { fs.writeFileSync(convFile(name), JSON.stringify({ sessionId: r.sessionId, offset: Math.max(r.offset - Buffer.byteLength(r.partial || ''), r.muteUntil || 0), log: r.log })); } catch { /* disco lleno o sin permisos: se reintenta con el próximo mensaje */ }
+    try { saveJson(convFile(name), { sessionId: r.sessionId, offset: Math.max(r.offset - Buffer.byteLength(r.partial || ''), r.muteUntil || 0), log: r.log }); } catch { /* disco lleno o sin permisos: se reintenta con el próximo mensaje */ }
   }
   convDirty.clear();
 }

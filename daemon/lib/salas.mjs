@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { now, PORT, replaceList, robots, RUNS, trunc, WORKSPACE } from './base.mjs';
+import { now, PORT, replaceList, robots, RUNS, saveJson, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { freeDesk, log, roomSeat, saveState } from './persistencia.mjs';
 import { spawnQueue } from './equipo.mjs';
@@ -24,7 +24,7 @@ const THREAD_MAX = 300;
 let salas = [];
 try { salas = JSON.parse(fs.readFileSync(SALAS_FILE, 'utf8')); } catch { salas = []; }
 
-function saveSalas() { fs.writeFileSync(SALAS_FILE, JSON.stringify(salas, null, 2)); }
+function saveSalas() { saveJson(SALAS_FILE, salas, { pretty: true }); }
 function contextPath(s) { return path.join(SALAS_DIR, s.id, 'CONTEXT.md'); }
 function threadPath(s) { return path.join(SALAS_DIR, s.id, 'HILO.md'); }
 
@@ -222,7 +222,7 @@ function archiveSala(s, reason) {
     context: contextPath(s), threadFile: threadPath(s), messages: s.thread.length, docs: s.docs.length, createdAt: s.createdAt, closedAt: now(), reason,
     saved: { key: s.key || '', folder: s.folder || '', thread: s.thread, docs: s.docs, notes: s.notes || [], roster: s.roster || [], ownerLook: s.ownerLook || null, rosterMoved: !!s.rosterMoved } }); // para «Reabrir»
   salasArchive = salasArchive.slice(0, 300);
-  fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
+  saveJson(SALAS_ARCH_FILE, salasArchive, { pretty: true });
 }
 
 // Lo que recibe un robot al entrar a una sala. El CONTEXT.md va copiado aquí (si es razonable): leerlo con una
@@ -305,7 +305,7 @@ async function salasApi(req, res, url, parts) {
       if (!sv.thread && fs.existsSync(threadPath(s))) fs.renameSync(threadPath(s), path.join(path.dirname(threadPath(s)), 'HILO-anterior.md'));
       salas.push(s);
       replaceList(salasArchive, salasArchive.filter(x => x !== e));
-      fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
+      saveJson(SALAS_ARCH_FILE, salasArchive, { pretty: true });
       writeThreadFile(s); saveSalas(); emitSalas();
       return send(res, 200, { ok: true, id: s.id });
     }
@@ -317,7 +317,7 @@ async function salasApi(req, res, url, parts) {
       const dir = path.dirname(e.context);
       const moved = dir.startsWith(SALAS_DIR + path.sep) ? toTrash(dir, `sala-${e.id}`) : null;
       replaceList(salasArchive, salasArchive.filter(x => x !== e));
-      fs.writeFileSync(SALAS_ARCH_FILE, JSON.stringify(salasArchive, null, 2));
+      saveJson(SALAS_ARCH_FILE, salasArchive, { pretty: true });
       return send(res, 200, { ok: true, papelera: moved });
     }
     if (req.method === 'POST' && url.pathname === '/api/salas') {

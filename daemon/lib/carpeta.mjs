@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { CONFIG_FILE, LEGACY_RUNS, ROOT, RUNS, WORKSPACE } from './base.mjs';
+import { CONFIG_FILE, LEGACY_RUNS, ROOT, RUNS, saveJson, WORKSPACE } from './base.mjs';
 import { listSkills } from './tmux.mjs';
 
 /* ---------- carpeta de trabajo ---------- */
@@ -20,7 +20,7 @@ function readConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
 }
 function saveConfig(patch) {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify({ ...readConfig(), ...patch }, null, 2));
+  saveJson(CONFIG_FILE, { ...readConfig(), ...patch }, { pretty: true });
 }
 function saveWorkspace(ws) {
   saveConfig({ workspace: ws });
