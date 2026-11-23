@@ -107,6 +107,7 @@ setInterval(scheduleCards, 30000); // «sin actividad» cambia con el reloj, no 
 
 // Avisos: contador en el título de la pestaña (siempre) y, si los activas, sonido y notificación del sistema.
 st.inboxTemp = prefGet('inboxTemp', '0') === '1';
+st.inboxGroup = prefGet('inboxGroup', 'robot');
 const notif = { on: prefGet('notify', '0') === '1', known: null, ctx: null, base: document.title };
 const alertOf = d =>
   d.consoleLost

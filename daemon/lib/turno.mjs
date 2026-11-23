@@ -100,6 +100,10 @@ function deliver(r) {
     robot: r.name,
     label: r.label,
     sessionId: r.sessionId,
+    // Kept on the item so the inbox can be grouped by room or repo even after the robot is gone.
+    sala: r.place?.sala || null,
+    salaName: salas.find(s => s.id === r.place?.sala)?.name || null,
+    repo: r.repo || null,
     at: now(),
     status: 'nuevo',
     updated: !!d.updated,

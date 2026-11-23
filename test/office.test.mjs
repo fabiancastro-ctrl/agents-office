@@ -1714,3 +1714,36 @@ test('salas: pedir robots y dar de baja al último hijo antes de aprobar no borr
     await o.stop();
   }
 });
+
+test('bandeja: marcar vistos varios documentos a la vez ignora ids desconocidos y no toca el resto', async () => {
+  const item = (id, extra = {}) => ({ id, path: `/x/${id}.md`, robot: 'r', label: 'l', at: 1, status: 'nuevo', ...extra });
+  const o = await startOffice({
+    files: {
+      'office-state.json': JSON.stringify({
+        colorSeq: 0,
+        maxRobots: 4,
+        inbox: [item('a1', { sala: 's1', salaName: 'Puente', repo: 'nr-x' }), item('b2'), item('c3')],
+        robots: []
+      })
+    }
+  });
+  try {
+    const bad = await o.api('POST', '/api/inbox/seen-many', { ids: 'a1' });
+    assert.equal(bad.status, 400);
+    const ok = await o.api('POST', '/api/inbox/seen-many', { ids: ['a1', 'b2', 'zzz'] });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.marked, 2);
+    const inbox = (await o.snapshot()).inbox;
+    assert.deepEqual(
+      inbox.map(i => [i.id, i.status]),
+      [
+        ['a1', 'visto'],
+        ['b2', 'visto'],
+        ['c3', 'nuevo']
+      ]
+    );
+    assert.equal(inbox[0].salaName, 'Puente', 'los campos de sala y repo se conservan');
+  } finally {
+    await o.stop();
+  }
+});

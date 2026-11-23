@@ -231,29 +231,50 @@ function inboxPanel() {
       </div>
     </div>`;
   };
-  // Agrupado por robot (el que entregó más reciente primero): cada robot es una tarea distinta.
+  // Grouped by robot (default), room or repo. Groups keep the order of the inbox (latest delivery first);
+  // inside each group the oldest document goes first.
+  const mode = ['robot', 'sala', 'repo'].includes(st.inboxGroup) ? st.inboxGroup : 'robot';
+  const keyOf = i =>
+    mode === 'sala' ? i.salaName || (i.sala ? 'Sala cerrada' : 'Sin sala') : mode === 'repo' ? i.repo || 'Sin repo' : i.robot;
   const groups = new Map();
   for (const i of items) {
-    if (!groups.has(i.robot)) groups.set(i.robot, []);
-    groups.get(i.robot).push(i);
+    const k = keyOf(i);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(i);
   }
+  for (const list of groups.values()) list.sort((a, b) => a.at - b.at);
   const rows = [...groups]
-    .map(([robot, list]) => {
-      const live = st.robots.get(robot);
+    .map(([key, list]) => {
       const nNew = list.filter(i => i.status !== 'visto').length;
+      const count = `${list.length} doc${list.length === 1 ? '' : 's'}${nNew && filter !== 'nuevos' ? ` · ${nNew} nuevo${nNew === 1 ? '' : 's'}` : ''}`;
+      const seenBtn = `<button class="btn sm" data-inbox="seen-group" data-ids="${esc(
+        list
+          .filter(i => i.status !== 'visto')
+          .map(i => i.id)
+          .join(',')
+      )}" ${nNew ? '' : 'disabled'}>Marcar vista todo</button>`;
+      let head;
+      if (mode === 'robot') {
+        const live = st.robots.get(key);
+        head = `${live ? `<span class="ib-av">${robotSVG(COLORS[live.data.color % COLORS.length], lookOf(key, live.data.place, live.data))}</span>` : ''}<b>${esc(key)}</b><span class="ib-lbl" title="${esc(list[0].label)}">${esc(list[0].label)}</span><small>${count}${live ? '' : ' · ya se fue'}</small>`;
+      } else {
+        head = `<b>${esc(key)}</b><span class="ib-lbl"></span><small>${count}</small>`;
+      }
       return `<section class="ib-g">
-      <div class="ib-gh">${live ? `<span class="ib-av">${robotSVG(COLORS[live.data.color % COLORS.length], lookOf(robot, live.data.place, live.data))}</span>` : ''}<b>${esc(robot)}</b><span class="ib-lbl" title="${esc(list[0].label)}">${esc(list[0].label)}</span><small>${list.length} doc${list.length === 1 ? '' : 's'}${nNew && filter !== 'nuevos' ? ` · ${nNew} nuevo${nNew === 1 ? '' : 's'}` : ''}${live ? '' : ' · ya se fue'}</small></div>
+      <div class="ib-gh">${head}${seenBtn}</div>
       ${list.map(row).join('')}
     </section>`;
     })
     .join('');
-  return `<div class="dlg-head"><h3>Tu bandeja</h3><p>Documentos que te entregaron los robots, agrupados por robot. Abrir uno lo marca como visto; archivar lo saca de la lista sin borrar el archivo.</p></div>
+  const seg = (v, label) => `<label><input type="radio" name="inboxg" value="${v}" ${mode === v ? 'checked' : ''}>${label}</label>`;
+  return `<div class="dlg-head"><h3>Tu bandeja</h3><p>Documentos que te entregaron los robots, agrupados por ${mode === 'sala' ? 'sala' : mode === 'repo' ? 'repo' : 'robot'}, con el más viejo primero. Abrir uno lo marca como visto; archivar lo saca de la lista sin borrar el archivo.</p></div>
     <div class="dlg-sec">
       <div class="row between">
         <div class="seg small" role="radiogroup" aria-label="Filtro">
           <label><input type="radio" name="inboxf" value="nuevos" ${filter === 'nuevos' ? 'checked' : ''}>Nuevos (${n})</label>
           <label><input type="radio" name="inboxf" value="todos" ${filter === 'todos' ? 'checked' : ''}>Todos (${shown.length})</label>
         </div>
+        <div class="seg small" role="radiogroup" aria-label="Agrupar por">${seg('robot', 'Robot')}${seg('sala', 'Sala')}${seg('repo', 'Repo')}</div>
         <div class="row">
           ${temps || st.inboxTemp ? `<button class="btn sm" data-inbox="temp" title="Archivos en carpetas temporales (/tmp, scratchpads): borradores, láminas de un deck…">${st.inboxTemp ? 'Ocultar temporales' : `Mostrar temporales (${temps})`}</button>` : ''}
           <button class="btn sm" data-inbox="seen-all" ${n ? '' : 'disabled'}>Marcar todos como vistos</button>

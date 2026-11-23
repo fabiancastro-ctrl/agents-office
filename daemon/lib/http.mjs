@@ -442,6 +442,21 @@ const server = http.createServer(async (req, res) => {
       emitInbox();
       return send(res, 200, { ok: true });
     }
+    if (req.method === 'POST' && url.pathname === '/api/inbox/seen-many') {
+      // Marks several items at once (a group in the inbox panel); unknown ids are ignored.
+      const { ids } = await readBody(req);
+      if (!Array.isArray(ids)) return send(res, 400, { error: 'Faltan los documentos a marcar.' });
+      const set = new Set(ids.map(String));
+      let n = 0;
+      for (const it of inbox) {
+        if (set.has(it.id) && it.status !== 'visto') {
+          it.status = 'visto';
+          n++;
+        }
+      }
+      emitInbox();
+      return send(res, 200, { ok: true, marked: n });
+    }
     if (parts[0] === 'api' && parts[1] === 'inbox' && parts[2]) {
       const idx = inbox.findIndex(x => x.id === parts[2]);
       if (idx < 0) return send(res, 404, { error: 'Ese documento ya no está en la bandeja.' });

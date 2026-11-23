@@ -152,6 +152,11 @@ PANEL.addEventListener('change', e => {
     st.inboxFilter = e.target.value;
     return renderPanel();
   }
+  if (e.target.name === 'inboxg') {
+    st.inboxGroup = e.target.value;
+    prefSet('inboxGroup', st.inboxGroup);
+    return renderPanel();
+  }
   if (
     ['kind', 'rtkind', 'rttype', 'skind', 'rtwhen'].includes(e.target.name) ||
     ['rt-where', 'rt-hours', 'rt-c-kind', 'rt-c-to', 'rt-w-kind'].includes(e.target.id)
@@ -398,6 +403,8 @@ PANEL.addEventListener('click', async e => {
       if (ib.dataset.inbox === 'reveal' && item) await api('POST', '/api/reveal', { path: item.path });
       if (ib.dataset.inbox === 'archive') await api('DELETE', `/api/inbox/${id}`);
       if (ib.dataset.inbox === 'seen-all') await api('POST', '/api/inbox/seen-all');
+      if (ib.dataset.inbox === 'seen-group')
+        await api('POST', '/api/inbox/seen-many', { ids: (ib.dataset.ids || '').split(',').filter(Boolean) });
     } catch {
       /* toast ya mostrado */
     }
