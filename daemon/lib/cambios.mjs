@@ -16,11 +16,14 @@ function trackFile(r, tool, file) {
   const p = path.resolve(String(file));
   if (p.startsWith(RUNS + path.sep)) return false; // memoria de rutinas, adjuntos, estado de la oficina
   r.files ||= [];
+  (r.fileAt ||= {})[p] = Date.now(); // lets «Entendido» on a clash expire when the file is edited again
   const i = r.files.indexOf(p);
-  if (i === r.files.length - 1 && i >= 0) return false;
+  if (i === r.files.length - 1 && i >= 0) return !!r.clashAck; // same file again: only refresh views if a clash was silenced
   if (i >= 0) r.files.splice(i, 1);
   r.files.push(p);
-  if (r.files.length > FILES_MAX) r.files.splice(0, r.files.length - FILES_MAX);
+  if (r.files.length > FILES_MAX) {
+    for (const old of r.files.splice(0, r.files.length - FILES_MAX)) delete r.fileAt[old];
+  }
   return true;
 }
 
@@ -251,4 +254,4 @@ async function openChange(r, p) {
   return { status: 200, mode: 'archivo' };
 }
 
-export { filesFromTranscript, openChange, robotChanges, trackFile };
+export { filesFromTranscript, openChange, real, robotChanges, trackFile };

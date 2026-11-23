@@ -92,3 +92,16 @@ onClick('[data-chg-open]', async f => {
       r.mode === 'diff' ? 'Abierto en VS Code: el último commit a la izquierda, el archivo de hoy a la derecha' : 'Abierto en el editor'
     );
 });
+
+// File clashes: another live robot edited the same file. A warning only; «Entendido» silences it until either edits again.
+function clashBox(d) {
+  if (!d.clashes?.length) return '';
+  const rows = d.clashes
+    .map(
+      c =>
+        `<div class="clash-row"><span>⚠ También editó este archivo: <b title="${esc(c.file)}">${esc(shownPath(c.file))}</b> <small>(${c.with.map(esc).join(', ')})</small></span><button type="button" class="btn sm" data-act="clash-ack" data-file="${esc(c.file)}">Entendido</button></div>`
+    )
+    .join('');
+  return `<div class="alert clash-box" id="clash-box">${rows}</div>`;
+}
+const shownPath = p => p.split('/').slice(-2).join('/'); // parent folder + file name, enough to recognize it

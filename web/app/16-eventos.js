@@ -490,6 +490,7 @@ PANEL.addEventListener('click', async e => {
       return select('@cron');
     }
     if (b.dataset.act === 'revive' && a) return revive(name, b);
+    if (b.dataset.act === 'clash-ack' && a) return await api('POST', `/api/robots/${name}/clash-ack`, { file: b.dataset.file });
     if (b.dataset.act === 'sumkill' && a) return sumKill(name);
     if (b.dataset.act === 'relevar' && a) return relevar(name);
     if (b.dataset.act === 'seguir-sin-relevo' && a) return seguirSinRelevo(name);

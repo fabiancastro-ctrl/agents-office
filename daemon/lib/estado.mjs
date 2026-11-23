@@ -11,6 +11,7 @@ import { archive, criticalOf, requestOf } from './turno.mjs';
 import { convDir } from './exportar.mjs';
 import { contextPath, salaExportDir, salas, salasArchive, threadPath } from './salas.mjs';
 import { bgList } from './hooks.mjs';
+import { clashesOf } from './choques.mjs';
 
 /* ---------- estado ---------- */
 
@@ -97,6 +98,7 @@ function view(r, withLog = false) {
     lastEventAt: r.lastEventAt || null,
     repo: r.repo || null,
     files: (r.files || []).length,
+    clashes: clashesOf(r),
     spend: r.spend || null,
     crown: crownOf(r.name),
     loop: r.loop || null

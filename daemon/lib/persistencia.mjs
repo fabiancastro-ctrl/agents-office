@@ -76,6 +76,8 @@ function saveState() {
         repo: r.repo || null,
         bg: r.bg || null,
         files: r.files || [],
+        fileAt: r.fileAt || {},
+        clashAck: r.clashAck || {},
         gitCwd: r.gitCwd || null
       })),
       spawnQueue,

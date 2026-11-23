@@ -1526,6 +1526,40 @@ test('cambios: archivos que tocó el robot con su estado en git, otros cambios d
   }
 });
 
+test('choques: dos robots vivos que editaron el mismo archivo se avisan; «Entendido» calla hasta que alguien lo edite otra vez', async () => {
+  const o = await startOffice();
+  try {
+    const f = path.join(o.ws, 'compartido.txt');
+    fs.writeFileSync(f, 'x\n');
+    for (const n of ['uno', 'dos', 'tres']) await o.api('POST', '/api/robots', libre(n));
+    const edit = (n, file) => o.hook(n, { hook_event_name: 'PostToolUse', tool_name: 'Edit', cwd: o.ws, tool_input: { file_path: file } });
+    const clashes = async n => (await o.robot(n)).clashes;
+    await edit('uno', f);
+    assert.deepEqual(await clashes('uno'), [], 'sin otro editor no hay choque');
+    await edit('dos', f);
+    const c1 = await clashes('uno');
+    assert.equal(c1.length, 1);
+    assert.deepEqual(c1[0].with, ['dos']);
+    assert.deepEqual((await clashes('dos'))[0].with, ['uno']);
+    assert.deepEqual(await clashes('tres'), []);
+    // uno acknowledges: silences only its own warning
+    assert.equal((await o.api('POST', '/api/robots/uno/clash-ack', { file: c1[0].file })).status, 200);
+    assert.deepEqual(await clashes('uno'), []);
+    assert.equal((await clashes('dos')).length, 1);
+    // dos edits it again: uno's warning comes back
+    await sleep(5);
+    await edit('dos', f);
+    assert.equal((await clashes('uno')).length, 1);
+    // un robot despedido ya no choca
+    await o.api('DELETE', '/api/robots/dos');
+    await waitFor(async () => !(await o.snapshot()).robots.some(r => r.name === 'dos'), { what: 'que se vaya dos' });
+    assert.deepEqual(await clashes('uno'), []);
+    assert.equal((await o.api('POST', '/api/robots/uno/clash-ack', { file: f })).status, 404);
+  } finally {
+    await o.stop();
+  }
+});
+
 test('limpiar relevos: quita del archivo solo a los relevados por contexto y manda sus resúmenes a la Papelera', async () => {
   const trash = fs.mkdtempSync(path.join(os.tmpdir(), 'office-trash-'));
   const sum = path.join(os.tmpdir(), `relevo-${Date.now()}.md`);

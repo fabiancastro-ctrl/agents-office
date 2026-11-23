@@ -656,6 +656,11 @@ details.rc-sec[open]>summary h4::after{transform:rotate(90deg)}
 /* ---------- robots sin actividad ---------- */
 .rc.stuck{border-color:color-mix(in srgb,var(--amber) 55%,var(--line))}
 .rc-stuck{color:var(--amber);font-weight:600}
+.rc-clash{color:#ff8a94;font-weight:600}
+.clash-box{gap:6px}
+.clash-row{display:flex;gap:8px;align-items:center;justify-content:space-between;color:#ffd9de}
+.clash-row small{opacity:.8}
+html[data-theme=light] .rc-clash,html[data-theme=light] .clash-row{color:#7a1d2a}
 .rc.stuck .rc-line::before{animation:none;content:"⏸";color:var(--amber)}
 
 /* ---------- bandeja agrupada por robot ---------- */

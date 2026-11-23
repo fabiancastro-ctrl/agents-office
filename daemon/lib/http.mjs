@@ -34,6 +34,7 @@ import { resetRepoIndex, routines, routineView, rutinasApi } from './rutinas.mjs
 import { moveToSala, salas, salasApi, salaView } from './salas.mjs';
 import { mantenimientoApi } from './mantenimiento.mjs';
 import { openChange, robotChanges } from './cambios.mjs';
+import { ackClash } from './choques.mjs';
 
 /* ---------- http ---------- */
 
@@ -235,6 +236,13 @@ route('POST', 'sala', async (r, req, res) => {
 });
 // Cambios: los archivos que tocó y cómo están en git; «abrir» lo muestra en el editor (diff contra HEAD si tiene cambios).
 route('GET', 'cambios', async (r, req, res) => send(res, 200, await robotChanges(r)));
+// «Entendido» on a file clash: silences it for this robot until either editor touches the file again.
+route('POST', 'clash-ack', async (r, req, res) => {
+  const file = String((await readBody(req)).file || '');
+  if (!ackClash(r, file)) return send(res, 404, { error: 'Ese choque ya no existe.' });
+  emit(r);
+  return send(res, 200, { ok: true });
+});
 route('POST', 'cambios-abrir', async (r, req, res) => {
   const out = await openChange(r, (await readBody(req)).path);
   return send(res, out.status, out.error ? { error: out.error } : { ok: true, mode: out.mode });

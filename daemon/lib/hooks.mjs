@@ -23,6 +23,7 @@ import { broadcast, emit } from './estado.mjs';
 import { registerSession } from './uso.mjs';
 import { log, setState, taskNote } from './persistencia.mjs';
 import { trackFile } from './cambios.mjs';
+import { clashPeers } from './choques.mjs';
 import { finishTurn, trackDoc } from './turno.mjs';
 import { pumpTranscript } from './transcript.mjs';
 
@@ -420,7 +421,10 @@ async function onHook(name, body, via = '', closers = []) {
     case 'PostToolUse': {
       if (internalHelper) break;
       if (['Write', 'Edit', 'MultiEdit'].includes(body.tool_name)) trackDoc(r, body.tool_name, body.tool_input?.file_path);
-      if (trackFile(r, body.tool_name, body.tool_input?.file_path || body.tool_input?.notebook_path)) emit(r);
+      if (trackFile(r, body.tool_name, body.tool_input?.file_path || body.tool_input?.notebook_path)) {
+        emit(r);
+        for (const o of clashPeers(r)) emit(o); // their view shows the clash too
+      }
       if (!sub && r.tool) {
         r.tool = '';
         emit(r);
