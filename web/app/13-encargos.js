@@ -72,7 +72,7 @@ function headActions(d) {
     );
   if (canSummary(d))
     out.push(
-      `<button type="button" class="btn sm" data-act="sumkill" title="${isCold(d) ? 'Lleva más de una hora quieto: la oficina arma el resumen sin tokens, lo guarda y lo despide.' : 'Le pide un super resumen de lo que hacía, lo guarda como documento y lo despide.'}">📝 Despedir${isCold(d) ? ' (sin tokens)' : ''}</button>`
+      `<button type="button" class="btn sm" data-act="sumkill" title="${isCold(d) ? 'Lleva más de una hora quieto: la oficina arma el resumen sin tokens, lo guarda y lo despide.' : 'Le pide un super resumen de lo que hacía, lo guarda como documento y lo despide.'}">📝 Despedir con resumen${isCold(d) ? ' (sin tokens)' : ''}</button>`
     );
   return out.join('');
 }
@@ -80,19 +80,13 @@ function headActions(d) {
 function robotMenu(d) {
   const item = (attrs, label, title = '') =>
     `<button type="button" class="mi" role="menuitem" ${attrs}${title ? ` title="${esc(title)}"` : ''}>${label}</button>`;
-  const noteItem = d.note
-    ? item('data-note="edit"', '✎ Editar nota', 'Tu nota: qué espera, de quién, qué falta')
-    : item('data-note="edit"', '🗒 Nota', 'Una nota tuya: qué espera, de quién, qué falta');
   return `<details class="pm" id="pm-menu"><summary class="btn sm" title="Más acciones de este robot" aria-label="Más acciones">⋯</summary><div class="pm-list" role="menu">
-    ${item('data-look="open"', '🎨 Apariencia', 'Cambiar color, antena, visor y accesorio')}
     ${item(`data-copy-link="robot:${esc(d.name)}"`, '🔗 Copiar enlace', 'Copia un enlace que abre la oficina directo en este robot (solo funciona en este computador)')}
     ${item('data-act="export"', '⬇ Exportar conversación', 'Guarda toda su conversación (tus mensajes y los suyos, sin herramientas) en docs/conversaciones-robots/ de tu carpeta de trabajo.')}
-    ${item('data-act="wake-me"', '⏰ Despiértame cuando…', 'Crea un despertador: cuando pase algo (un PR aprobado, un ticket que cambia, una hora), la oficina le escribe a este robot')}
     ${item('data-act="follow"', '📍 Seguir en el mapa', 'Cierra esta ventana y la cámara del mapa sigue a este robot (tecla F, o Mayús + clic en el robot)')}
     ${canCompact(d) ? item('data-act="compact"', `🧹 Compactar (${d.ctx.pct} %)`, `Contexto al ${d.ctx.pct} %: le manda /compact para resumir su conversación y liberar espacio`) : ''}
     ${d.relevo && !d.relevoPending && canSummary(d) ? item('data-act="seguir-sin-relevo"', 'Seguir así (sin relevo)', 'No vuelve a ofrecer el relevo hasta que el contexto suba 100 k más') : ''}
     ${d.files ? item('data-open-changes', '🧾 Cambios', 'Abre el bloque de cambios: los archivos que tocó y cómo están en git') : ''}
-    ${noteItem}
     ${salaPicker(d) ? `<label class="pm-sel"><span>Sala</span>${salaPicker(d)}</label>` : ''}
     ${sidePicker(d) ? `<label class="pm-sel"><span>Al lado</span>${sidePicker(d)}</label>` : ''}
   </div></details>`;
@@ -154,7 +148,7 @@ function robotPanel(a) {
   else if (d.needsPermission)
     alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir. Decide con los botones de arriba (o las teclas A y D).</span></div>`;
   return `
-    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}</div><div class="ph-main"><h3>${esc(d.name)}${d.tools?.includes('artifact') ? ' <span class="tool-mark" title="Tiene las herramientas de Artifact">📄</span>' : ''}</h3>${titleEditor(d)}<div class="ph-row" id="ph-row">${noteUi.editing === d.name || d.note ? noteEditor(d) : ''}${prioPicker(d)}${lookUi.open === d.name ? lookEditor(d) : ''}${isSleepy(d) ? `<span class="rc-sleep">💤 ${fmtDur(sleepMs(d))} sin actividad</span>` : ''}</div><div class="sub-h ph-what" title="${esc(d.label)}">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)} <span class="origin">· ${esc(d.origin || 'Origen desconocido')}</span></div></div><div class="ph-side"><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span><div class="ph-acts" id="ph-acts">${headActions(d)}${robotMenu(d)}</div></div></div>
+    <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}</div><div class="ph-main"><h3>${esc(d.name)}${d.tools?.includes('artifact') ? ' <span class="tool-mark" title="Tiene las herramientas de Artifact">📄</span>' : ''}</h3>${titleEditor(d)}<div class="ph-row" id="ph-row">${noteEditor(d)}${prioPicker(d)}${lookEditor(d)}<button type="button" class="btn sm ghost" data-act="wake-me" title="Crea un despertador: cuando pase algo (un PR aprobado, un ticket que cambia, una hora), la oficina le escribe a este robot">⏰ Despiértame cuando…</button>${isSleepy(d) ? `<span class="rc-sleep">💤 ${fmtDur(sleepMs(d))} sin actividad</span>` : ''}</div><div class="sub-h ph-what" title="${esc(d.label)}">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)} <span class="origin">· ${esc(d.origin || 'Origen desconocido')}</span></div></div><div class="ph-side"><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span><div class="ph-acts" id="ph-acts">${headActions(d)}${robotMenu(d)}</div></div></div>
     ${alertZone([queueBar(d), alert, stalledBox(d), clashBox(d)])}
     <div class="rp-grid" id="rp-grid">
       <div class="rp-col">
@@ -178,7 +172,7 @@ function robotPanel(a) {
           <button class="btn sm" data-act="again" title="Abre «Nuevo encargo» con lo mismo que le pediste a este robot">↻ Lanzar otro igual</button>
           <button class="btn sm" data-act="fav" title="Guarda este encargo como acceso rápido en «Nuevo encargo»">★ Frecuente</button>
           ${d.relevoPending ? '<span class="note">🔁 Escribiendo su relevo…</span>' : d.summaryPending ? '<span class="note">📝 Escribiendo su resumen para irse…</span>' : ''}
-          <button class="btn sm danger pbar-end" data-act="kill" title="Lo despide ya, sin resumen. Si quieres que deje uno para retomar después, usa «📝 Despedir» (arriba).">Dar de baja</button>
+          <button class="btn sm danger pbar-end" data-act="kill" title="Lo despide ya, sin resumen. Si quieres que deje uno para retomar después, usa «📝 Despedir con resumen» (arriba).">Dar de baja</button>
         </div>
         <div class="stats">tokens · salida ${u.out ?? 0} · entrada ${u.in ?? 0} · caché leída ${u.cacheRead ?? 0} · caché escrita ${u.cacheWrite ?? 0}${spendText(d) ? ` · gasto: ${esc(spendText(d))}` : ''}${d.permissionMode ? ' · permisos: ' + esc(d.permissionMode) : ''}</div>
         <div class="note">tmux attach -t ${esc(st.config.session || 'office')}:${esc(d.name)} · sesión ${esc(d.sessionId)}</div>
