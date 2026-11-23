@@ -23,8 +23,22 @@ function queueBar(d) {
     others = l.filter(n => n !== d.name).length;
   if (!others) return '';
   const pos = l.indexOf(d.name);
-  return `<div class="qbar" id="qbar"><b>${pos >= 0 ? `${pos + 1} de ${l.length}` : `${others}`}</b> ${pos >= 0 ? 'te esperan' : others === 1 ? 'robot más te espera' : 'robots más te esperan'}<span class="qk"><kbd>A</kbd> aprobar · <kbd>D</kbd> denegar · <kbd>S</kbd> siguiente</span><button type="button" class="btn sm" data-act="qnext">Siguiente ›</button></div>`;
+  return `<div class="qbar" id="qbar"><b>${pos >= 0 ? `${pos + 1} de ${l.length}` : `${others}`}</b> ${pos >= 0 ? 'te esperan' : others === 1 ? 'robot más te espera' : 'robots más te esperan'}<span class="qk"><kbd>A</kbd> aprobar · <kbd>D</kbd> denegar · <kbd>S</kbd> siguiente</span>${repeatedPermButton(d)}<button type="button" class="btn sm" data-act="qnext">Siguiente ›</button></div>`;
 }
+// Same pending permission (same tool and same command or path, as described by the daemon) in 2 or more robots.
+const permKeyOf = d => d.hold?.tool || (d.needsPermission && d.state === 'input' ? d.activity : '') || '';
+const repeatedPerm = d => {
+  const key = permKeyOf(d);
+  if (!key) return [];
+  const same = [...st.robots.values()].map(a => a.data).filter(x => permKeyOf(x) === key);
+  return same.length > 1 ? same : [];
+};
+const repeatedPermButton = d => {
+  const n = repeatedPerm(d).length;
+  return n
+    ? `<button type="button" class="btn sm" data-act="perm-all" data-n="${n}" title="Aprueba el mismo permiso en los ${n} robots que lo piden: ${esc(permKeyOf(d))}">Aprobar en todos (${n})</button>`
+    : '';
+};
 async function decide(d, allow) {
   if (d.spawnReq) {
     await decideSpawn(d, allow);

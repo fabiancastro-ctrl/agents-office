@@ -1795,3 +1795,4 @@ html[data-theme=light] .alert.stall-box{background:#fff8e8;border-color:#ecd29a}
 .robot.stuck::after{content:"zzz";position:absolute;left:-24px;top:-6px;font:700 12px/1 var(--mono);color:var(--amber);text-shadow:0 0 4px rgba(0,0,0,.8);letter-spacing:1px;animation:zzbob 1.8s ease-in-out infinite;pointer-events:none;z-index:3}
 @keyframes zzbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 @media (prefers-reduced-motion:reduce){.robot.stuck::after{animation:none}}
+.qbar .btn+.btn{margin-left:0}

@@ -35,6 +35,7 @@ import { moveToSala, salas, salasApi, salaView } from './salas.mjs';
 import { mantenimientoApi } from './mantenimiento.mjs';
 import { openChange, robotChanges } from './cambios.mjs';
 import { ackClash } from './choques.mjs';
+import { allowRule, ruleFor, settingsFile } from './permisos.mjs';
 
 /* ---------- http ---------- */
 
@@ -446,6 +447,17 @@ const server = http.createServer(async (req, res) => {
       const shown = p.startsWith(WORKSPACE + path.sep) ? path.relative(WORKSPACE, p) : p;
       if (!TEXT_DOC.test(p)) return send(res, 200, { path: shown, binary: true });
       return send(res, 200, { path: shown, text: fs.readFileSync(p, 'utf8') });
+    }
+    // «Permitir siempre» from «Uso Claude»: without apply it only previews the rule; with apply it adds it to the workspace's
+    // .claude/settings.local.json.
+    if (req.method === 'POST' && url.pathname === '/api/permitir-siempre') {
+      const { key, apply } = await readBody(req);
+      const out = ruleFor(key);
+      if (out.error) return send(res, 400, { error: out.error });
+      const file = settingsFile();
+      if (!apply) return send(res, 200, { rule: out.rule, file });
+      const done = allowRule(out.rule);
+      return send(res, done.status, done.error ? { error: done.error } : { rule: out.rule, file, added: done.added });
     }
     if (req.method === 'POST' && url.pathname === '/api/reveal') {
       const p = knownDoc((await readBody(req)).path);

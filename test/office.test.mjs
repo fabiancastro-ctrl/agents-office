@@ -1578,6 +1578,35 @@ test('estancado: un robot trabajando sin eventos se marca; el siguiente evento l
   }
 });
 
+test('permitir siempre: arma la regla, la muestra y solo con apply la agrega a settings.local.json sin pisar lo demás', async () => {
+  const o = await startOffice();
+  try {
+    const file = path.join(o.ws, '.claude', 'settings.local.json');
+    const ask = (key, apply) => o.api('POST', '/api/permitir-siempre', { key, apply });
+    const prev = await ask('Bash: git status');
+    assert.equal(prev.body.rule, 'Bash(git status:*)');
+    assert.ok(prev.body.file.endsWith('/trabajo/.claude/settings.local.json'), 'the workspace of the office, not ~/.claude');
+    assert.equal(fs.existsSync(file), false, 'la vista previa no escribe nada');
+    assert.equal((await ask('Bash: ls')).body.rule, 'Bash(ls:*)');
+    assert.equal((await ask('Grep')).body.rule, 'Grep');
+    for (const bad of ['Bash: rm -rf', 'Bash: git push', 'Bash: echo $(x)', 'Read', 'Edit', ''])
+      assert.equal((await ask(bad)).status, 400, bad);
+    // existing file: the rest is kept and the rule is not duplicated
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ env: { A: '1' }, permissions: { deny: ['Bash(curl:*)'], allow: ['Read'] } }));
+    assert.equal((await ask('Bash: git status', true)).body.added, true);
+    assert.equal((await ask('Bash: git status', true)).body.added, false);
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.deepEqual(saved, { env: { A: '1' }, permissions: { deny: ['Bash(curl:*)'], allow: ['Read', 'Bash(git status:*)'] } });
+    // a file that is not valid JSON is never overwritten
+    fs.writeFileSync(file, '{ no es json');
+    assert.equal((await ask('Grep', true)).status, 409);
+    assert.equal(fs.readFileSync(file, 'utf8'), '{ no es json');
+  } finally {
+    await o.stop();
+  }
+});
+
 test('cables de choque: la página trae el interruptor de la vista y el código que dibuja la línea', async () => {
   const o = await startOffice();
   try {

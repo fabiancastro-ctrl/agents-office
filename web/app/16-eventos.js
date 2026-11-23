@@ -478,6 +478,16 @@ PANEL.addEventListener('click', async e => {
       return follow(name);
     }
     if (b.dataset.act === 'qnext') return goNextWaiting();
+    if (b.dataset.act === 'perm-all' && a) {
+      const n = b.dataset.n;
+      if (!armed(b, `¿Aprobar en ${n}?`, 3000, `Aprobar en todos (${n})`)) return;
+      clearTimeout(b._t);
+      b.disabled = true;
+      const group = repeatedPerm(a.data);
+      for (const d of group) await decide(d, true); // each one through the usual path (hold or console approval)
+      toast(`Permiso aprobado en ${group.length} robots`);
+      return;
+    }
     if (b.dataset.act === 'compact' && a) return compact(name);
     if (b.dataset.act === 'wake-me' && a) {
       st.rtDraft = wakeDraft({ kind: 'say', robot: name }, a.data.note);

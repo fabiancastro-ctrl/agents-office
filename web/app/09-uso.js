@@ -100,7 +100,7 @@ function usagePanel() {
             }</p>`
           : '<p class="note">Hoy ningún robot ha tenido que esperarte.</p>'
       }
-      ${permRows.length ? `<table class="usage wperm"><thead><tr><th>Permisos que más hicieron esperar (7 días)</th><th>Veces</th><th>Espera</th></tr></thead><tbody>${permRows.map(([p, v]) => `<tr><td><code>${esc(p)}</code></td><td>${v.n}</td><td>${esc(fmtDur(v.ms))}</td></tr>`).join('')}</tbody></table><p class="note">Si un permiso se repite y es seguro, puedes darlo fijo en <code>permissions.allow</code> de <code>.claude/settings.json</code> del workspace y los robots dejan de esperarte por él.</p>` : ''}
+      ${permRows.length ? `<table class="usage wperm"><thead><tr><th>Permisos que más hicieron esperar (7 días)</th><th>Veces</th><th>Espera</th><th></th></tr></thead><tbody>${permRows.map(([p, v]) => `<tr><td><code>${esc(p)}</code></td><td>${v.n}</td><td>${esc(fmtDur(v.ms))}</td><td><button type="button" class="btn sm" data-allow-perm="${esc(p)}" title="Muestra la regla de permissions.allow y, con un segundo clic, la agrega a .claude/settings.local.json de la carpeta de trabajo">Permitir siempre</button></td></tr>`).join('')}</tbody></table><p class="note">Si un permiso se repite y es seguro, puedes darlo fijo con «Permitir siempre»: se agrega a <code>permissions.allow</code> de <code>.claude/settings.local.json</code> del workspace y los robots dejan de esperarte por él.</p>` : ''}
       <p class="note">Cuenta desde que un robot pide permiso, te pregunta o termina su turno con una pregunta, hasta que le respondes. Lo calcula la oficina; no gasta tokens.</p></div>`
     : '';
   // 6 · Horas de trabajo: a qué hora del día trabajan los robots y a qué hora te esperan (últimos 14 días). Se apaga aquí.
@@ -152,6 +152,26 @@ function usagePanel() {
     </div>`;
 }
 onClick('[data-usage=refresh]', () => loadClaudeStatus(true));
+// «Permitir siempre»: the first click asks the daemon for the rule and shows it on the button; the second one adds it.
+onClick('[data-allow-perm]', async b => {
+  const key = b.dataset.allowPerm;
+  try {
+    if (b.classList.contains('armed')) {
+      clearTimeout(b._t);
+      b.disabled = true;
+      const r = await api('POST', '/api/permitir-siempre', { key, apply: true });
+      b.textContent = r.added ? '✓ Agregada' : '✓ Ya estaba';
+      b.classList.remove('armed');
+      toast(r.added ? `Regla ${r.rule} agregada a ${r.file}` : `La regla ${r.rule} ya estaba en ${r.file}`);
+      return;
+    }
+    const r = await api('POST', '/api/permitir-siempre', { key });
+    b.title = `Se agregará a ${r.file}`;
+    armed(b, `Agregar ${r.rule}`, 8000, 'Permitir siempre');
+  } catch {
+    b.disabled = false; // api() already showed the error
+  }
+});
 PANEL.addEventListener('change', e => {
   if (e.target.id === 'hours-on')
     api('POST', '/api/config', { hoursOn: e.target.checked })
