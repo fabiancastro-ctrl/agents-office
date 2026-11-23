@@ -73,6 +73,91 @@ function robotOr404(res, name) {
   return r;
 }
 
+// Rutas de /api/robots/:name/:action. El despachador (más abajo, en el servidor) busca el robot y responde el 404 una sola
+// vez, y llama al manejador de «MÉTODO acción»: route('POST', 'say', async (r, req, res) => …). Sin acción es el robot mismo.
+// El manejador responde con `return send(...)`. Las acciones de equipo (encargos, cola) están en equipoRobotApi.
+const ROBOT_ROUTES = new Map();
+const route = (method, action, handler) => { ROBOT_ROUTES.set(`${method} ${action || ''}`, handler); };
+
+route('POST', 'exportar', async (r, req, res) => {
+  try { return send(res, 200, { ok: true, ...exportConversation(r) }); } catch (e) { return send(res, 409, { error: e.message }); }
+});
+route('POST', 'revivir', async (r, req, res) => {
+  try { await revive(r); return send(res, 200, { ok: true }); } catch (e) { return send(res, 409, { error: e.message }); }
+});
+route('POST', 'say', async (r, req, res) => {
+  if (r.consoleLost) return send(res, 409, { error: `La consola de ${r.name} está caída: revívelo primero.` });
+  const { text, attachments } = await readBody(req);
+  if (!String(text || '').trim() && !validAttachments(attachments).length) return send(res, 400, { error: 'Mensaje vacío.' });
+  await say(r, text, attachments);
+  return send(res, 200, { ok: true });
+});
+route('POST', 'permission', async (r, req, res) => {
+  const { decision } = await readBody(req);
+  await pressKey(r, decision === 'approve' ? 'approve' : 'reject');
+  return send(res, 200, { ok: true });
+});
+route('POST', 'ask', async (r, req, res) => {
+  const { id, answers, console: toConsole } = await readBody(req);
+  return answerAsk(r, id, answers, !!toConsole) ? send(res, 200, { ok: true }) : send(res, 404, { error: 'Esas preguntas ya no están pendientes.' });
+});
+// Aspecto que le eliges al robot: color, antena, visor y accesorio (los topes son los largos de ROBOT_COLORS,
+// ANTENNAS, VISORS y HEAD_ACC en web/robot-art.js: si sumas opciones allá, súbelos aquí). reset vuelve al de su nombre.
+route('POST', 'look', async (r, req, res) => {
+  const b = await readBody(req);
+  if (b.reset) { r.look = null; if (Number.isInteger(r.baseColor)) r.color = r.baseColor; }
+  else {
+    const lim = { ant: 4, visor: 6, acc: 10 }, look = { ...(r.look || {}) };
+    for (const [k, n] of Object.entries(lim)) if (b[k] !== undefined) { const v = Number(b[k]); if (!Number.isInteger(v) || v < 0 || v >= n) return send(res, 400, { error: `Valor inválido para ${k}.` }); look[k] = v; }
+    if (b.color !== undefined) { const c = Number(b.color); if (!Number.isInteger(c) || c < 0 || c > 15) return send(res, 400, { error: 'Color inválido.' }); if (!Number.isInteger(r.baseColor)) r.baseColor = r.color; r.color = c; }
+    r.look = Object.keys(look).length ? look : null;
+  }
+  emit(r);
+  return send(res, 200, { ok: true });
+});
+// Despedir con su resumen: le pide un super resumen (su próxima respuesta) y al recibirlo lo da de baja.
+route('POST', 'despedir-con-resumen', async (r, req, res) => {
+  if (r.state !== 'done' && !(r.state === 'input' && !r.needsPermission && !r.hold && !r.ask)) return send(res, 409, { error: 'Está en medio de algo: espera a que termine su turno.' });
+  if (isCold(r)) { // frío: despertarlo reescribiría toda su caché; el resumen lo arma la oficina, sin tokens
+    await removeRobot(r, 'despedido con su resumen', officeSummary(r), 'oficina');
+    return send(res, 200, { ok: true, by: 'oficina' });
+  }
+  r.summaryPending = true;
+  log(r, 'sys', 'Le pediste su resumen para despedirlo');
+  emit(r);
+  await say(r, SUMMARY_ASK);
+  return send(res, 200, { ok: true });
+});
+// Relevo por contexto: escribe su resumen, se da de baja y entra otro robot con su mismo nombre y solo ese resumen.
+route('POST', 'relevar', async (r, req, res) => {
+  if (r.state !== 'done' && !(r.state === 'input' && !r.needsPermission && !r.hold && !r.ask) || blockedBy(r)) return send(res, 409, { error: 'Está en medio de algo: espera a que termine su turno.' });
+  await startRelevo(r, 'manual');
+  return send(res, 200, { ok: true });
+});
+route('POST', 'seguir-sin-relevo', async (r, req, res) => { snooze(r); return send(res, 200, { ok: true }); });
+// Nota tuya pegada al robot («esperando respuesta de Ramiro»): se ve en la tarjeta, el mapa y el archivo.
+route('POST', 'note', async (r, req, res) => {
+  r.note = String((await readBody(req)).note ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  emit(r);
+  return send(res, 200, { ok: true, note: r.note });
+});
+// Título que le pones tú al robot («Tareas de QA», «Revisando wallet#32 Ramiro»); vacío lo quita.
+route('POST', 'title', async (r, req, res) => {
+  r.title = cleanTitle((await readBody(req)).title);
+  emit(r);
+  return send(res, 200, { ok: true, title: r.title });
+});
+route('GET', 'pane', async (r, req, res) => send(res, 200, { text: await pane(r) }));
+route('POST', 'sala', async (r, req, res) => { const out = moveToSala(r, (await readBody(req)).sala || null); return send(res, out.status, out.error ? { error: out.error } : { ok: true }); });
+// Cambios: los archivos que tocó y cómo están en git; «abrir» lo muestra en el editor (diff contra HEAD si tiene cambios).
+route('GET', 'cambios', async (r, req, res) => send(res, 200, await robotChanges(r)));
+route('POST', 'cambios-abrir', async (r, req, res) => {
+  const out = await openChange(r, (await readBody(req)).path);
+  return send(res, out.status, out.error ? { error: out.error } : { ok: true, mode: out.mode });
+});
+route('POST', 'console', async (r, req, res) => { await openConsole(r); return send(res, 200, { ok: true }); });
+route('DELETE', '', async (r, req, res) => { await removeRobot(r, 'dado de baja'); return send(res, 200, { ok: true }); });
+
 // Solo local: la oficina atiende únicamente peticiones a 127.0.0.1/localhost en su puerto (frena que un dominio
 // externo se haga pasar por tu equipo) y que no vengan de otra página (un sitio abierto en tu navegador no puede
 // lanzar robots, escribirles ni aprobarles permisos). La página de la oficina manda su propio Origin y los robots
@@ -196,85 +281,9 @@ const server = http.createServer(async (req, res) => {
       const r = robotOr404(res, parts[2]);
       if (!r) return;
       const action = parts[3];
-      if (req.method === 'POST' && action === 'exportar') {
-        try { return send(res, 200, { ok: true, ...exportConversation(r) }); } catch (e) { return send(res, 409, { error: e.message }); }
-      }
-      if (req.method === 'POST' && action === 'revivir') {
-        try { await revive(r); return send(res, 200, { ok: true }); } catch (e) { return send(res, 409, { error: e.message }); }
-      }
-      if (req.method === 'POST' && action === 'say') {
-        if (r.consoleLost) return send(res, 409, { error: `La consola de ${r.name} está caída: revívelo primero.` });
-        const { text, attachments } = await readBody(req);
-        if (!String(text || '').trim() && !validAttachments(attachments).length) return send(res, 400, { error: 'Mensaje vacío.' });
-        await say(r, text, attachments);
-        return send(res, 200, { ok: true });
-      }
       if (await equipoRobotApi(req, res, url, parts, r, action)) return;
-      if (req.method === 'POST' && action === 'permission') {
-        const { decision } = await readBody(req);
-        await pressKey(r, decision === 'approve' ? 'approve' : 'reject');
-        return send(res, 200, { ok: true });
-      }
-      // Título que le pones tú al robot («Tareas de QA», «Revisando wallet#32 Ramiro»); vacío lo quita.
-      if (req.method === 'POST' && action === 'ask') {
-        const { id, answers, console: toConsole } = await readBody(req);
-        return answerAsk(r, id, answers, !!toConsole) ? send(res, 200, { ok: true }) : send(res, 404, { error: 'Esas preguntas ya no están pendientes.' });
-      }
-      // Aspecto que le eliges al robot: color, antena, visor y accesorio (los topes son los largos de ROBOT_COLORS,
-      // ANTENNAS, VISORS y HEAD_ACC en web/robot-art.js: si sumas opciones allá, súbelos aquí). reset vuelve al de su nombre.
-      if (req.method === 'POST' && action === 'look') {
-        const b = await readBody(req);
-        if (b.reset) { r.look = null; if (Number.isInteger(r.baseColor)) r.color = r.baseColor; }
-        else {
-          const lim = { ant: 4, visor: 6, acc: 10 }, look = { ...(r.look || {}) };
-          for (const [k, n] of Object.entries(lim)) if (b[k] !== undefined) { const v = Number(b[k]); if (!Number.isInteger(v) || v < 0 || v >= n) return send(res, 400, { error: `Valor inválido para ${k}.` }); look[k] = v; }
-          if (b.color !== undefined) { const c = Number(b.color); if (!Number.isInteger(c) || c < 0 || c > 15) return send(res, 400, { error: 'Color inválido.' }); if (!Number.isInteger(r.baseColor)) r.baseColor = r.color; r.color = c; }
-          r.look = Object.keys(look).length ? look : null;
-        }
-        emit(r);
-        return send(res, 200, { ok: true });
-      }
-      // Despedir con su resumen: le pide un super resumen (su próxima respuesta) y al recibirlo lo da de baja.
-      if (req.method === 'POST' && action === 'despedir-con-resumen') {
-        if (r.state !== 'done' && !(r.state === 'input' && !r.needsPermission && !r.hold && !r.ask)) return send(res, 409, { error: 'Está en medio de algo: espera a que termine su turno.' });
-        if (isCold(r)) { // frío: despertarlo reescribiría toda su caché; el resumen lo arma la oficina, sin tokens
-          await removeRobot(r, 'despedido con su resumen', officeSummary(r), 'oficina');
-          return send(res, 200, { ok: true, by: 'oficina' });
-        }
-        r.summaryPending = true;
-        log(r, 'sys', 'Le pediste su resumen para despedirlo');
-        emit(r);
-        await say(r, SUMMARY_ASK);
-        return send(res, 200, { ok: true });
-      }
-      // Relevo por contexto: escribe su resumen, se da de baja y entra otro robot con su mismo nombre y solo ese resumen.
-      if (req.method === 'POST' && action === 'relevar') {
-        if (r.state !== 'done' && !(r.state === 'input' && !r.needsPermission && !r.hold && !r.ask) || blockedBy(r)) return send(res, 409, { error: 'Está en medio de algo: espera a que termine su turno.' });
-        await startRelevo(r, 'manual');
-        return send(res, 200, { ok: true });
-      }
-      if (req.method === 'POST' && action === 'seguir-sin-relevo') { snooze(r); return send(res, 200, { ok: true }); }
-      // Nota tuya pegada al robot («esperando respuesta de Ramiro»): se ve en la tarjeta, el mapa y el archivo.
-      if (req.method === 'POST' && action === 'note') {
-        r.note = String((await readBody(req)).note ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
-        emit(r);
-        return send(res, 200, { ok: true, note: r.note });
-      }
-      if (req.method === 'POST' && action === 'title') {
-        r.title = cleanTitle((await readBody(req)).title);
-        emit(r);
-        return send(res, 200, { ok: true, title: r.title });
-      }
-      if (req.method === 'GET' && action === 'pane') return send(res, 200, { text: await pane(r) });
-      if (req.method === 'POST' && action === 'sala') { const out = moveToSala(r, (await readBody(req)).sala || null); return send(res, out.status, out.error ? { error: out.error } : { ok: true }); }
-      // Cambios: los archivos que tocó y cómo están en git; «abrir» lo muestra en el editor (diff contra HEAD si tiene cambios).
-      if (req.method === 'GET' && action === 'cambios') return send(res, 200, await robotChanges(r));
-      if (req.method === 'POST' && action === 'cambios-abrir') {
-        const out = await openChange(r, (await readBody(req)).path);
-        return send(res, out.status, out.error ? { error: out.error } : { ok: true, mode: out.mode });
-      }
-      if (req.method === 'POST' && action === 'console') { await openConsole(r); return send(res, 200, { ok: true }); }
-      if (req.method === 'DELETE' && !action) { await removeRobot(r, 'dado de baja'); return send(res, 200, { ok: true }); }
+      const handler = ROBOT_ROUTES.get(`${req.method} ${action || ''}`);
+      if (handler) return handler(r, req, res);
     }
     if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'decision' && parts[2]) {
       const { decision } = await readBody(req);
