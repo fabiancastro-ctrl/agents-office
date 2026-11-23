@@ -1,7 +1,7 @@
 /* ---------- red cable between robots that clash ---------- */
 // A thin dotted red line joins two robots that edited the same file (d.clashes, computed by the daemon). It lives in an SVG
 // over the map, follows the robots while they walk (offsetLeft/offsetTop track the CSS transition) and is only drawn when
-// both robots are visible in the current view. On by default; switched off from the «🎛 Vista» menu.
+// both robots are visible in the current view. On by default; switched off from the «⚙ Ajustes» menu.
 const cables = { on: prefGet('cables', '1') === '1', lines: new Map(), raf: 0 };
 const cablesSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 cablesSvg.id = 'cables';

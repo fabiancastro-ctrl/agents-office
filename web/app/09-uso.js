@@ -11,7 +11,9 @@ async function loadWeeks() {
     return;
   }
   const cur = st.weeks[0];
-  $('#week-chip').textContent = cur ? `semana · ${tokLine(cur)}` : 'semana · sin uso';
+  // Short line under «Uso Claude» in the More menu; the full breakdown goes in the tooltip.
+  $('#week-chip').textContent = cur ? `semana · salida ${fmtTok(cur.out)}` : 'semana · sin uso';
+  $('#week-chip').title = cur ? `Tokens de la oficina esta semana: ${tokLine(cur)}. Clic para el detalle.` : 'Todavía no hay uso esta semana.';
   scheduleCards();
   if (st.selected === '@usage') schedulePanel();
 }

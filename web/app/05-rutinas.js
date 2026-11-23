@@ -496,7 +496,6 @@ function renderMeta() {
   $('#cap-down').disabled = max <= 1;
   $('#cap-up').disabled = max >= (st.config.maxRobotsLimit || 20);
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done' || onHold(a.data)).length; // en espera no cuenta como listo
-  $('#meta').textContent = '';
   const done = n - active;
   $('#btn-dismiss').hidden = !done;
   if (!$('#btn-dismiss').classList.contains('armed')) $('#btn-dismiss').textContent = `Despedir listos (${done})`;

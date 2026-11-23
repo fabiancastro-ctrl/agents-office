@@ -491,6 +491,8 @@ const unseen = () => inboxShown().filter(i => i.status !== 'visto').length;
 function renderInboxBadge() {
   const n = unseen();
   $('#inbox-n').textContent = n;
+  $('#inbox-btn-n').textContent = n;
+  $('#inbox-btn-n').hidden = !n;
   $('#inbox').classList.toggle('has-new', n > 0);
   // La luz roja sigue encendida mientras haya un review con críticos sin ver; se apaga al abrirlo o marcarlo visto.
   const crit = st.inbox.filter(i => i.status !== 'visto' && i.critical > 0).reduce((k, i) => k + i.critical, 0);

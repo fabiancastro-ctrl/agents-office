@@ -77,7 +77,7 @@ soundBtn.addEventListener('click', () => {
   paintSound();
   SFX.deliver();
 });
-($('#vm-sound') || $('#btn-notify')?.parentElement)?.appendChild(soundBtn); // en el menú «🎛 Vista»
+($('#vm-sound') || $('#btn-notify')?.parentElement)?.appendChild(soundBtn); // inside the Settings menu
 
 // X · Modo cine (tecla C): solo el mapa, a pantalla completa, sin barra, métricas ni tarjetas. C o Esc salen.
 function cinema(on = !document.body.classList.contains('cine')) {

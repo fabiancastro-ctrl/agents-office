@@ -28,8 +28,27 @@ button{cursor:pointer}
 /* Pixelify Sans dibuja «fi» como una ligadura que parece una A («OAcina»): sin ligaduras en toda la página */
 html{font-variant-ligatures:none}
 
-.top{position:sticky;top:0;z-index:9;background:var(--bg);display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px;padding-block:14px;border-bottom:1px solid var(--line)}
-.brand{font-family:var(--display);font-size:var(--fs-4);display:flex;align-items:center;gap:10px}
+/* Header in one row: brand and office on the left, main actions in the centre, robot cap and «☰ Más» on the right.
+   The «waiting for you» bar (needbar) is a second row only while someone waits. */
+.top{position:sticky;top:0;z-index:9;background:var(--bg);display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding-block:10px;border-bottom:1px solid var(--line)}
+.top-l,.top-c,.top-r{display:flex;align-items:center;gap:8px;min-width:0}
+.top-l{flex:1 1 0;gap:10px}
+.top-c{flex:none}
+.top-r{flex:1 1 0;justify-content:flex-end}
+.brand{font-family:var(--display);font-size:var(--fs-4);white-space:nowrap}
+.tag::before{content:"● ";font-size:.8em}
+.cnt{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--st-need);color:#2a1d05;font-size:var(--fs-1);line-height:18px;text-align:center}
+.more-wrap{position:relative}
+#btn-more.on{border-color:var(--amber);color:var(--amber)}
+#btn-more.warn::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--st-need);margin-left:2px}
+.more-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:230px;display:grid;gap:2px;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+.more-menu[hidden]{display:none}
+.mi{display:flex;align-items:center;gap:6px;width:100%;min-height:32px;padding:0 10px;background:transparent;border:0;border-radius:6px;color:var(--ink);font-size:var(--fs-3);text-align:left}
+.mi:hover,.mi:focus-visible{background:var(--panel-2)}
+.mi kbd{margin-left:auto}
+.mi-sub{display:block;width:100%;margin:-4px 0 2px;padding:0 10px 2px;background:transparent;border:0;color:var(--muted);font-size:var(--fs-1);text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-sub:hover{color:var(--ink)}
+.mi-sub:empty{display:none}
 .office-name{--oh:174;font:inherit;font-family:var(--body);font-size:var(--fs-3);color:hsl(var(--oh) 70% 72%);background:hsl(var(--oh) 45% 22% / .55);border:1px solid hsl(var(--oh) 50% 45% / .7);border-radius:6px;padding:2px 9px;cursor:pointer;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .office-name:hover{border-color:hsl(var(--oh) 60% 60%)}
 .office-name.empty{color:var(--muted);background:transparent;border-style:dashed;font-family:var(--body);font-size:var(--fs-2)}
@@ -58,8 +77,6 @@ table.usage th:first-child,table.usage td:first-child{text-align:left}
 table.usage th{color:var(--muted);font-weight:500}
 table.usage tr.cur td{color:var(--ink);font-weight:600}
 
-.toolbar{display:flex;flex-wrap:wrap;gap:8px 8px;align-items:center;padding-block:12px}
-.toolbar>.btn,.toolbar>.mt-sel{padding-inline:10px}
 .stepper{display:flex;align-items:center;gap:6px;font-size:var(--fs-2);color:var(--muted);border:1px solid var(--line);border-radius:var(--ctl-r);padding:3px 4px 3px 10px}
 .stepper b{font-family:var(--mono);font-size:var(--fs-3);color:var(--ink);min-width:20px;text-align:center}
 .stepper .btn{width:26px;padding:0}
@@ -1517,7 +1534,7 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 @keyframes wb-draw{to{stroke-dashoffset:0}}
 .sala-wb::after{content:"";position:absolute;right:8px;bottom:-9px;width:22px;height:5px;border-radius:2px;background:linear-gradient(90deg,#2c56a8 0 30%,#c24b58 30% 60%,#2f8f5b 60%)} /* marcadores en la repisa */
 /* X · Modo cine */
-body.cine header.top,body.cine .toolbar,body.cine .kpis,body.cine .minimap,body.cine aside.cards{display:none!important}
+body.cine header.top,body.cine .kpis,body.cine .minimap,body.cine aside.cards{display:none!important}
 body.cine .office{display:flex;justify-content:center}
 body.cine .main-col{width:100%}
 /* el mapa crece hasta llenar la pantalla (su alto manda: proporción 16:10 del plano base) */
@@ -1686,15 +1703,16 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .r-sala.in-sala>.room-h>span{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
 .r-sala.in-sala>.room-h>.btn,.r-sala.in-sala>.room-h>small{flex:none}
 
-/* Menú «🎛 Vista» */
-.vista-wrap{position:relative}
-#btn-vista.on{border-color:var(--amber);color:var(--amber)}
-.vista-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:60;min-width:330px;display:grid;gap:6px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+/* Menú «⚙ Ajustes» */
+.vista-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:330px;display:grid;gap:6px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
 .vista-menu[hidden]{display:none}
 .vm-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted)}
 .vm-row>.btn,.vm-row>select{flex:none;min-width:118px;justify-content:center;text-align:center}
 .vm-note{margin:4px 0 0;font-size:11.5px;color:var(--muted)}
-@media (max-width:1380px){.toolbar .stepper>span{display:none}.toolbar>.btn,.toolbar>.vista-wrap>.btn{padding-inline:8px}}
+/* Narrow windows: the texts shrink first, then the labels hide and only the icon stays. */
+@media (max-width:1380px){.top{gap:8px 10px}.top-c>.btn{padding-inline:9px}.top-c>.door-chip,.top-c>#btn-dismiss{font-size:var(--fs-2)}.office-name{max-width:200px}}
+@media (max-width:1240px){.tag{font-size:10px;padding-inline:6px}.brand{font-size:var(--fs-3)}.office-name{max-width:150px}}
+@media (max-width:1100px){.stepper>span,#btn-more .lbl{display:none}}
 
 /* En una sala, si un robot de afuera te necesita: la sala brilla en rojo y la cabecera dice quién. */
 .r-sala.in-sala.outside-need{animation:outneed 1.6s ease-in-out infinite}

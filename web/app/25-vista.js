@@ -1,25 +1,48 @@
-/* ---------- menú «🎛 Vista» ---------- */
-// Los botones de cómo se ve la oficina (estilo, tema, tamaño del texto, contraste, HD, 2.5D, compacta, avisos y sonido)
-// viven en un menú: la barra queda en una fila con lo que se usa a diario. Cada botón conserva su id y su lógica.
-const vistaBtn = $('#btn-vista'),
+/* ---------- header menus: «☰ Más» and «⚙ Ajustes» ---------- */
+// «☰ Más» holds what is used now and then (routines, end of day, pins, Claude usage, health); «⚙ Ajustes» is the
+// settings panel (how the office looks, map options, alerts). Every button keeps its id and its logic; the V key opens
+// Ajustes directly.
+const moreBtn = $('#btn-more'),
+  moreMenu = $('#more-menu'),
+  vistaBtn = $('#btn-vista'),
   vistaMenu = $('#vista-menu');
+function toggleMore(open = moreMenu.hidden) {
+  if (open) toggleVista(false);
+  moreMenu.hidden = !open;
+  moreBtn.setAttribute('aria-expanded', String(open));
+  moreBtn.classList.toggle('on', open);
+  if (open) moreMenu.querySelector('button')?.focus();
+}
 function toggleVista(open = vistaMenu.hidden) {
+  if (open && moreMenu && !moreMenu.hidden) toggleMore(false);
   vistaMenu.hidden = !open;
   vistaBtn.setAttribute('aria-expanded', String(open));
-  vistaBtn.classList.toggle('on', open);
-  if (open) (vistaMenu.querySelector('select, button') || vistaBtn).focus();
+  moreBtn.classList.toggle('on', open || !moreMenu.hidden);
+  if (open) (vistaMenu.querySelector('select, button') || moreBtn).focus();
 }
+moreBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  toggleMore();
+});
 vistaBtn.addEventListener('click', e => {
   e.stopPropagation();
-  toggleVista();
+  toggleVista(true);
+});
+// Picking an item closes the menu (the item's own handler already ran).
+moreMenu.addEventListener('click', e => {
+  if (e.target.closest('button')) toggleMore(false);
 });
 document.addEventListener('click', e => {
-  if (!vistaMenu.hidden && !e.target.closest('.vista-wrap')) toggleVista(false);
-});
-vistaMenu.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    e.stopPropagation();
-    toggleVista(false);
-    vistaBtn.focus();
+  if (!e.target.closest('.more-wrap')) {
+    if (!moreMenu.hidden) toggleMore(false);
+    if (!vistaMenu.hidden) toggleVista(false);
   }
 });
+for (const menu of [moreMenu, vistaMenu])
+  menu.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    toggleMore(false);
+    toggleVista(false);
+    moreBtn.focus();
+  });

@@ -125,7 +125,8 @@ function syncSaludChip() {
   if (!b || !h) return;
   const bad = h.checks.filter(c => !c.ok).length;
   b.classList.toggle('warn', !!bad);
-  b.textContent = bad ? `🩺 ${bad} aviso${bad === 1 ? '' : 's'}` : '🩺 oficina';
+  $('#btn-more')?.classList.toggle('warn', !!bad); // the dot on «☰ Más» tells there is something in Salud
+  b.textContent = bad ? `🩺 Salud · ${bad} aviso${bad === 1 ? '' : 's'}` : '🩺 Salud';
 }
 function oficinaPanel() {
   const h = oficinaUi.h;

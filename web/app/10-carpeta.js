@@ -4,7 +4,7 @@ const needsSetup = () => !!st.setup && !st.setup.workspace;
 function setSetup(setup) {
   st.setup = setup || null;
   const ws = st.setup?.workspace;
-  $('#ws-chip').textContent = ws ? `carpeta · ${ws.split('/').pop()}` : 'sin carpeta de trabajo';
+  $('#ws-chip').textContent = ws ? `📁 ${ws.split('/').pop()}` : '📁 sin carpeta de trabajo';
   $('#ws-chip').title = ws ? `Carpeta de trabajo: ${ws}. Clic para verla o cambiarla.` : 'Elige la carpeta de trabajo';
   if (needsSetup()) {
     st.wsDraft ??= st.setup.suggestion;
