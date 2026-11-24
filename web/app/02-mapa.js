@@ -88,9 +88,7 @@ function layout(incoming) {
   setRect($('#qclock'), 62.8, 6.6, 3.9, 10); // reloj de la cuota semanal, colgado en la pared
   setRect($('.door'), 36, 97.2 + e, 8, 2.8);
   document.querySelectorAll('.win').forEach((w, k) => setRect(w, 15.5 + k * COL_DX, 37.1, 4.2, 1.8)); // en los huecos entre escritorios
-  setRect($('.deco.plant.p1'), 2.9, 27.8, 1.7, 4.5);
   setRect($('.deco.coffee'), 29.5, 27.5, 1.5, 5.5);
-  setRect($('.deco.plant.p2'), 65.4, 33.3, 1.7, 4.5);
   // Pasillo y columna de salas, de arriba a abajo del mapa.
   setRect($('#corridor'), CORR.x, 3, CORR.w, geo.H - 6);
   setRect($('.room.r-war'), SALA_COL.x, 3, SALA_COL.w, geo.H - 6);

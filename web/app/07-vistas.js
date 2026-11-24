@@ -21,8 +21,8 @@ function placeTDeco(e = extra()) {
   }
   list.forEach(([, x, y, w, h, low], k) => setRect(box.children[k], x, y + (low ? e : 0), w, h));
 }
-// Decoración que crece con el trabajo: en cada nivel aparecen plantas nuevas (y las de siempre crecen y florecen),
-// un trofeo cada 10 tareas en tu escritorio y la pizarra de la sala de descanso con lo terminado hoy.
+// Decoración que crece con el trabajo: en cada nivel aparecen plantas nuevas en la sala de escritorios (y las de siempre
+// crecen y florecen), un trofeo cada 10 tareas en tu escritorio y la pizarra de la sala de descanso con lo terminado hoy.
 // Una «tarea» es cada vez que un robot termina lo que le pediste (cada respuesta final de su turno).
 function placeGrowth(e) {
   const box = $('#growth');

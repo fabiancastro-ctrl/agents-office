@@ -131,17 +131,14 @@ const OFFICE_R = 67.5, // borde derecho de la oficina
 // Plantas que aparecen al crecer la oficina (renderGrowth). Van aquí arriba porque layout() las ubica al arrancar.
 const GROW_AT = [10, 40, 120, 300]; // tareas en la semana de la cuota
 // [nivel desde el que aparece, x, y, ancho, alto, ¿sigue a las filas extra de escritorios?, clase extra]
+// Only in the desks room, along its right wall (x ~65, right of the last desk column and above the style props in the
+// bottom corner): elsewhere they clashed with the office styles and stood where robots rest.
 const GROW_PLANTS = [
-  [1, 3.2, 20, 1.7, 4.5],
-  [1, 33, 27.6, 1.7, 4.5],
-  [2, 65.4, 56, 1.9, 5],
-  [2, 12.5, 27.6, 1.9, 5],
-  [2, 25, 27.6, 1.9, 5],
-  [3, 65.4, 40, 1.9, 5],
-  [3, 65.4, 70, 1.9, 5],
-  [3, 21, 27.6, 1.9, 5],
-  [4, 65.2, 80, 2.4, 6.4, false, 'big'],
-  [4, 65.2, 47, 2.4, 6.4, false, 'big']
+  [1, 65.4, 40, 1.9, 5],
+  [2, 65.4, 57, 1.9, 5],
+  [3, 65.4, 75, 1.9, 5],
+  [4, 65.2, 47.5, 2.4, 6.4, false, 'big'],
+  [4, 65.2, 65, 2.4, 6.4, false, 'big']
 ];
 // Office styles (selector «Estilo», setMapTheme in 07-vistas.js).
 // Each style dresses the same map: CSS restyles floors, walls, furniture, corridor and room signs (style.css,
