@@ -9,6 +9,7 @@ import { deliver, robotFlags, robotHints } from './turno.mjs';
 import { archiveRobot } from './exportar.mjs';
 import { accountTmuxEnv } from './cuentas.mjs';
 import { ensureSession, launching } from './tmux.mjs';
+import { paneVerdict, parsePanes, SHELL_STREAK } from './panel-viva.mjs';
 import { emitRoutines, routines, saveRoutines } from './rutinas.mjs';
 import { closeEmptyTeamSalas, ownerBackIfAlone, rosterOf, writeRoster } from './salas.mjs';
 
@@ -31,15 +32,36 @@ function markLost(r) {
 }
 async function checkConsoles() {
   if (!robots.size) return;
-  let windows;
+  let panes;
   try {
-    windows = new Set((await run('tmux', ['list-windows', '-t', SESSION, '-F', '#{window_name}'])).stdout.split('\n'));
+    panes = parsePanes(
+      (await run('tmux', ['list-panes', '-s', '-t', SESSION, '-F', '#{window_name}\t#{pane_dead}\t#{pane_current_command}'])).stdout
+    );
   } catch {
-    windows = new Set();
+    panes = new Map();
   } // sin sesión o sin servidor de tmux: ninguna consola sigue viva
-  for (const r of robots.values())
-    if (!r.consoleLost && r.state !== 'walking' && !launching.has(r.name) && !windows.has(r.name)) markLost(r);
+  const scriptBin = /\.sh$/.test(CLAUDE_BIN); // the test fake is a shell script
+  for (const r of robots.values()) {
+    if (r.consoleLost || r.state === 'walking' || launching.has(r.name)) {
+      shellSeen.delete(r.name);
+      continue;
+    }
+    const pane = panes.get(r.name);
+    if (!pane) {
+      markLost(r);
+      continue;
+    }
+    // A live window whose claude is gone: a dead pane is lost at once; a shell in the foreground must be seen twice in a row.
+    const v = paneVerdict(pane, { scriptBin });
+    if (v === 'dead') markLost(r);
+    else if (v === 'shell') {
+      const n = (shellSeen.get(r.name) || 0) + 1;
+      shellSeen.set(r.name, n);
+      if (n >= SHELL_STREAK) markLost(r);
+    } else shellSeen.delete(r.name);
+  }
 }
+const shellSeen = new Map(); // robot name -> consecutive checks with a shell in its pane
 setInterval(() => {
   checkConsoles().catch(() => {});
 }, Number(process.env.OFFICE_CONSOLE_CHECK_MS) || 10000);

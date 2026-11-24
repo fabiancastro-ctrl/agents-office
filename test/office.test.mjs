@@ -130,6 +130,20 @@ test('consola caída: se detecta sin borrar al robot y «Reanudar» abre su mism
   }
 });
 
+test('consola caída: a window that stays but whose process ended (dead pane) is marked lost too', async () => {
+  const o = await startOffice({ robots: [{ name: 'zombi' }, { name: 'sano' }] });
+  try {
+    const { execFileSync } = await import('node:child_process');
+    execFileSync('tmux', ['set-option', '-w', '-t', `${o.session}:zombi`, 'remain-on-exit', 'on']);
+    execFileSync('tmux', ['send-keys', '-t', `${o.session}:zombi`, 'C-d']); // cat exits, the window stays
+    await waitFor(async () => (await o.robot('zombi'))?.consoleLost, { what: 'the dead pane marked lost' });
+    assert.ok(o.windows().includes('zombi'), 'the window is still there');
+    assert.equal((await o.robot('sano')).consoleLost, false, 'a live console is untouched');
+  } finally {
+    await o.stop();
+  }
+});
+
 test('un robot pide robots: apruebas con cambios, entran según el cupo y los demás esperan', async () => {
   const o = await startOffice({ maxRobots: 2 });
   try {
