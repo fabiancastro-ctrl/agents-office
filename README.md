@@ -94,8 +94,13 @@ office rm nr                    # eliminar: despide, apaga y manda la oficina a 
 office restart nr               # tras actualizar el código del daemon
 office logs nr                  # últimas líneas del daemon (office logs nr -f para seguirlo)
 office ctl nr libre "resume el README"           # encargos desde la terminal (ver daemon/ctl.mjs)
+office cuenta add b --dir ~/.claude-b --nombre "Dropi nueva"   # registrar otra cuenta de Claude (ver «Dos cuentas»)
+office cuenta ls                # cuentas registradas: carpeta, enlaces OK/faltan y si tiene sesión iniciada
+office cuenta rm b              # la quita del registro (no toca su carpeta)
 tmux attach -t office-nr                         # ver las consolas de los robots (Ctrl-b d sale sin cerrarlas)
 ```
+
+- **Dos cuentas de Claude**: el registro vive en el edificio (`~/.agent-office/cuentas.json`, `AGENT_OFFICE_HOME` lo cambia) y lo comparten todas las oficinas; la principal (`~/.claude`) está implícita. `cuenta add` crea la carpeta de la cuenta y la enlaza a `~/.claude` en `settings.json`, `skills/`, `agents/`, `projects/` (así la memoria y los transcripts son los mismos) y, si existen allí, `CLAUDE.md`, `commands/` y `plugins/`. Lo que ya hubiera en la carpeta con esos nombres se renombra a `<nombre>.antes-oficina`; nunca se borra. Después inicia sesión una vez: `CLAUDE_CONFIG_DIR=<carpeta> claude auth login`. Cada robot se lanza con la cuenta que elijas en el selector **Cuenta** de «Nuevo encargo» y de las rutinas (aparece solo si hay más de una; «Automática» elige la de más cuota libre); sin elegir, usa la principal como siempre.
 
 - **Detener no despide a nadie (pausa)**: cada robot es una consola de `claude` en tmux, no un proceso de la oficina, así que sigue vivo y se reconecta solo (estado, escritorio y conversación) al arrancar la oficina otra vez. Sirve para reiniciar tras actualizar el código sin perder trabajo. Ojo: un robot que estaba trabajando **sigue trabajando y gastando cuota** aunque no lo veas; uno terminado o esperando no gasta nada.
 - **Cerrar de verdad**: `office stop nr --despedir` (o **Cerrar y despedir** en el edificio) da de baja a cada robot por la oficina, que primero entrega sus documentos pendientes a la bandeja, y cierra la sesión de tmux. Si la oficina estaba detenida, la inicia un momento para eso. No se puede deshacer: un robot que estaba trabajando se corta.

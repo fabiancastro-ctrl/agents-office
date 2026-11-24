@@ -378,7 +378,7 @@ test('equipo: el gasto de la sala suma a todos (también a los que se fueron) y 
     const delivered = (await o.robot(k1)).deliveredAt;
     assert.ok(delivered && !Number.isNaN(Date.parse(delivered)), 'la vista del hijo trae deliveredAt al entregar');
     assert.equal((await o.robot(k2)).deliveredAt, null, 'el que no entregó no lo tiene');
-    const d =await o.api('POST', `/api/salas/${ok.body.sala}/despedir-equipo`);
+    const d = await o.api('POST', `/api/salas/${ok.body.sala}/despedir-equipo`);
     assert.deepEqual(d.body.despedidos, [k1]);
     assert.equal(d.body.quedan, 2, 'quedan el padre y el que sigue trabajando');
     assert.ok(!(await o.robot(k1)) && (await o.robot(k2)) && (await o.robot('jefe')));
@@ -2112,5 +2112,69 @@ test('per-robot model: a routine stores its model and launches its robot with it
     assert.doesNotMatch(await waitFor(() => o.claudeCalls().find(c => c.includes('Rutina sin')), { what: 'its launch' }), /--model/);
   } finally {
     await o.stop();
+  }
+});
+
+test('accounts CLI: add links what is shared, never deletes, is idempotent; ls shows links and login; rm only unregisters', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'office-acc-'));
+  try {
+    const home = path.join(base, 'home'),
+      main = path.join(base, 'principal'),
+      acc = path.join(base, 'cuenta-b');
+    fs.mkdirSync(main);
+    fs.writeFileSync(path.join(main, 'settings.json'), '{}');
+    fs.writeFileSync(path.join(main, 'CLAUDE.md'), 'hola');
+    // acc already holds real files created by Claude: they must be renamed, not deleted
+    fs.mkdirSync(path.join(acc, 'plugins'), { recursive: true });
+    fs.writeFileSync(path.join(acc, 'settings.json'), '{"propio":true}');
+    // fake claude: `auth status` answers like the real one, per config dir
+    const fake = path.join(base, 'claude-auth.sh');
+    fs.writeFileSync(
+      fake,
+      `#!/bin/sh\nif [ -n "$CLAUDE_CONFIG_DIR" ]; then echo '{"loggedIn":false}'; exit 1; fi\necho '{"loggedIn":true,"orgName":"Org","subscriptionType":"team"}'\n`,
+      { mode: 0o755 }
+    );
+    const env = { ...process.env, AGENT_OFFICE_HOME: home, OFFICE_PRINCIPAL_DIR: main, OFFICE_CLAUDE_BIN: fake };
+    const cli = (...a) => {
+      try {
+        return {
+          code: 0,
+          out: execFileSync(process.execPath, [path.join(import.meta.dirname, '../bin/office.mjs'), ...a], {
+            env,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe']
+          })
+        };
+      } catch (e) {
+        return { code: e.status, out: String(e.stdout) + String(e.stderr) };
+      }
+    };
+    const add = cli('cuenta', 'add', 'b', '--dir', acc, '--nombre', 'Dropi nueva');
+    assert.equal(add.code, 0, add.out);
+    assert.match(add.out, new RegExp(`CLAUDE_CONFIG_DIR=${acc} claude auth login`));
+    for (const n of ['settings.json', 'skills', 'agents', 'projects', 'CLAUDE.md'])
+      assert.equal(fs.readlinkSync(path.join(acc, n)), path.join(main, n), n);
+    assert.ok(!fs.existsSync(path.join(acc, 'commands')), 'commands is linked only when the principal has it');
+    assert.equal(fs.readFileSync(path.join(acc, 'settings.json.antes-oficina'), 'utf8'), '{"propio":true}');
+    assert.ok(fs.existsSync(path.join(acc, 'plugins')), 'plugins is not on the principal: the real folder stays');
+    // add again: nothing moves
+    assert.equal(cli('cuenta', 'add', 'b', '--dir', acc).code, 1, 'duplicate id is refused');
+    const reg = JSON.parse(fs.readFileSync(path.join(home, 'cuentas.json'), 'utf8'));
+    assert.equal(reg[0].nombre, 'Dropi nueva');
+    fs.writeFileSync(path.join(home, 'cuentas.json'), '[]');
+    assert.equal(cli('cuenta', 'add', 'b', '--dir', acc).code, 0);
+    assert.ok(!fs.existsSync(path.join(acc, 'settings.json.antes-oficina-2')), 'second add is idempotent');
+    assert.equal(cli('cuenta', 'add', 'principal', '--dir', acc).code, 1);
+    assert.equal(cli('cuenta', 'add', 'z', '--dir', main).code, 1, 'the principal folder cannot be an extra account');
+    const ls = cli('cuenta', 'ls');
+    assert.match(ls.out, /principal\s+Principal\s+—\s+sí · Org · team/);
+    assert.match(ls.out, /\bb\s+b\s+OK\s+no/);
+    fs.rmSync(path.join(acc, 'agents'));
+    assert.match(cli('cuenta', 'ls').out, /faltan: agents/);
+    assert.equal(cli('cuenta', 'rm', 'b').code, 0);
+    assert.ok(fs.existsSync(path.join(acc, 'skills')), 'rm does not touch the folder');
+    assert.equal(cli('cuenta', 'rm', 'b').code, 1);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
   }
 });

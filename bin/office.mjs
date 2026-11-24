@@ -14,6 +14,8 @@
 //   office open <nombre>                        abre la oficina en el navegador
 //   office ctl <nombre> <comando…>              daemon/ctl.mjs contra esa oficina
 //   office lobby [stop]                         página del edificio (http://127.0.0.1:4700)
+//   office cuenta add <id> --dir <carpeta> [--nombre "…"]   registra otra cuenta de Claude (enlaza lo compartido)
+//   office cuenta ls | rm <id>                  cuentas, enlaces y sesión · la quita del registro
 //
 // Registro: ~/.agent-office/oficinas/<nombre>/office.json (AGENT_OFFICE_HOME cambia ~/.agent-office).
 // Los datos de la oficina viven en esa misma carpeta, salvo que office.json diga otra en «data»
@@ -25,7 +27,9 @@ import net from 'node:net';
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { accounts, authStatus, ID_RE, linksOf, PRINCIPAL, principalDir, saveAccounts, setupAccountDir } from '../daemon/lib/cuentas.mjs';
 
+const readRegistry = () => accounts().filter(a => !a.principal);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DAEMON = path.join(ROOT, 'daemon', 'daemon.mjs');
 const HOME = path.resolve(process.env.AGENT_OFFICE_HOME || path.join(os.homedir(), '.agent-office'));
@@ -71,7 +75,7 @@ function liveRobots(o) {
   if (owner.status === 0 && owner.stdout.trim() && Number(owner.stdout.trim()) !== o.port) return [];
   const names = tmux('list-windows', '-t', o.session, '-F', '#{window_name}')
     .stdout.split('\n')
-    .filter(n => n && n !== 'lobby' && n !== '_status');
+    .filter(n => n && n !== 'lobby' && !n.startsWith('_status'));
   // Claude Code muestra «esc to interrupt» mientras trabaja: es la forma de saberlo sin el daemon.
   return names.map(name => ({
     name,
@@ -480,6 +484,62 @@ async function lobby(sub) {
   console.log(`Edificio en http://127.0.0.1:${LOBBY_PORT}`);
 }
 
+/* ---------- cuentas de Claude ---------- */
+function cuenta(sub, rest, fl) {
+  const reg = readRegistry();
+  if (sub === 'add') {
+    const id = String(rest[0] || '').toLowerCase();
+    if (!ID_RE.test(id) || id === PRINCIPAL)
+      die('Uso: office cuenta add <id> --dir <carpeta> [--nombre "…"] (id en minúsculas, números y guiones; «principal» está reservado).');
+    if (typeof fl.dir !== 'string') die('Falta --dir <carpeta> (la carpeta de configuración de esa cuenta, p. ej. ~/.claude-b).');
+    const dir = path.resolve(expandHome(fl.dir));
+    if (dir === principalDir()) die('Esa es la carpeta de la cuenta principal; elige otra para la cuenta nueva.');
+    if (reg.some(a => a.id === id)) die(`Ya existe la cuenta «${id}». Quítala primero con: office cuenta rm ${id}`);
+    const clash = reg.find(a => a.dir === dir);
+    if (clash) die(`Esa carpeta ya es la cuenta «${clash.id}».`);
+    const actions = setupAccountDir(dir);
+    const nombre = typeof fl.nombre === 'string' ? fl.nombre : id;
+    saveAccounts([...reg, { id, nombre, dir }]);
+    console.log(`Cuenta «${id}» (${nombre}) registrada en ${dir}`);
+    for (const a of actions) console.log(`  ${a.name.padEnd(14)} ${a.did}${a.moved ? ` (lo que había quedó como ${a.moved})` : ''}`);
+    console.log('\nPara iniciar sesión con esa cuenta (una sola vez, lo haces tú):');
+    console.log(`  CLAUDE_CONFIG_DIR=${dir} claude auth login`);
+    console.log('Comprueba el estado con: office cuenta ls');
+    return;
+  }
+  if (sub === 'rm') {
+    const id = String(rest[0] || '').toLowerCase();
+    if (!reg.some(a => a.id === id)) die(`No existe la cuenta «${id}». Mira las registradas con: office cuenta ls`);
+    saveAccounts(reg.filter(a => a.id !== id));
+    console.log(`Cuenta «${id}» quitada del registro. Su carpeta no se tocó; los robots que ya la usan siguen vivos.`);
+    return;
+  }
+  if (sub === 'ls' || sub === undefined) {
+    const all = [{ id: PRINCIPAL, nombre: 'Principal', dir: principalDir(), principal: true }, ...reg];
+    console.log('id'.padEnd(12) + 'nombre'.padEnd(20) + 'enlaces'.padEnd(18) + 'sesión'.padEnd(34) + 'carpeta');
+    for (const a of all) {
+      let links = '—';
+      if (!a.principal) {
+        const l = linksOf(a);
+        links = l.missing.length ? `faltan: ${l.missing.join(',')}` : 'OK';
+      }
+      const s = authStatus(a);
+      const ses = s.loggedIn
+        ? `sí · ${s.orgName || '?'} · ${s.subscriptionType || '?'}`
+        : `no${s.error ? ` (${s.error})` : ' · inicia sesión'}`;
+      console.log(
+        a.id.padEnd(12) +
+          a.nombre.slice(0, 18).padEnd(20) +
+          links.slice(0, 16).padEnd(18) +
+          ses.slice(0, 32).padEnd(34) +
+          a.dir.replace(os.homedir(), '~')
+      );
+    }
+    return;
+  }
+  die('Uso: office cuenta add <id> --dir <carpeta> [--nombre "…"] | office cuenta ls | office cuenta rm <id>');
+}
+
 /* ---------- main ---------- */
 const [cmd, ...args] = process.argv.slice(2);
 const BOOL_FLAGS = new Set(['despedir', 'yes']);
@@ -537,6 +597,9 @@ switch (cmd) {
     process.exitCode = r.status ?? 1;
     break;
   }
+  case 'cuenta':
+    cuenta(pos[0], pos.slice(1), flags);
+    break;
   case 'lobby':
     await lobby(pos[0]);
     break;
@@ -548,7 +611,7 @@ switch (cmd) {
       fs
         .readFileSync(fileURLToPath(import.meta.url), 'utf8')
         .split('\n')
-        .slice(1, 17)
+        .slice(1, 19)
         .map(l => l.replace(/^\/\/ ?/, ''))
         .join('\n')
     );
