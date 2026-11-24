@@ -290,6 +290,19 @@ function decide(id, decision) {
   return true;
 }
 
+// A subagent stopped with TaskStop never sends SubagentStop: without this it stays «running» forever and pendingSubs
+// blocks the end of every turn (delegating state, no dismissal summary, no relay). Its task_id is the subagent's agent_id.
+function stopSub(r, id) {
+  const s = id && r.subs.find(x => x.id === id && x.status === 'running');
+  if (!s) return;
+  s.status = 'done';
+  s.activity = '';
+  r.pendingSubs = Math.max(0, r.pendingSubs - 1);
+  log(r, 'sub', `${s.type} detenido`);
+  if (r.pendingSubs === 0 && r.state === 'delegating') setState(r, 'working');
+  emit(r);
+}
+
 function subFor(r, body) {
   if (!body.agent_id || !body.agent_type) return null;
   let s = r.subs.find(x => x.id === body.agent_id);
@@ -426,6 +439,7 @@ async function onHook(name, body, via = '', closers = []) {
         emit(r);
         for (const o of clashPeers(r)) emit(o); // their view shows the clash too
       }
+      if (!sub && body.tool_name === 'TaskStop') stopSub(r, body.tool_input?.task_id);
       if (!sub && r.tool) {
         r.tool = '';
         emit(r);

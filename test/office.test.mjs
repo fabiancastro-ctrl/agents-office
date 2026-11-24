@@ -516,6 +516,38 @@ test('detector de bucles: marca ⟳ a la 4.ª repetición idéntica, se apaga al
   }
 });
 
+test('a subagent stopped with TaskStop is marked done and no longer blocks the turn', async () => {
+  const o = await startOffice();
+  try {
+    await o.api('POST', '/api/robots', libre('uno'));
+    await o.hook('uno', { hook_event_name: 'UserPromptSubmit', prompt: 'x' });
+    await o.hook('uno', {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Agent',
+      tool_use_id: 't1',
+      tool_input: { subagent_type: 'general-purpose', description: 'check' }
+    });
+    // its first own tool call binds the agent_id to the sub
+    await o.hook('uno', {
+      hook_event_name: 'PreToolUse',
+      agent_id: 'sub-1',
+      agent_type: 'general-purpose',
+      tool_name: 'Bash',
+      tool_use_id: 't2',
+      tool_input: { command: 'ls' }
+    });
+    assert.equal((await o.robot('uno')).pendingSubs, 1);
+    await o.hook('uno', { hook_event_name: 'PostToolUse', tool_name: 'TaskStop', tool_use_id: 't3', tool_input: { task_id: 'sub-1' } });
+    const r = await o.robot('uno');
+    assert.equal(r.pendingSubs, 0);
+    assert.equal(r.subs[0].status, 'done');
+    await o.hook('uno', { hook_event_name: 'Stop', last_assistant_message: 'listo' });
+    assert.equal((await o.robot('uno')).state, 'done', 'the turn ends instead of staying in delegating');
+  } finally {
+    await o.stop();
+  }
+});
+
 test('exportar sala, muro de la fama e historial de la cuota', async () => {
   const o = await startOffice({
     env: { OFFICE_SPEND_TICK_MS: '300' },
