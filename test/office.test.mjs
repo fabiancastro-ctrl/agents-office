@@ -2329,3 +2329,76 @@ test('accounts: the page has the Cuenta selector (only with several accounts), t
     await o.stop();
   }
 });
+
+test('accounts: "auto" launches on the account with the most free quota from the saved readings, and falls back to the principal', async () => {
+  const at = Date.now(),
+    weekEnd = at + 3 * 86400e3;
+  const quotaAcc = { principal: { weekPct: 80, weekPctAt: at, weekEnd }, b: { weekPct: 20, weekPctAt: at, weekEnd } };
+  const o = await startOffice({ maxRobots: 5, accounts: ['b'], files: { 'config.json': JSON.stringify({ quotaAcc }) } });
+  try {
+    await o.api('POST', '/api/robots', { ...libre('au', 'Tarea automatica uno'), account: 'auto' });
+    const call = text => waitFor(() => o.claudeCalls().find(c => c.includes(text)), { what: `launch of ${text}` });
+    assert.ok((await call('Tarea automatica uno')).startsWith(`CLAUDE_CONFIG_DIR=${o.accDir('b')} `));
+    const r = await o.robot('au');
+    assert.equal(r.account, 'b', 'the robot keeps the real account, not "auto"');
+    assert.ok(r.log.some(l => /Cuenta elegida automáticamente.*Cuenta b/.test(l.text)));
+    // The principal frees up more than b: the next one goes there
+    fs.writeFileSync(
+      path.join(o.data, 'config.json'),
+      JSON.stringify({ quotaAcc: { ...quotaAcc, principal: { ...quotaAcc.principal, weekPct: 5 } } })
+    );
+    await o.api('POST', '/api/robots', { ...libre('au2', 'Tarea automatica dos'), account: 'auto' });
+    assert.doesNotMatch(await call('Tarea automatica dos'), /CLAUDE_CONFIG_DIR/);
+    // No readings at all: the principal
+    fs.writeFileSync(path.join(o.data, 'config.json'), '{}');
+    await o.api('POST', '/api/robots', { ...libre('au3', 'Tarea automatica tres'), account: 'auto' });
+    assert.doesNotMatch(await call('Tarea automatica tres'), /CLAUDE_CONFIG_DIR/);
+    assert.equal((await o.robot('au3')).account, '');
+    // A routine can ask for it too and its robot gets a real account
+    const sch = { mode: 'once', at: new Date(Date.now() + 500).toISOString() };
+    const id = (
+      await o.api('POST', '/api/routines', { type: 'agenda', name: 'auto', text: 'Rutina automatica', schedule: sch, account: 'auto' })
+    ).body.id;
+    assert.equal((await o.snapshot()).routines.find(x => x.id === id).account, 'auto');
+  } finally {
+    await o.stop();
+  }
+  // With no extra account registered, "auto" means nothing and is dropped
+  const solo = await startOffice({ maxRobots: 2 });
+  try {
+    await solo.api('POST', '/api/robots', { ...libre('s', 'Tarea sola'), account: 'auto' });
+    await waitFor(() => solo.claudeCalls().find(c => c.includes('Tarea sola')), { what: 'launch' });
+    assert.doesNotMatch(
+      solo.claudeCalls().find(c => c.includes('Tarea sola')),
+      /CLAUDE_CONFIG_DIR/
+    );
+  } finally {
+    await solo.stop();
+  }
+});
+
+test('accounts: a notice (once) when an account passes 90 % of its week, pointing at the freest other one', async () => {
+  const o = await startOffice({ maxRobots: 3, accounts: ['b'], usage: { principal: { s: 10, w: 30 }, b: { s: 60, w: 95 } } });
+  const ac = new AbortController();
+  try {
+    const res = await fetch(`${o.url}/api/events`, { signal: ac.signal });
+    const reader = res.body.getReader();
+    let seen = '';
+    (async () => {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        seen += new TextDecoder().decode(value);
+      }
+    })().catch(() => {});
+    assert.equal((await o.api('GET', '/api/claude-status?refresh=1')).status, 200);
+    await waitFor(() => /va en 95 % de su cuota semanal/.test(seen), { what: 'the 90 % notice', timeout: 5000 });
+    assert.match(seen, /Cuenta b.*va en 95 %.*Lanza los siguientes robots en «Principal» \(30 %\)/);
+    await o.api('GET', '/api/claude-status?refresh=1');
+    await sleep(300);
+    assert.equal(seen.split('va en 95 % de su cuota semanal').length - 1, 1, 'the notice is not repeated for the same week');
+  } finally {
+    ac.abort();
+    await o.stop();
+  }
+});

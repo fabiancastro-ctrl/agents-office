@@ -12,6 +12,8 @@ process.env.OFFICE_DATA = path.join(tmp, 'datos');
 process.env.OFFICE_SESSION = `office-unit-${process.pid}`;
 process.env.OFFICE_TRASH = path.join(tmp, 'papelera');
 process.env.OFFICE_PORT = '1';
+process.env.AGENT_OFFICE_HOME = path.join(tmp, 'home'); // accounts registry isolated from the real one
+process.env.OFFICE_PRINCIPAL_DIR = path.join(tmp, 'principal');
 let base, equipo, salas, uso;
 before(async () => {
   base = await import('../daemon/lib/base.mjs');
@@ -129,4 +131,28 @@ test('el robot de relevo se reconoce por su origen (web/robot-art.js)', async ()
   assert.equal(ctx.isRelevo({ origin: 'Relevo por contexto de api (320k) · esperó cupo en la puerta' }), true);
   assert.equal(ctx.isRelevo({ origin: 'Lanzado por ti' }), false);
   assert.equal(ctx.isRelevo(null), false);
+});
+
+test('accounts: automatic choice picks the most free weekly quota from simulated readings', async () => {
+  const cu = await import('../daemon/lib/cuentas.mjs');
+  const t = Date.parse('2026-11-25T12:00:00Z'),
+    end = Date.parse('2026-11-30T23:00:00Z');
+  const read = (pct, at = t - 60e3) => ({ weekPct: pct, weekPctAt: at, weekEnd: end });
+  // Only the principal exists: it is always the answer
+  assert.equal(cu.autoAccount({ principal: read(95) }, t), '');
+  fs.mkdirSync(process.env.AGENT_OFFICE_HOME, { recursive: true });
+  cu.saveAccounts([
+    { id: 'b', nombre: 'B', dir: path.join(tmp, 'cb') },
+    { id: 'c', nombre: 'C', dir: path.join(tmp, 'cc') }
+  ]);
+  assert.equal(cu.autoAccount({}, t), '', 'no readings: the principal');
+  assert.equal(cu.autoAccount({ principal: read(70), b: read(30), c: read(50) }, t), 'b');
+  assert.equal(cu.autoAccount({ principal: read(20), b: read(30) }, t), '', 'the principal has more free quota');
+  assert.equal(cu.autoAccount({ principal: read(40), b: read(40) }, t), '', 'a tie goes to the principal');
+  assert.equal(cu.autoAccount({ principal: read(90), b: read(60) }, t), 'b', 'an account never read does not compete');
+  // A reading from before the last renewal counts as 0: the week started over
+  const old = { weekPct: 99, weekPctAt: end - 9 * 86400e3, weekEnd: end };
+  assert.equal(cu.autoAccount({ principal: read(50), b: old }, t), 'b');
+  assert.equal(cu.weekUsed(old, t), 0);
+  cu.saveAccounts([]);
 });

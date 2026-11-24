@@ -23,7 +23,8 @@ import {
 import { emit } from './estado.mjs';
 import { freeDesk, log, roomSeat, setState } from './persistencia.mjs';
 import { cleanTitle, normModel, normTools, robotFlags, robotHints } from './turno.mjs';
-import { accountTmuxEnv, normAccount } from './cuentas.mjs';
+import { accountName, accountTmuxEnv, AUTO, autoAccount, normAccount, normAccountPick } from './cuentas.mjs';
+import { readConfig } from './carpeta.mjs';
 import { attachmentNote } from './adjuntos.mjs';
 import { routines } from './rutinas.mjs';
 import { salaPreamble, salas } from './salas.mjs';
@@ -161,7 +162,9 @@ async function launchReserved({
   account,
   modelPick
 }) {
-  account = normAccount(account);
+  // «Automática» is resolved now, from the last /usage readings; everything downstream sees a real account.
+  const auto = normAccountPick(account) === AUTO;
+  account = auto ? autoAccount(readConfig().quotaAcc) : normAccount(account);
   let prompt, label;
   if (kind === 'skill') {
     skill = String(skill || '')
@@ -272,6 +275,7 @@ async function launchReserved({
     throw new Error(`No se pudo abrir la consola: ${e.message}`);
   }
   log(r, 'sys', `Encargo: ${label}`);
+  if (auto) log(r, 'sys', `Cuenta elegida automáticamente (la de más cuota libre): ${accountName(account)}`);
   log(r, 'sys', r.origin);
   console_(name, 'lanzado', `${label} · tmux attach -t ${SESSION}:${name}`);
   emit(r);

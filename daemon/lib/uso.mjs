@@ -6,7 +6,7 @@ import path from 'node:path';
 import { CLAUDE_BIN, clients, console_, now, robots, run, RUNS, SESSION, WORKSPACE } from './base.mjs';
 import { broadcast, configView, emit, fmtK } from './estado.mjs';
 import { readConfig, saveConfig } from './carpeta.mjs';
-import { accountName, accounts, accountTmuxEnv, normAccount, PRINCIPAL } from './cuentas.mjs';
+import { accountName, accounts, accountTmuxEnv, normAccount, PRINCIPAL, weekUsed } from './cuentas.mjs';
 import { log } from './persistencia.mjs';
 import { lookFromName } from './equipo.mjs';
 import { archive } from './turno.mjs';
@@ -509,6 +509,7 @@ function parseClaudeStatus(text, account = '') {
     const head = fullestQuota(qa);
     saveConfig({ quotaAcc: qa, quota: { ...head.q, account: head.id } });
     broadcast({ type: 'config', config: configView() });
+    warnAccount(key, q);
   }
   const start = clean.findIndex(l => /^What's contributing/.test(l));
   const detail =
@@ -527,6 +528,27 @@ function parseClaudeStatus(text, account = '') {
 setInterval(() => {
   if (clients.size && WORKSPACE) claudeStatus(true).catch(() => {});
 }, Number(process.env.OFFICE_USAGE_REFRESH_MS) || 3600e3);
+// Notice (once per account and week) when an account passes 90 % of its weekly quota: suggests the least used other one.
+const ACCOUNT_WARN_PCT = 90,
+  warned = new Set();
+function warnAccount(key, q) {
+  const used = weekUsed(q);
+  if (used === null || used < ACCOUNT_WARN_PCT || accounts().length < 2) return;
+  const mark = `${key}:${q.weekEnd || ''}`;
+  if (warned.has(mark)) return;
+  warned.add(mark);
+  const qa = readConfig().quotaAcc || {};
+  const others = accounts()
+    .filter(a => a.id !== key)
+    .map(a => ({ a, used: weekUsed(qa[a.id]) }))
+    .filter(x => x.used !== null && x.used < used)
+    .sort((x, y) => x.used - y.used);
+  const name = accountName(key === PRINCIPAL ? '' : key);
+  const tip = others.length
+    ? ` Lanza los siguientes robots en «${others[0].a.nombre}» (${others[0].used} %) o elige «Automática» en el selector de Cuenta.`
+    : '';
+  broadcast({ type: 'notice', text: `⚠ La cuenta «${name}» va en ${used} % de su cuota semanal.${tip}` });
+}
 // The registered account with the highest weekly % in the saved readings: { id, q }. Ties go to the first (principal).
 function fullestQuota(qa) {
   let best = null;

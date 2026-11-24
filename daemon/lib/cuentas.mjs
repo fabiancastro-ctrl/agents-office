@@ -85,6 +85,28 @@ const accountOf = id => accounts().find(a => a.id === (normAccount(id) || PRINCI
 // For a child or an item that may carry its own choice: an explicit "principal" stays principal; an empty or unknown one inherits `fallback`.
 const inheritAccount = (v, fallback = '') => (idOf(v) === PRINCIPAL ? '' : normAccountPick(v) || fallback || '');
 const accountName = id => accountOf(id)?.nombre || '';
+// Weekly % used of one saved reading ({ weekPct, weekPctAt, weekEnd } from config.quotaAcc), or null when never read.
+// A reading taken before the last renewal of the week no longer counts: the quota is back to 0.
+function weekUsed(q, t = Date.now()) {
+  const at = Number(q?.weekPctAt) || 0;
+  if (!Number.isFinite(q?.weekPct) || !at) return null;
+  let end = Number(q.weekEnd) || 0;
+  if (end) {
+    while (end <= t) end += 7 * 86400e3;
+    if (at < end - 7 * 86400e3) return 0;
+  }
+  return q.weekPct;
+}
+// «Automática»: the account with the most free weekly quota according to the last readings; '' (principal) when
+// there are none. Ties go to the first registered, the principal.
+function autoAccount(readings, t = Date.now()) {
+  let best = null;
+  for (const a of accounts()) {
+    const used = weekUsed(readings?.[a.id], t);
+    if (used !== null && (!best || used < best.used)) best = { id: a.principal ? '' : a.id, used };
+  }
+  return best ? best.id : '';
+}
 // Extra tmux args that point a robot at its account folder. The principal runs exactly as before (no variable).
 const accountTmuxEnv = id => {
   const a = normAccount(id) ? accountOf(id) : null;
@@ -199,6 +221,7 @@ export {
   accountTmuxEnv,
   AUTO,
   authStatus,
+  autoAccount,
   claudeJsonOf,
   expandHome,
   FILE,
@@ -211,5 +234,6 @@ export {
   PRINCIPAL,
   principalDir,
   saveAccounts,
-  setupAccountDir
+  setupAccountDir,
+  weekUsed
 };
