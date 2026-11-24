@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { now, PERMISSION_MODES, PORT, replaceList, robots, ROUTINE_TICK_MS, run, RUNS, saveJson, trunc, WORKSPACE } from './base.mjs';
+import { normAccountPick } from './cuentas.mjs';
 import { broadcast, usage } from './estado.mjs';
 import { log } from './persistencia.mjs';
 import { archive, normModel } from './turno.mjs';
@@ -149,6 +150,7 @@ function routineView(rt) {
     runs: rt.runs || 0,
     permissionMode: rt.permissionMode,
     modelPick: rt.modelPick || '',
+    account: rt.account || '',
     paused: rt.paused,
     running: !!rt.running,
     nextAt: Number.isFinite(rt.nextAt) ? rt.nextAt : null,
@@ -196,7 +198,14 @@ function fillTemplate(s, pr) {
 function jobFor(rt, pr) {
   const origin = `Lanzado por la rutina «${rt.name}» para ${pr.repo}#${pr.number} (${trunc(pr.title, 60)})${pr.event ? ` · ${pr.event}` : ''}`;
   const extra = rt.extra ? `\n\nInstrucciones adicionales: ${fillTemplate(rt.extra, pr)}` : '';
-  const base = { permissionMode: rt.permissionMode, modelPick: rt.modelPick, origin, leaveWhenDone: true, routine: rt.id };
+  const base = {
+    permissionMode: rt.permissionMode,
+    modelPick: rt.modelPick,
+    account: rt.account,
+    origin,
+    leaveWhenDone: true,
+    routine: rt.id
+  };
   if (rt.action.kind === 'skill') return { ...base, kind: 'skill', skill: rt.action.skill, args: fillTemplate(rt.action.args, pr) + extra };
   return { ...base, kind: 'libre', text: fillTemplate(rt.action.text, pr) + extra };
 }
@@ -402,6 +411,7 @@ async function runAgenda(rt) {
       label: `Rutina «${rt.name}» #${rt.runs}`,
       permissionMode: rt.permissionMode,
       modelPick: rt.modelPick,
+      account: rt.account,
       origin: `Ejecución #${rt.runs} de la rutina «${rt.name}»`,
       leaveWhenDone: true,
       routine: rt.id
@@ -587,6 +597,7 @@ async function wakeAct(rt, what) {
       title: rt.name,
       permissionMode: rt.permissionMode,
       modelPick: rt.modelPick,
+      account: rt.account,
       origin: `Lanzado por el despertador «${rt.name}»`
     });
     return `lancé a ${r.name}`;
@@ -647,6 +658,7 @@ async function buildRoutine(b) {
     type,
     permissionMode: b.permissionMode || '',
     modelPick: normModel(b.modelPick),
+    account: normAccountPick(b.account),
     schedule: cleanSchedule(type === 'wake' ? { mode: 'every', everyMin: b.schedule?.everyMin || b.everyMin || 5 } : b)
   };
   if (type === 'agenda') {

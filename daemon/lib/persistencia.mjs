@@ -48,6 +48,7 @@ function saveState() {
         permissionMode: r.permissionMode,
         tools: r.tools || [],
         modelPick: r.modelPick || '',
+        account: r.account || '',
         sessionId: r.sessionId,
         transcript: r.transcript,
         startedAt: r.startedAt,

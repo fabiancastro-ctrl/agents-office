@@ -82,6 +82,8 @@ const normAccount = v => {
 // What the user can choose: normAccount plus 'auto' (resolved at launch by the quota).
 const normAccountPick = v => (idOf(v) === AUTO && hasMany() ? AUTO : normAccount(v));
 const accountOf = id => accounts().find(a => a.id === (normAccount(id) || PRINCIPAL));
+// For a child or an item that may carry its own choice: an explicit "principal" stays principal; an empty or unknown one inherits `fallback`.
+const inheritAccount = (v, fallback = '') => (idOf(v) === PRINCIPAL ? '' : normAccountPick(v) || fallback || '');
 const accountName = id => accountOf(id)?.nombre || '';
 // Extra tmux args that point a robot at its account folder. The principal runs exactly as before (no variable).
 const accountTmuxEnv = id => {
@@ -201,6 +203,7 @@ export {
   expandHome,
   FILE,
   hasMany,
+  inheritAccount,
   ID_RE,
   linksOf,
   normAccount,

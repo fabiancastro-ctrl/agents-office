@@ -23,6 +23,7 @@ import {
 import { emit } from './estado.mjs';
 import { freeDesk, log, roomSeat, setState } from './persistencia.mjs';
 import { cleanTitle, normModel, normTools, robotFlags, robotHints } from './turno.mjs';
+import { accountTmuxEnv, normAccount } from './cuentas.mjs';
 import { attachmentNote } from './adjuntos.mjs';
 import { routines } from './rutinas.mjs';
 import { salaPreamble, salas } from './salas.mjs';
@@ -99,6 +100,7 @@ async function launch({
   color,
   look,
   tools,
+  account,
   modelPick
 }) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
@@ -130,6 +132,7 @@ async function launch({
       color,
       look,
       tools,
+      account,
       modelPick
     });
   } finally {
@@ -155,8 +158,10 @@ async function launchReserved({
   color,
   look,
   tools,
+  account,
   modelPick
 }) {
+  account = normAccount(account);
   let prompt, label;
   if (kind === 'skill') {
     skill = String(skill || '')
@@ -201,11 +206,13 @@ async function launchReserved({
       text: kind === 'libre' ? String(text || '').trim() : '',
       permissionMode: permissionMode || '',
       tools: normTools(tools),
-      modelPick: normModel(modelPick)
+      modelPick: normModel(modelPick),
+      account
     },
     permissionMode: permissionMode || '',
     tools: normTools(tools),
     modelPick: normModel(modelPick),
+    account,
     leaveWhenDone: !!leaveWhenDone,
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
     routine: routine || null,
@@ -243,6 +250,7 @@ async function launchReserved({
     `OFFICE_ROBOT=${name}`,
     '-e',
     `OFFICE_PORT=${PORT}`,
+    ...accountTmuxEnv(account),
     'env',
     '-u',
     'ANTHROPIC_API_KEY',

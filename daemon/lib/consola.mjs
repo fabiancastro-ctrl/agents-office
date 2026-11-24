@@ -7,6 +7,7 @@ import { convDirty, convFile, endWait, log, saveState, setState } from './persis
 import { drainSpawnQueue, flushIfIdle, pendingResults, resultTimers } from './equipo.mjs';
 import { deliver, robotFlags, robotHints } from './turno.mjs';
 import { archiveRobot } from './exportar.mjs';
+import { accountTmuxEnv } from './cuentas.mjs';
 import { ensureSession, launching } from './tmux.mjs';
 import { emitRoutines, routines, saveRoutines } from './rutinas.mjs';
 import { closeEmptyTeamSalas, ownerBackIfAlone, rosterOf, writeRoster } from './salas.mjs';
@@ -64,6 +65,7 @@ async function revive(r) {
     `OFFICE_ROBOT=${r.name}`,
     '-e',
     `OFFICE_PORT=${PORT}`,
+    ...accountTmuxEnv(r.account),
     'env',
     '-u',
     'ANTHROPIC_API_KEY',

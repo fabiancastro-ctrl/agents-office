@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { CONFIG_FILE, LEGACY_RUNS, ROOT, RUNS, saveJson, WORKSPACE } from './base.mjs';
 import { listSkills } from './tmux.mjs';
+import { accounts, claudeJsonOf } from './cuentas.mjs';
 
 /* ---------- carpeta de trabajo ---------- */
 const expandHome = p =>
@@ -46,10 +47,10 @@ const setOfficeName = v => {
 
 // Claude Code pide confirmar la confianza la primera vez que se abre en una carpeta (o en una superior);
 // mientras no se acepte, un robot quedaría detenido en esa pregunta.
-function trustAccepted(ws) {
+function trustAccepted(ws, account = '') {
   let projects = {};
   try {
-    projects = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8')).projects || {};
+    projects = JSON.parse(fs.readFileSync(claudeJsonOf(account), 'utf8')).projects || {};
   } catch {
     return null;
   }
@@ -67,6 +68,12 @@ function workspaceInfo(raw) {
   info.claudeMd = fs.existsSync(path.join(ws, 'CLAUDE.md'));
   info.projectSkills = listSkills(ws).length - listSkills(os.tmpdir()).length; // sin contar las de ~/.claude
   info.trusted = trustAccepted(ws);
+  // Each extra account keeps its own trusted folders in <dir>/.claude.json: a robot of an untrusted one would stall on the prompt.
+  info.trustedAccounts = Object.fromEntries(
+    accounts()
+      .filter(a => !a.principal)
+      .map(a => [a.id, trustAccepted(ws, a.id)])
+  );
   info.insideOffice = ws === ROOT || ws.startsWith(ROOT + path.sep);
   return info;
 }

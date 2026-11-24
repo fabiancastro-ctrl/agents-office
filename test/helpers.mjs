@@ -59,6 +59,13 @@ export async function startOffice(opts = {}) {
     ws = path.join(base, 'trabajo');
   fs.mkdirSync(data);
   fs.mkdirSync(path.join(ws, 'docs'), { recursive: true });
+  // Accounts registry isolated per office (never the real ~/.agent-office); opts.accounts = ids to pre-register.
+  const home = path.join(base, 'home');
+  fs.mkdirSync(home);
+  const accDir = id => path.join(base, 'cuentas', id);
+  const writeAccounts = list =>
+    fs.writeFileSync(path.join(home, 'cuentas.json'), JSON.stringify(list.map(id => ({ id, nombre: `Cuenta ${id}`, dir: accDir(id) }))));
+  writeAccounts(opts.accounts || []);
   const port = await freePort();
   const session = `office-test-${port}`;
   const claudeLog = path.join(base, 'claude.log');
@@ -68,7 +75,7 @@ export async function startOffice(opts = {}) {
   // sin él, dos hijos que arrancan a la vez mezclaban sus líneas a mitad de un prompt largo y una prueba fallaba a veces.
   fs.writeFileSync(
     fake,
-    `#!/bin/sh\nline=$(printf '%s' "$*" | tr '\\n' ' ')\nwhile ! mkdir '${claudeLog}.lock' 2>/dev/null; do sleep 0.01; done\nprintf '%s\\n' "$line" >> '${claudeLog}'\nrmdir '${claudeLog}.lock'\nexec cat\n`,
+    `#!/bin/sh\nline=$(printf '%s' "$*" | tr '\\n' ' ')\n[ -n "$CLAUDE_CONFIG_DIR" ] && line="CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR $line"\nwhile ! mkdir '${claudeLog}.lock' 2>/dev/null; do sleep 0.01; done\nprintf '%s\\n' "$line" >> '${claudeLog}'\nrmdir '${claudeLog}.lock'\nexec cat\n`,
     { mode: 0o755 }
   );
   if (opts.robots?.length) {
@@ -84,6 +91,8 @@ export async function startOffice(opts = {}) {
   const env = {
     ...process.env,
     OFFICE_DATA: data,
+    AGENT_OFFICE_HOME: home,
+    OFFICE_PRINCIPAL_DIR: path.join(base, 'principal'),
     OFFICE_PORT: String(port),
     OFFICE_SESSION: session,
     OFFICE_WORKSPACE: ws,
@@ -124,6 +133,9 @@ export async function startOffice(opts = {}) {
     data,
     ws,
     base,
+    home,
+    accDir,
+    setAccounts: writeAccounts,
     proc,
     log: () => out,
     claudeCalls: () => (fs.existsSync(claudeLog) ? fs.readFileSync(claudeLog, 'utf8').trim().split('\n').filter(Boolean) : []),

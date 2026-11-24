@@ -124,6 +124,7 @@ function view(r, withLog = false) {
     permissionMode: r.permissionMode,
     tools: r.tools || [],
     modelPick: r.modelPick || '',
+    account: r.account || '',
     startedAt: r.startedAt,
     timeline: (r.timeline || []).slice(-1),
     lastEventAt: r.lastEventAt || null,

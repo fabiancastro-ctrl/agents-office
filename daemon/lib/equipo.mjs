@@ -6,6 +6,7 @@ import { console_, maxRobots, now, robots, trunc } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { log, saveState } from './persistencia.mjs';
 import { cleanTitle, normModel, normTools } from './turno.mjs';
+import { inheritAccount, normAccountPick } from './cuentas.mjs';
 import { launch, launching, say } from './tmux.mjs';
 import {
   checkTeamDone,
@@ -105,7 +106,8 @@ function requestSpawn(r, body) {
         text,
         name: validName(x.nombre ?? x.name) || kidName(title, text),
         tools: normTools(x.herramientas ?? x.tools),
-        modelPick: normModel(x.modelo ?? x.model)
+        modelPick: normModel(x.modelo ?? x.model),
+        account: inheritAccount(x.cuenta ?? x.account, r.account)
       };
     })
     .filter(x => x.text);
@@ -157,7 +159,8 @@ async function decideSpawn(r, id, approve, edited) {
           text: String(x.text ?? '').trim(),
           name: validName(x.name) || kidName(x.title, x.text),
           tools: normTools(x.tools),
-          modelPick: normModel(x.modelPick)
+          modelPick: normModel(x.modelPick),
+          account: normAccountPick(x.account)
         }))
         .filter(x => x.text)
     : r.spawnReq.items;
@@ -185,6 +188,7 @@ async function decideSpawn(r, id, approve, edited) {
     name: it.name || '',
     tools: normTools(it.tools),
     modelPick: normModel(it.modelPick),
+    account: normAccountPick(it.account),
     sala: sala.id,
     at: now()
   }));
@@ -249,6 +253,7 @@ async function drainSpawnQueue() {
           parent: q.parent,
           tools: q.tools,
           modelPick: q.modelPick,
+          account: q.account,
           sala,
           color: par?.color,
           look: par ? { ...lookFromName(par.name), ...(par.look || {}) } : null,

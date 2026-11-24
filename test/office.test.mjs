@@ -2178,3 +2178,76 @@ test('accounts CLI: add links what is shared, never deletes, is idempotent; ls s
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('per-robot account: CLAUDE_CONFIG_DIR is set only for a registered non-principal account, and Resume keeps it', async () => {
+  const o = await startOffice({ maxRobots: 6, accounts: ['b'] });
+  try {
+    await o.api('POST', '/api/robots', libre('base', 'Tarea sin cuenta elegida'));
+    await o.api('POST', '/api/robots', { ...libre('cb', 'Tarea con la cuenta b'), account: 'B' });
+    await o.api('POST', '/api/robots', { ...libre('cz', 'Tarea con cuenta desconocida'), account: 'zz' });
+    await o.api('POST', '/api/robots', { ...libre('cp', 'Tarea con la principal'), account: 'principal' });
+    const call = text => waitFor(() => o.claudeCalls().find(c => c.includes(text)), { what: `launch of ${text}` });
+    assert.doesNotMatch(await call('Tarea sin cuenta elegida'), /CLAUDE_CONFIG_DIR/);
+    assert.ok((await call('Tarea con la cuenta b')).startsWith(`CLAUDE_CONFIG_DIR=${o.accDir('b')} `));
+    assert.doesNotMatch(await call('Tarea con cuenta desconocida'), /CLAUDE_CONFIG_DIR/);
+    assert.doesNotMatch(await call('Tarea con la principal'), /CLAUDE_CONFIG_DIR/);
+    const snap = await o.snapshot();
+    assert.deepEqual(
+      ['base', 'cb', 'cz', 'cp'].map(n => snap.robots.find(r => r.name === n).account),
+      ['', 'b', '', '']
+    );
+    // A registry change is picked up without restarting the daemon
+    o.setAccounts(['b', 'c']);
+    await o.api('POST', '/api/robots', { ...libre('cc', 'Tarea con la cuenta c'), account: 'c' });
+    assert.ok((await call('Tarea con la cuenta c')).startsWith(`CLAUDE_CONFIG_DIR=${o.accDir('c')} `));
+    // Resume after the console drops: same account
+    await turn(o, 'cb', 'hola', 'Hecho.');
+    execFileSync('tmux', ['kill-window', '-t', `${o.session}:cb`]);
+    await waitFor(async () => (await o.robot('cb'))?.consoleLost, { what: 'the lost console' });
+    const sid = (await o.robot('cb')).sessionId;
+    assert.equal((await o.api('POST', '/api/robots/cb/revivir')).status, 200);
+    assert.ok((await call(`--resume ${sid}`)).startsWith(`CLAUDE_CONFIG_DIR=${o.accDir('b')} `));
+  } finally {
+    await o.stop();
+  }
+});
+
+test('per-robot account: team requests ("cuenta"), handoffs and routines carry it', async () => {
+  const o = await startOffice({ maxRobots: 5, accounts: ['b'] });
+  try {
+    await o.api('POST', '/api/robots', { ...libre('jefe', 'Jefe en la cuenta b'), account: 'b' });
+    const req = await o.api('POST', '/api/robots/jefe/encargos', {
+      encargos: [
+        { nombre: 'hereda', titulo: 'Hereda', encargo: 'Hijo sin cuenta propia' },
+        { nombre: 'rara', titulo: 'Rara', encargo: 'Hijo con cuenta desconocida', cuenta: 'zz' },
+        { nombre: 'prin', titulo: 'Prin', encargo: 'Hijo con la principal explicita', cuenta: 'principal' }
+      ]
+    });
+    assert.equal(req.status, 202);
+    assert.equal((await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' })).status, 200);
+    await waitFor(() => o.windows().includes('prin'), { what: 'the child windows' });
+    const call = text => waitFor(() => o.claudeCalls().find(c => c.includes(text)), { what: `launch of ${text}` });
+    const dir = `CLAUDE_CONFIG_DIR=${o.accDir('b')} `;
+    assert.ok((await call('Hijo sin cuenta propia')).startsWith(dir), 'a child without choice uses its parent account');
+    assert.ok((await call('Hijo con cuenta desconocida')).startsWith(dir), 'an unregistered one is dropped, so the parent account stays');
+    assert.doesNotMatch(await call('Hijo con la principal explicita'), /CLAUDE_CONFIG_DIR/);
+    // Handoff keeps the account
+    await turn(o, 'jefe', 'hola', 'Hecho.');
+    assert.equal((await o.api('POST', '/api/robots/jefe/relevar')).status, 200);
+    await o.hook('jefe', { hook_event_name: 'Stop', last_assistant_message: '## Relevo\n- Falta cerrar el PR 7.' });
+    assert.ok((await call('relevo por contexto')).startsWith(dir));
+    // Routine stores and launches with it; 'auto' is kept only when there are several accounts
+    const sch = () => ({ mode: 'once', at: new Date(Date.now() + 500).toISOString() });
+    const id = (await o.api('POST', '/api/routines', { type: 'agenda', name: 'conb', text: 'Rutina con b', schedule: sch(), account: 'b' }))
+      .body.id;
+    await waitFor(async () => (await o.snapshot()).routines.find(x => x.id === id && x.doneOnce), { what: 'the routine run' });
+    assert.equal((await o.snapshot()).routines.find(x => x.id === id).account, 'b');
+    assert.ok((await call('Rutina con b')).startsWith(dir));
+    const id2 = (
+      await o.api('POST', '/api/routines', { type: 'agenda', name: 'rara', text: 'Rutina rara', schedule: sch(), account: 'zz' })
+    ).body.id;
+    assert.equal((await o.snapshot()).routines.find(x => x.id === id2).account, '');
+  } finally {
+    await o.stop();
+  }
+});

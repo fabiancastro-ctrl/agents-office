@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { inbox, now, replaceList, robots, ROOT, RUNS, saveJson, trunc, WORKSPACE } from './base.mjs';
+import { normAccountPick } from './cuentas.mjs';
 import { broadcast, bumpStats, emit, view } from './estado.mjs';
 import { log, saveState, setState } from './persistencia.mjs';
 import { maybeFlush, pendingResults, reportToParent } from './equipo.mjs';
@@ -157,8 +158,24 @@ function requestOf(r) {
   const p = String(r.prompt || '').replace(/ \[Adjuntos: [^\]]*\]$/, '');
   const m = /^\/([a-z0-9:_-]+)\s*([\s\S]*)$/i.exec(p);
   return m
-    ? { kind: 'skill', skill: m[1], args: m[2], text: '', permissionMode: r.permissionMode || '', modelPick: r.modelPick || '' }
-    : { kind: 'libre', skill: null, args: '', text: p, permissionMode: r.permissionMode || '', modelPick: r.modelPick || '' };
+    ? {
+        kind: 'skill',
+        skill: m[1],
+        args: m[2],
+        text: '',
+        permissionMode: r.permissionMode || '',
+        modelPick: r.modelPick || '',
+        account: r.account || ''
+      }
+    : {
+        kind: 'libre',
+        skill: null,
+        args: '',
+        text: p,
+        permissionMode: r.permissionMode || '',
+        modelPick: r.modelPick || '',
+        account: r.account || ''
+      };
 }
 
 // Encargos frecuentes: atajos guardados en Nuevo encargo (por oficina, en su carpeta de datos).
@@ -332,6 +349,7 @@ async function frecuentesApi(req, res, url, parts) {
       text: kind === 'libre' ? String(b.text || '') : '',
       permissionMode: b.permissionMode || '',
       modelPick: normModel(b.modelPick),
+      account: normAccountPick(b.account),
       title: cleanTitle(b.title)
     };
     if (kind === 'skill' ? !f.skill : !f.text.trim()) return send(res, 400, { error: 'Llena el encargo antes de guardarlo.' });

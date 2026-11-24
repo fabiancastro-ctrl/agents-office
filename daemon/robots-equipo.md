@@ -17,6 +17,7 @@ Robots = consolas nuevas e independientes, no subagentes. Úsalo solo si te pide
 
 - Los robots no traen las herramientas de Artifact (pesan ~10 k tokens por llamada). Si un encargo debe publicar una página o un artifact, agrégale `"herramientas": ["artifact"]` a ese encargo (campo opcional; solo ese robot lo recibe) y pásale en el encargo el contenido o la ruta del archivo a publicar.
 - Cada encargo puede pedir también `"modelo": "sonnet"|"haiku"|"opus"` (opcional; sin él, el robot usa el modelo por defecto de Claude).
+- Cada encargo puede pedir `"cuenta": "<id>"` (opcional; una cuenta de Claude registrada en la oficina; sin ella, el hijo usa la cuenta del robot que lo pide).
 - Cada robot nuevo arranca sin tu conversación: el encargo debe ser autosuficiente (objetivo, repos y rutas, documentos de entrada, restricciones, qué entregar y en qué formato).
 - El usuario los aprueba en la oficina; tú y ellos quedan en una sala cuyo CONTEXT.md recibe ese contexto (la respuesta del curl te da su ruta).
 - Sigue con tu trabajo: cada resultado te llega como mensaje «[Oficina] Resultado…» (los que terminen mientras trabajas te llegan juntos al terminar tu turno); intégralos.

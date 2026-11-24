@@ -246,6 +246,7 @@ function archiveRobot(r, reason, robotSummary, by = 'robot') {
     permissionMode: r.permissionMode || '',
     tools: r.tools || [],
     modelPick: r.modelPick || '',
+    account: r.account || '',
     request: r.request || null,
     transcript: r.transcript || null,
     sessionId: r.sessionId || null,
@@ -316,6 +317,7 @@ async function retake(id, text) {
     look: a.look,
     tools: a.tools,
     modelPick: a.modelPick,
+    account: a.account,
     origin: `Retoma la tarea de ${a.name} con su resumen (se había ido el ${new Date(a.leftAt).toLocaleString('es')})`
   });
   r.note = a.note || '';
