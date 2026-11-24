@@ -1873,6 +1873,8 @@ html.hc .robot.bub-flip .bubble::after{border-top-color:transparent;border-botto
 
 /* En espera: terminó su turno pero tiene algo corriendo de fondo. Ticket pequeño en lugar de LISTO. */
 .st-done.onhold .sign{background:#c8d8f8;color:#1d2d44;border-color:#3d5a8a;font-size:11px;padding:0 4px;animation:none}
+/* Icons inside the robot's sign keep text size: «.robot svg» (the robot body, 51×62) would otherwise stretch them */
+.robot .sign .ic{display:inline-block;width:1.05em;height:1.05em}
 .pill.p-hold,.rc.g-hold .pill{background:color-mix(in srgb,var(--st-hold) 22%,transparent);color:var(--st-hold);border-color:color-mix(in srgb,var(--st-hold) 45%,transparent)}
 
 /* Alguien dentro de una sala te necesita: el cuarto «Salas de épica» late en ámbar y la fila de esa sala se rellena,
