@@ -56,11 +56,11 @@ function pinsPanel() {
   const row = p => {
     const live = st.robots.has(p.robot);
     return `<div class="lg agent has-av pin-item" style="--c:${avColor(p.robot)}"><span class="w">${avatarOf(p.robot)}${esc(p.robot)}${p.title ? ` · ${esc(p.title)}` : ''} · ${hhmm(p.at)}${live ? '' : ' · ya se fue'}</span>
-      <span class="lg-acts"><button type="button" class="cp-btn" data-copy="msg" title="Copiar con formato de chat (Google Chat, Slack)">📋 Copiar</button>${live ? `<button type="button" class="cp-btn" data-pin-go="${esc(p.id)}" title="Abrir la conversación en este mensaje">Ver</button>` : ''}<button type="button" class="cp-btn" data-pin-done="${esc(p.id)}" title="Ya lo enviaste: lo quita de la lista">✓ Enviado</button></span>
+      <span class="lg-acts"><button type="button" class="cp-btn" data-copy="msg" title="Copiar con formato de chat (Google Chat, Slack)">${icon('clip')} Copiar</button>${live ? `<button type="button" class="cp-btn" data-pin-go="${esc(p.id)}" title="Abrir la conversación en este mensaje">Ver</button>` : ''}<button type="button" class="cp-btn" data-pin-done="${esc(p.id)}" title="Ya lo enviaste: lo quita de la lista">✓ Enviado</button></span>
       <div class="x md-chat">${copyable(mdHtml(p.text))}</div></div>`;
   };
-  return `<div class="dlg-head"><h3>📌 Para enviar <small>${list.length || ''}</small></h3><p>Mensajes que guardaste con 📌 para pegarlos en Google Chat o Slack. Se quedan aunque el robot se vaya; marca «✓ Enviado» cuando ya los mandaste.</p></div>
-    <div class="log pins-log" id="pins-log">${list.length ? list.map(row).join('') : '<div class="lg sys"><span class="x">No hay nada guardado. Pasa el mouse por un mensaje de un robot y toca 📌.</span></div>'}</div>`;
+  return `<div class="dlg-head"><h3>${icon('pin')} Para enviar <small>${list.length || ''}</small></h3><p>Mensajes que guardaste con el pin para pegarlos en Google Chat o Slack. Se quedan aunque el robot se vaya; marca «✓ Enviado» cuando ya los mandaste.</p></div>
+    <div class="log pins-log" id="pins-log">${list.length ? list.map(row).join('') : '<div class="lg sys"><span class="x">No hay nada guardado. Pasa el mouse por un mensaje de un robot y toca el pin.</span></div>'}</div>`;
 }
 document.addEventListener('click', async e => {
   const done = e.target.closest('[data-pin-done]');

@@ -394,15 +394,15 @@ function paint(a) {
     setTimeout(() => a.el.classList.remove('poweron'), 1600);
   }
   a.wasLost = !!d.consoleLost;
-  a.sign.textContent = d.consoleLost
-    ? '💥 se cayó'
+  a.sign.innerHTML = d.consoleLost
+    ? `${icon('burst')} se cayó`
     : d.spawnReq
-      ? `🤖 ×${d.spawnReq.items.length} ¿los lanzo?`
+      ? `${icon('bot')} ×${d.spawnReq.items.length} ¿los lanzo?`
       : onHold(d)
-        ? `⏳${d.bg.length > 1 ? ' ' + d.bg.length : ''}`
+        ? `${icon('hourglass')}${d.bg.length > 1 ? ' ' + d.bg.length : ''}`
         : d.state === 'done'
           ? d.critical > 0
-            ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}`
+            ? `${icon('warn')} ${d.critical} crítico${d.critical === 1 ? '' : 's'}`
             : 'LISTO'
           : d.state === 'input'
             ? d.inputAt
@@ -575,8 +575,9 @@ function onDeliver(name, items) {
     celebrate(items);
     toast(
       crit
-        ? `⚠ ${name} entregó ${what} con ${crit} hallazgo${crit === 1 ? '' : 's'} crítico${crit === 1 ? '' : 's'}`
-        : `${name} entregó ${what} en tu bandeja`
+        ? `${name} entregó ${what} con ${crit} hallazgo${crit === 1 ? '' : 's'} crítico${crit === 1 ? '' : 's'}`
+        : `${name} entregó ${what} en tu bandeja`,
+      crit ? 'warn' : undefined
     );
   });
 }

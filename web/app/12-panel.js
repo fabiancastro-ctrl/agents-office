@@ -142,7 +142,9 @@ function taskNoteWeb(p) {
 // mensaje con una línea (---), lo que viene después de la línea. Se copia en formato de chat (Google Chat y
 // WhatsApp usan *negrita*, _cursiva_, ~tachado~ y ```bloques```), no en Markdown.
 const COPY_BTN =
-  '<button type="button" class="cp-btn" data-copy title="Copiar con formato de chat (Google Chat, WhatsApp, Slack)">📋 Copiar</button>';
+  '<button type="button" class="cp-btn" data-copy title="Copiar con formato de chat (Google Chat, WhatsApp, Slack)">' +
+  icon('clip') +
+  ' Copiar</button>';
 function copyable(h) {
   h = h
     .replace(/<blockquote>/g, `<blockquote class="cp">${COPY_BTN}`)
@@ -328,7 +330,7 @@ document.addEventListener('click', async e => {
     b.textContent = '✓ Copiado';
     b.classList.add('ok');
     setTimeout(() => {
-      b.textContent = '📋 Copiar';
+      b.innerHTML = `${icon('clip')} Copiar`;
       b.classList.remove('ok');
     }, 1500);
   } else toast('No se pudo copiar: selecciona el texto y usa ⌘C');
@@ -360,7 +362,7 @@ function logRow(l, robot, i, interim) {
   const av = l.kind === 'agent' ? avatarOf(l.kind === 'agent' && !l.who ? robot : l.who) : '';
   const cpAll =
     l.kind === 'agent' && md
-      ? `<span class="lg-acts">${i != null ? '<button type="button" class="cp-btn" data-pin title="Guardar en «Para enviar» para pegarlo después">📌</button><button type="button" class="cp-btn" data-fwd title="Pasar este mensaje a otro robot">↪ Pasar</button>' : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg" title="Copiar todo el mensaje con formato de chat (Google Chat, WhatsApp)">📋 Copiar</button></span>`
+      ? `<span class="lg-acts">${i != null ? `<button type="button" class="cp-btn" data-pin aria-label="Guardar en «Para enviar»" title="Guardar en «Para enviar» para pegarlo después">${icon('pin')}</button><button type="button" class="cp-btn" data-fwd title="Pasar este mensaje a otro robot">↪ Pasar</button>` : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg" title="Copiar todo el mensaje con formato de chat (Google Chat, WhatsApp)">${icon('clip')} Copiar</button></span>`
       : '';
   return `<div class="lg ${l.kind}${av ? ' has-av' : ''}${interim ? ' interim' : ''}"${i != null ? ` data-i="${i}"` : ''}${av && l.who ? ` style="--c:${avColor(l.who)}"` : ''}><span class="w">${av}${esc(who)} · ${t}${pasted}</span>${cpAll}${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</div>`;
 }
@@ -457,7 +459,7 @@ const titleUi = { editing: null };
 const lookUi = { open: null };
 function lookEditor(d) {
   if (lookUi.open !== d.name)
-    return `<button type="button" class="btn sm ghost lk-open" data-look="open" title="Cambiar color, antena, visor y accesorio">🎨 Apariencia</button>`;
+    return `<button type="button" class="btn sm ghost lk-open" data-look="open" title="Cambiar color, antena, visor y accesorio">${icon('palette')} Apariencia</button>`;
   const L = lookOf(d.name, d.place, d);
   const cyc = (k, n, label, names) =>
     `<span class="lk-c"><small>${label}</small><button type="button" data-look="${k}" data-dir="-1" aria-label="${label} anterior">◀</button><b title="${L[k] + 1} de ${n}">${names ? esc(names[L[k]]) : `${L[k] + 1}/${n}`}</b><button type="button" data-look="${k}" data-dir="1" aria-label="${label} siguiente">▶</button></span>`;
@@ -499,8 +501,8 @@ function noteEditor(d) {
   if (noteUi.editing === d.name)
     return `<form class="rt-note edit" id="note-form" data-robot="${esc(d.name)}"><input id="note-in" maxlength="300" value="${esc(d.note || '')}" placeholder="Ej.: esperando respuesta de Ramiro sobre el stock" autocomplete="off"><button class="btn primary sm">Guardar</button><button type="button" class="btn sm" data-note="cancel">Cancelar</button></form>`;
   return d.note
-    ? `<div class="rt-note" id="note-view"><span>🗒 ${esc(d.note)}</span><button type="button" class="btn sm ghost" data-note="edit">✎</button><button type="button" class="btn sm ghost" data-note="clear" title="Quitar la nota">✕</button></div>`
-    : `<button type="button" class="btn sm ghost" id="note-view" data-note="edit" title="Una nota tuya: qué espera, de quién, qué falta">🗒 Nota</button>`;
+    ? `<div class="rt-note" id="note-view"><span>${icon('memo')} ${esc(d.note)}</span><button type="button" class="btn sm ghost" data-note="edit" aria-label="Editar la nota" title="Editar la nota">${icon('note')}</button><button type="button" class="btn sm ghost" data-note="clear" title="Quitar la nota">✕</button></div>`
+    : `<button type="button" class="btn sm ghost" id="note-view" data-note="edit" title="Una nota tuya: qué espera, de quién, qué falta">${icon('memo')} Nota</button>`;
 }
 // Priority in the «waiting for you» queue: p0 (red), p1 (amber) or normal. Set from the window or from the card.
 const prioRank = p => (p === 'p0' ? 0 : p === 'p1' ? 1 : 2);
@@ -581,7 +583,7 @@ async function sumKill(name) {
 }
 // Relevo por contexto: con mucho contexto la oficina ofrece «🔁 Relevar» (escribe su resumen y sigue otro robot con su
 // mismo nombre y solo ese resumen) o «Seguir así» (no vuelve a ofrecer hasta que suba 100 k más).
-const relevoLabel = d => `🔁 Relevar (${Math.round(d.relevo.tokens / 1000)} k)`;
+const relevoLabel = d => `${icon('repeat')} Relevar (${Math.round(d.relevo.tokens / 1000)} k)`;
 const relevoBtns = (d, card) =>
   d.relevo && !d.relevoPending && canSummary(d)
     ? `<button class="btn sm primary" data-${card ? 'card-' : ''}act="relevar" title="Mucho contexto: cada turno lo relee entero. Escribe su resumen, se va y entra otro robot con su mismo nombre que sigue solo con ese resumen.">${relevoLabel(d)}</button><button class="btn sm" data-${card ? 'card-' : ''}act="seguir-sin-relevo" title="No vuelve a ofrecer el relevo hasta que el contexto suba 100 k más">Seguir así</button>`
@@ -621,7 +623,7 @@ function titleEditor(d) {
   if (titleUi.editing === d.name)
     return `<form class="rt-title edit" id="title-form" data-robot="${esc(d.name)}"><input id="title-in" maxlength="60" value="${esc(d.title || titleOf(d))}" placeholder="Ej.: Tareas de QA · Revisando wallet#32 Ramiro" autocomplete="off"><button class="btn primary sm">Guardar</button><button type="button" class="btn sm" data-title="cancel">Cancelar</button></form>`;
   const sug = !d.title && titleOf(d);
-  return `<div class="rt-title" id="title-view">${d.title ? `<b>📌 ${esc(d.title)}</b>` : sug ? `<b class="auto">📌 ${esc(sug)}</b><small class="muted">sugerido</small><button type="button" class="btn sm ghost" data-title="accept" title="Guardar este título">✓ Usar</button>` : '<span class="muted">Sin título</span>'}<button type="button" class="btn sm ghost" data-title="edit" title="Ponle un título para saber qué hace">${d.title || sug ? '✎ Cambiar' : '✎ Ponle un título'}</button></div>`;
+  return `<div class="rt-title" id="title-view">${d.title ? `<b>${icon('pin')} ${esc(d.title)}</b>` : sug ? `<b class="auto">${icon('pin')} ${esc(sug)}</b><small class="muted">sugerido</small><button type="button" class="btn sm ghost" data-title="accept" title="Guardar este título">✓ Usar</button>` : '<span class="muted">Sin título</span>'}<button type="button" class="btn sm ghost" data-title="edit" title="Ponle un título para saber qué hace">${icon('note')} ${d.title || sug ? 'Cambiar' : 'Ponle un título'}</button></div>`;
 }
 onClick('[data-title]', b => {
   if (b.dataset.title === 'accept') {
