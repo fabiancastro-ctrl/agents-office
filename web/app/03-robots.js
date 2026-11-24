@@ -657,3 +657,63 @@ function onLeft(name) {
   if (st.selected?.startsWith('@sala:')) schedulePanel();
   renderMeta();
 }
+
+// Eyes follow the pointer: only the selected robot and the ones waiting for you (state input) shift their pupils (or
+// the visor faces) a little toward the mouse while it is over the map. Event driven (nothing runs while the pointer is
+// still or outside the map), coalesced with requestAnimationFrame and throttled; off with prefers-reduced-motion.
+const gaze = { x: 0, y: 0, raf: 0, last: 0, on: new Set() };
+const GAZE_MS = 60,
+  GAZE_MAX_X = 1.1,
+  GAZE_MAX_Y = 0.7;
+const noMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+function gazeClear() {
+  for (const a of gaze.on) {
+    a.el.removeAttribute('data-gz');
+    a.el.style.removeProperty('--ex');
+    a.el.style.removeProperty('--ey');
+  }
+  gaze.on.clear();
+}
+function gazeStep() {
+  gaze.raf = 0;
+  gaze.last = performance.now();
+  if (gaze.out) return;
+  if (noMotion()) return gazeClear();
+  const now = new Set();
+  for (const a of st.robots.values()) {
+    if (!(st.selected === a.data.name || a.data.state === 'input') || a.el.classList.contains('offview')) continue;
+    const r = a.el.getBoundingClientRect();
+    if (!r.width) continue;
+    const dx = gaze.x - (r.left + r.width / 2),
+      dy = gaze.y - (r.top + r.height * 0.33),
+      k = Math.min(1, Math.hypot(dx, dy) / 80) / (Math.hypot(dx, dy) || 1);
+    const ex = (Math.round(dx * k * GAZE_MAX_X * 4) / 4).toFixed(2),
+      ey = (Math.round(dy * k * GAZE_MAX_Y * 4) / 4).toFixed(2);
+    now.add(a);
+    if (a.el.dataset.gz !== `${ex},${ey}`) {
+      a.el.dataset.gz = `${ex},${ey}`;
+      a.el.style.setProperty('--ex', ex + 'px');
+      a.el.style.setProperty('--ey', ey + 'px');
+    }
+  }
+  for (const a of gaze.on)
+    if (!now.has(a)) {
+      a.el.removeAttribute('data-gz');
+      a.el.style.removeProperty('--ex');
+      a.el.style.removeProperty('--ey');
+    }
+  gaze.on = now;
+}
+MAP.addEventListener('pointermove', e => {
+  if (e.pointerType === 'touch' || noMotion()) return;
+  gaze.x = e.clientX;
+  gaze.y = e.clientY;
+  gaze.out = false;
+  if (gaze.raf) return;
+  const wait = Math.max(0, GAZE_MS - (performance.now() - gaze.last));
+  gaze.raf = requestAnimationFrame(() => (wait ? setTimeout(gazeStep, wait) : gazeStep()));
+});
+MAP.addEventListener('pointerleave', () => {
+  gaze.out = true; // a pending step (rAF or throttle timer) sees this and does nothing
+  gazeClear();
+});

@@ -861,6 +861,11 @@ kbd{font-family:var(--mono);font-size:11px;background:#1d2533;border:1px solid v
 @keyframes headback{35%,65%{transform:rotate(-6deg) translateY(-.8px)}}
 .robot.g-scratch .arm-l{animation:scratch 2s ease-in-out 1}
 @keyframes scratch{0%,100%{transform:rotate(0)}15%{transform:rotate(-150deg)}30%{transform:rotate(-140deg)}45%{transform:rotate(-158deg)}60%{transform:rotate(-142deg)}75%{transform:rotate(-156deg)}}
+/* Ojos que siguen el puntero (data-gz y --ex/--ey los pone 03-robots.js solo al robot elegido y a los que te esperan).
+   Mueve las pupilas y las caras del visor; si no hay puntero, nada cambia. */
+.robot[data-gz] .eye,.robot[data-gz] .f-happy,.robot[data-gz] .f-ask{translate:var(--ex,0px) var(--ey,0px);transition:translate .12s ease-out}
+.robot[data-gz].st-working .eye,.robot[data-gz].st-delegating .eye{translate:var(--ex,0px) calc(var(--ey,0px) - 1.2px)}
+@media (prefers-reduced-motion:reduce){.robot[data-gz] .eye,.robot[data-gz] .f-happy,.robot[data-gz] .f-ask{translate:none;transition:none}}
 /* Mochila de relevo: a la espalda mientras el robot camina (.packed) y, al sentarse, suelta junto a su escritorio. */
 .bk-relevo{display:none} .robot.packed .bk-relevo{display:inline}
 .rpack{position:absolute;width:15px;height:17px;transform:translate(-50%,-100%);border-radius:5px 5px 3px 3px;background:#5b7bd6;border:1px solid rgba(8,12,20,.45);box-shadow:0 2px 0 rgba(0,0,0,.25);pointer-events:auto}
