@@ -849,6 +849,19 @@ kbd{font-family:var(--mono);font-size:11px;background:#1d2533;border:1px solid v
 .robot.st-input .f-ask{display:inline} .robot.st-input .eye{opacity:0}
 .robot.stuck .f-sweat,.robot.crit .f-sweat{display:inline}
 .robot.stuck .f-sweat{animation:sweat 2.4s ease-in infinite}
+/* Gestos de una sola vez al cambiar de estado (los pone paint con a.gest; en reduced-motion el * {animation:none} de
+   arriba los apaga todos): saludo al llegar al escritorio, estirón al cerrar un turno largo (> 5 min), rascarse la
+   cabeza al pasar a preguntarte. En done el brazo ya se estira solo (stretch): aquí suma el cuerpo y la cabeza. */
+.robot.g-wave .arm-r{animation:greet 1.8s ease-in-out 1}
+@keyframes greet{0%,100%{transform:rotate(0)}15%,45%,75%{transform:rotate(152deg)}30%,60%{transform:rotate(132deg)}}
+.robot.g-stretch:not(.moving) > svg{animation:bodystretch 1.8s ease-in-out 1}
+.robot.g-stretch .head{animation:headback 1.8s ease-in-out 1}
+.robot.g-stretch.st-input .arm-l{animation:stretch 1.8s ease-in-out 1}
+@keyframes bodystretch{35%,65%{transform:scale(.97,1.07)}}
+@keyframes headback{35%,65%{transform:rotate(-6deg) translateY(-.8px)}}
+.robot.g-scratch .arm-l{animation:scratch 2s ease-in-out 1}
+@keyframes scratch{0%,100%{transform:rotate(0)}15%{transform:rotate(-150deg)}30%{transform:rotate(-140deg)}45%{transform:rotate(-158deg)}60%{transform:rotate(-142deg)}75%{transform:rotate(-156deg)}}
+@media (prefers-reduced-motion:reduce){.robot.g-wave .arm-r,.robot.g-stretch > svg,.robot.g-stretch .head,.robot.g-stretch .arm-l,.robot.g-scratch .arm-l{animation:none}}
 /* Caras nuevas (las tres de arriba mandan: .frus solo sale sin .stuck y trabajando; .proud no tapa «?» ni sudor).
    Concentrado: ojos entrecerrados mientras teclea, escribe o consulta la web (leer y buscar ya mueven la cabeza).
    Frustrado: el último resultado de herramienta fue un error. Orgulloso: 20 s tras entregar un documento. */

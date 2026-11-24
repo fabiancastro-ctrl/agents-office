@@ -23,7 +23,8 @@ function createRobot(d, fromSnapshot) {
     q: Promise.resolve(),
     subEls: new Map(),
     log: d.log || [],
-    lastBubble: ''
+    lastBubble: '',
+    workSince: isWork(d.state) ? Date.now() : 0
   };
   st.robots.set(d.name, a);
   const fromBreak = takeFromBreak(d.name);
@@ -34,6 +35,28 @@ function createRobot(d, fromSnapshot) {
     queue(a, () => walkTo(a, seatOf(d.place)));
   }
   return a;
+}
+
+// One-shot gestures on state changes (g-wave, g-stretch, g-scratch in style.css; paint adds the class while a.gest lives).
+// Each fires once per transition and the class is gone after `ms`; prefers-reduced-motion turns all animations off.
+const isWork = s => s === 'working' || s === 'delegating';
+const LONG_TURN_MS = 5 * 60e3;
+function gesture(a, cls, ms = 2200, repaint = false) {
+  a.gest = { cls, until: Date.now() + ms };
+  clearTimeout(a.gestTimer);
+  a.gestTimer = setTimeout(() => {
+    a.gest = null;
+    paint(a);
+  }, ms + 50);
+  if (repaint) paint(a);
+}
+function stateGestures(a, was, d) {
+  if (was === d.state) return;
+  if (isWork(d.state) && !isWork(was)) a.workSince = Date.now();
+  const long = isWork(was) && a.workSince && Date.now() - a.workSince > LONG_TURN_MS;
+  if (!isWork(d.state)) a.workSince = 0;
+  if (d.state === 'input' && !d.needsPermission && !d.hold) gesture(a, 'g-scratch'); // a question for you: scratches its head
+  else if (long && (d.state === 'done' || d.state === 'input')) gesture(a, 'g-stretch'); // a long turn is over
 }
 
 const artSig = d =>
@@ -55,7 +78,8 @@ function upsert(d, fromSnapshot = false) {
     });
   }
   if (d.log) a.log = d.log;
-  a.data = { ...d, log: undefined };
+  if (a.data && st.ready) stateGestures(a, a.data.state, d); // a.data is still the previous view here
+  a.data ={ ...d, log: undefined };
   layout(); // ya con su lugar nuevo: corrige «N robots» de su sala (si nada cambió de tamaño, no recoloca nada)
   const sig = artSig(d);
   if (a.artSig !== undefined && a.artSig !== sig)
@@ -301,6 +325,7 @@ function paint(a) {
     isStuck(d) ? 'stuck' : '',
     d.toolError && (shownState === 'working' || shownState === 'delegating') && !isStuck(d) ? 'frus' : '',
     Date.now() < (a.proudUntil || 0) ? 'proud' : '',
+    a.gest && Date.now() < a.gest.until ? a.gest.cls : '',
     urg ? `urg-${urg}` : '',
     ...keep,
     st.selected === d.name ? 'sel' : '',

@@ -701,6 +701,7 @@ async function walkTo(a, dest) {
   viewClass(a);
   try {
     await walkSteps(a, dest);
+    if (!a.el.classList.contains('leaving')) gesture(a, 'g-wave', 1900, true); // arrives at its desk: says hi
   } finally {
     a.transit = false;
     viewClass(a);
