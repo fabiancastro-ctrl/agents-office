@@ -377,7 +377,7 @@ onClick('[data-rt-cancel]', () => {
 onClick('[data-rt-preview]', async pv => {
   const box = $('#rt-preview', PANEL);
   pv.disabled = true;
-  box.innerHTML = '<p class="muted">Consultando… (no gasta cuota)</p>';
+  box.innerHTML = `<div aria-busy="true" aria-label="Consultando, no gasta cuota">${skeleton(3)}</div>`;
   try {
     const r = await api('POST', '/api/routines/preview', routineBody());
     const when = t => fmtWhen(t, { weekday: 'short' });

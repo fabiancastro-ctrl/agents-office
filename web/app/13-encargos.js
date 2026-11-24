@@ -160,7 +160,7 @@ function robotPanel(a) {
         ${docsBlock(d)}
         ${changesBlock(d)}
         <h4>Consola en vivo</h4>
-        <pre class="term" id="pane">${esc(paneCache.get(d.name) ?? 'cargando…')}</pre>
+        ${paneCache.has(d.name) ? `<pre class="term" id="pane">${esc(paneCache.get(d.name))}</pre>` : `<pre class="term loading" id="pane" aria-busy="true" aria-label="Cargando la consola">${skeleton(16)}</pre>`}
         <div class="pbar" id="pbar">
           <button class="btn sm" data-act="console">Abrir consola en Terminal</button>
           <button class="btn sm" data-act="again" title="Abre «Nuevo encargo» con lo mismo que le pediste a este robot">↻ Lanzar otro igual</button>

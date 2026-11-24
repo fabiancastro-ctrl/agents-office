@@ -130,7 +130,7 @@ function syncSaludChip() {
 }
 function oficinaPanel() {
   const h = oficinaUi.h;
-  if (!h) return `<div class="dlg-head"><h3>${icon('pulse')} Oficina</h3></div><p>${oficinaUi.err ? esc(oficinaUi.err) : 'Revisando…'}</p>`;
+  if (!h) return `<div class="dlg-head"><h3>${icon('pulse')} Oficina</h3></div><p>${oficinaUi.err ? esc(oficinaUi.err) : `<span aria-busy="true" aria-label="Revisando">${skeleton(6)}</span>`}</p>`;
   const up = fmtDur(h.daemon.upMs);
   const checks = h.checks
     .map(

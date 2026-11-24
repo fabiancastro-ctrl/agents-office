@@ -49,6 +49,9 @@ const icon = (name, label) =>
   label
     ? `<svg class="ic" role="img" aria-label="${esc(label)}"><use href="#i-${name}"/></svg>`
     : `<svg class="ic" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+// Placeholder bars (shimmer) for a panel that is still loading: roughly the height of the final content, so it does not jump.
+const skeleton = (n = 4, cls = '') =>
+  `<span class="skl-wrap" aria-hidden="true">${Array.from({ length: n }, () => `<i class="skl ${cls}"></i>`).join('')}</span>`;
 const COLORS = ROBOT_COLORS; // web/robot-art.js
 const STATE_LABEL = {
   idle: 'en espera',

@@ -305,7 +305,10 @@ async function refreshPane(name) {
     const last = text.split('\n').slice(-60).join('\n');
     paneCache.set(name, last);
     const pre = $('#pane', PANEL);
-    if (pre && st.selected === name && pre.textContent !== last) {
+    if (pre && st.selected === name && (pre.classList.contains('loading') || pre.textContent !== last)) {
+      pre.classList.remove('loading');
+      pre.removeAttribute('aria-busy');
+      pre.removeAttribute('aria-label');
       pre.textContent = last;
       pre.scrollTop = pre.scrollHeight;
     }

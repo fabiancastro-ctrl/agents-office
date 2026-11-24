@@ -29,7 +29,7 @@ function changesBlock(d) {
   if (!d.files && !(c && c.repos.some(r => r.pending))) return '';
   if (chg.open && !c && !chg.loading.has(d.name)) setTimeout(() => loadChanges(d.name)); // abierto y cambiaste de robot
   let body = '';
-  if (chg.loading.has(d.name) && !c) body = '<p class="muted">Consultando git…</p>';
+  if (chg.loading.has(d.name) && !c) body = `<div aria-busy="true" aria-label="Consultando git">${skeleton(4)}</div>`;
   else if (c) {
     body =
       c.repos

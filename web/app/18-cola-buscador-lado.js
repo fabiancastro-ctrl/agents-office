@@ -213,7 +213,7 @@ function setArchCount(n) {
 function archivoPanel() {
   return `<div class="dlg-head"><h3>${icon('archive')} Archivo de despedidos</h3><p>Aquí quedan los robots que despediste con «Despedir con su resumen», con el <b>super resumen</b> que escribieron al irse («Dar de baja» no deja nada). Con «↻ Retomar» entra un robot nuevo solo con ese resumen y lo que le digas. Cada resumen también queda como documento en <code>docs/resumenes-robots/</code> de tu carpeta de trabajo. «Quitar» saca al robot de la lista y manda su resumen a la Papelera, de donde se recupera.</p></div>
     <div class="arch-bar"><input class="arch-q" id="arch-q" type="search" placeholder="Filtrar por nombre, título, nota o resumen…" autocomplete="off"><button type="button" class="btn sm ghost" id="arch-relevos" data-arch-relevos hidden title="Quita de la lista a todos los relevados por contexto (son automáticos: su robot siguió con el mismo nombre y el resumen) y manda sus resúmenes a la Papelera">${icon('broom')} Limpiar relevos</button></div>
-    <div class="arch-list" id="arch-list"><p class="muted">Cargando…</p></div>
+    <div class="arch-list" id="arch-list" aria-busy="true">${skeleton(3, 'blk')}</div>
     <section class="dlg-sec"><h4>${icon('door')} Salas cerradas</h4><p class="note">Las salas que cerraste o que se cerraron solas al irse su equipo. Su contexto y su hilo siguen en <code>runs/salas/&lt;id&gt;/</code>.</p><div class="arch-list" id="arch-salas"><p class="muted">Cargando…</p></div></section>`;
 }
 async function loadArchivo() {

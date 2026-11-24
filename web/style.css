@@ -90,6 +90,20 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 /* Button system: primary (yellow), normal, ghost (discreet) and sm share radius, border and height per size. */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:var(--ctl-h);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--ctl-r);padding:0 12px;font-size:var(--fs-3);line-height:1.2}
 .btn:hover{border-color:var(--wall)}
+/* Press feedback: a 1 px sink on :active with a smaller shadow. Transform and shadow do not move the layout. */
+.btn,.rf-chip,.cp-btn,.mi,.sw,.ctab{transition:transform .08s ease-out,box-shadow .08s ease-out,border-color .15s,background-color .15s,color .15s,opacity .15s}
+.btn:not(.ghost),.rf-chip,.ctab{box-shadow:0 1px 0 rgba(0,0,0,.3)}
+.btn:active:not(:disabled),.rf-chip:active,.cp-btn:active,.mi:active,.sw:active,.ctab:active{transform:translateY(1px)}
+.btn:not(.ghost):active:not(:disabled),.rf-chip:active,.ctab:active{box-shadow:0 0 0 rgba(0,0,0,.3)}
+@media (prefers-reduced-motion:reduce){.btn,.rf-chip,.cp-btn,.mi,.sw,.ctab{transition:none}.btn:active,.rf-chip:active,.cp-btn:active,.mi:active,.sw:active,.ctab:active{transform:none}}
+/* Skeleton: bars in the surface colour with a soft moving gradient, same height as the content that replaces them. */
+.skl-wrap{display:block}
+.skl{display:block;height:12px;margin:9px 0;border-radius:4px;background:linear-gradient(100deg,var(--panel-2) 30%,color-mix(in srgb,var(--ink) 9%,var(--panel-2)) 50%,var(--panel-2) 70%) 0 0/220% 100%;animation:skl 1.5s ease-in-out infinite}
+.skl:nth-child(3n+2){width:82%} .skl:nth-child(3n){width:64%} .skl.blk{height:84px;margin:0 0 8px;border-radius:10px}
+.term.loading{overflow:hidden;min-height:200px}
+.term .skl{height:9px;margin:5px 0}
+@keyframes skl{from{background-position:110% 0}to{background-position:-110% 0}}
+@media (prefers-reduced-motion:reduce){.skl{animation:none}}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn.primary{background:var(--amber);color:#2a1d05;border-color:var(--amber);font-weight:600}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
