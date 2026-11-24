@@ -198,6 +198,38 @@ const TDECO = {
     ['td-fly f2', 45, 90, null, null, true],
     ['td-fly f3', 58, 86, null, null, true],
     ['td-fly f4', 12, 80, null, null, true]
+  ],
+  playa: [
+    ['td-surf', 40.2, 6.4, 3.4, 15.8],
+    ['td-palm', 2.4, 82.8, 4.4, null, true],
+    ['td-castle', 62.4, 89.6, 4.4, 6.4, true],
+    ['td-ball', 17.3, 92.4, 1.6, null, true],
+    ['td-crab', 33, 93.6, 2, null, true],
+    ['td-ball', 49.6, 92.4, 1.6, null, true]
+  ],
+  nieve: [
+    ['td-fire', ...TD_WALL],
+    ['td-snowman', 2.8, 85.2, 3.4, null, true],
+    ['td-pine', 62.6, 86, 4.2, null, true],
+    ['td-sled', 32.4, 93.2, 3.6, 2.6, true],
+    ['td-flake', 17.4, 91.4, null, null, true],
+    ['td-flake', 49.7, 91.4, null, null, true]
+  ],
+  dojo: [
+    ['td-scroll', 40, 6, 4.2, 16],
+    ['td-bonsai', 2.8, 88.2, 3.8, 7.8, true],
+    ['td-lantern', 62.8, 85.6, 3, 10.4, true],
+    ['td-chochin', 17.3, 90.8, 1.4, 4.4, true],
+    ['td-chochin', 33.3, 90.8, 1.4, 4.4, true],
+    ['td-chochin', 49.6, 90.8, 1.4, 4.4, true]
+  ],
+  arcade: [
+    ['td-neon', ...TD_WALL],
+    ['td-cab', 2.6, 85.2, 3.4, 10.8, true],
+    ['td-cab', 62.8, 85.2, 3.4, 10.8, true],
+    ['td-coin', 17.4, 92.2, 1.3, null, true],
+    ['td-coin', 33.4, 92.2, 1.3, null, true],
+    ['td-coin', 49.7, 92.2, 1.3, null, true]
   ]
 };
 // colIdx: sala/rutina -> cuarto de la columna (estable mientras exista).

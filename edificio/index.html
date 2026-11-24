@@ -388,6 +388,15 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
 .floor[data-theme] .plq .no::after{margin-left:6px;font-size:10px}
 .floor[data-theme=garaje] .plq .no::after{content:"🔧"} .floor[data-theme=nave] .plq .no::after{content:"🚀"} .floor[data-theme=biblioteca] .plq .no::after{content:"📚"}
 .floor[data-theme=cafeteria] .plq .no::after{content:"☕"} .floor[data-theme=bosque] .plq .no::after{content:"🌲"}
+.floor[data-theme=playa] .plq .no::after{content:"🏖️"} .floor[data-theme=nieve] .plq .no::after{content:"❄️"} .floor[data-theme=dojo] .plq .no::after{content:"🎋"} .floor[data-theme=arcade] .plq .no::after{content:"🕹️"}
+.floor[data-theme=playa] .win{border-color:#a88a5e}
+.floor[data-theme=playa].on .win:not(.r){background:radial-gradient(ellipse at 50% -10%,rgba(255,230,160,.55),transparent 60%),linear-gradient(transparent 62%,#cfae72 62%),linear-gradient(#5fb8d6,#1f6f8b)}
+.floor[data-theme=nieve] .win{border-color:#9ab8cf}
+.floor[data-theme=nieve].on .win:not(.r){background:radial-gradient(ellipse at 50% 110%,rgba(243,140,60,.55),transparent 55%),radial-gradient(#fff 0 1px,transparent 1.5px) 0 0/9px 8px,linear-gradient(#2f4560,#2a3f55)}
+.floor[data-theme=dojo] .win{border-color:#3a2a22}
+.floor[data-theme=dojo].on .win:not(.r){background:radial-gradient(ellipse at 50% 50%,rgba(255,211,107,.35),transparent 65%),repeating-linear-gradient(90deg,transparent 0 9px,#3a2a22 9px 10px),repeating-linear-gradient(0deg,transparent 0 7px,#3a2a22 7px 8px),#efe4c8}
+.floor[data-theme=arcade] .win{border-color:#ff3fa4}
+.floor[data-theme=arcade].on .win:not(.r){background:radial-gradient(ellipse at 50% -10%,rgba(255,63,164,.6),transparent 60%),repeating-linear-gradient(0deg,rgba(56,232,255,.25) 0 1px,transparent 1px 6px),#140a2a;box-shadow:0 0 8px rgba(255,63,164,.5)}
 </style>
 </head>
 <body>
