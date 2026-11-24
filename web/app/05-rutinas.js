@@ -42,20 +42,36 @@ function lastRunText(rt) {
   const base = `${t} · ${l.open} PRs abiertos · ${l.changed} con novedades · ${l.dispatched} robots lanzados`;
   return l.pending ? `${base} · ${l.pending} pendientes (${l.note})` : l.note ? `${t} · ${l.note}` : base;
 }
+// Routines as a wall calendar over «Tu escritorio»: when each one runs next (today, tomorrow, weekday), the running ones
+// first and highlighted. Paused routines do not show up. The «N activas» count stays in its header.
 function renderRoutineChips() {
   const active = st.routines.filter(r => !r.paused).length;
   $('#rt-count').textContent = `${active} activa${active === 1 ? '' : 's'}`;
-  $('#rt-chips').innerHTML =
-    st.routines
-      .slice(0, 4)
-      .map(
-        rt =>
-          `<div class="rchip"><div class="ring ${rt.paused ? 'paused' : ''} ${rt.running ? 'running' : ''}" data-ring="${rt.id}"></div><span>${esc(rt.name)}<br><small data-next="${rt.id}"></small></span></div>`
-      )
-      .join('') || '<div class="room-b">Sin rutinas. Clic para crear una.</div>';
+  renderRoutineCal();
   tickRoutines();
   renderColumn();
 }
+function renderRoutineCal() {
+  const rows = st.routines
+    .filter(r => !r.paused && (r.running || r.nextAt))
+    .sort((x, y) => Number(!!y.running) - Number(!!x.running) || (x.nextAt || 0) - (y.nextAt || 0));
+  const midnight = ms => new Date(new Date(ms).setHours(0, 0, 0, 0)).getTime();
+  const dayLabel = ms => {
+    const k = Math.round((midnight(ms) - midnight(Date.now())) / 864e5);
+    return k <= 0 ? 'hoy' : k === 1 ? 'mañana' : DAYN[new Date(ms).getDay()];
+  };
+  const shown = rows.slice(0, 4);
+  $('#rt-chips').innerHTML =
+    shown
+      .map(
+        rt =>
+          `<div class="cal-row${rt.running ? ' run' : ''}" title="${esc(`${rt.name} · ${schedTxt(rt.schedule, rt.everyMin)}`)}"><b class="cal-d">${rt.running ? 'ahora' : dayLabel(rt.nextAt)}</b><span class="cal-t">${rt.running || !rt.nextAt ? icon('clock') : new Date(rt.nextAt).toTimeString().slice(0, 5)}</span><span class="cal-n">${esc(rt.name)}</span></div>`
+      )
+      .join('') +
+    (rows.length > shown.length ? `<div class="cal-more">+${rows.length - shown.length} más</div>` : '') ||
+    '<div class="cal-empty">Sin rutinas activas. Clic para crear una.</div>';
+}
+setInterval(renderRoutineCal, 60000); // «hoy» y «mañana» cambian a medianoche
 function tickRoutines() {
   for (const rt of st.routines) {
     document.querySelectorAll(`[data-ring="${rt.id}"]`).forEach(el => el.style.setProperty('--p', routineProgress(rt).p));

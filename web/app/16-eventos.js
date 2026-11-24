@@ -94,8 +94,10 @@ MAP.addEventListener('click', e => {
     const a = [...st.robots.values()].find(x => x.data.place.idx === Number(dk.dataset.desk));
     return select(a ? a.data.name : '@new');
   }
+  const rtRoom = e.target.closest('[data-rt-room]');
+  if (rtRoom) return openRoutineRoom(rtRoom.dataset.rtRoom);
   const sala = e.target.closest('[data-sala]');
-  if (sala) return enterSala(sala.dataset.sala);
+  if (sala) return enterSala(sala.dataset.sala, true);
   const room = e.target.closest('[data-room]');
   if (room) select('@' + room.dataset.room);
 });

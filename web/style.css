@@ -156,14 +156,12 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 .bcoffee::before{content:"";position:absolute;left:28%;top:30%;width:44%;height:16%;background:#f3b74f;border-radius:2px;box-shadow:0 0 6px rgba(243,183,79,.6)}
 .bcoffee::after{content:"";position:absolute;left:32%;top:48%;width:36%;height:12%;background:#e8edf4;border-radius:0 0 2px 2px}
 .robot.on-break .nm{opacity:.75}
-.r-git{background:var(--git)} .r-jira{background:var(--jira)} .r-cron{background:var(--cron)} .r-war{background:var(--war)} .r-coord{background:var(--coord)}
+.r-git{background:var(--git)} .r-jira{background:var(--jira)} .r-war{background:var(--war)} .r-coord{background:var(--coord)}
 /* El título va sobre la pared, en el pasillo: los monitores de la primera fila asoman por encima de las mesas */
 #room-open>.room-h{position:absolute;left:0;right:0;top:-26px;padding:0 6px}
 .r-open{background:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,rgba(0,0,0,.08) 0 1px,transparent 1px 120px),var(--open);cursor:default} .r-open:hover{border-color:var(--wall)}
 .r-rt{background:var(--cron);border-style:dashed;z-index:1}
 .r-sala{background:var(--war)}
-#sala-chips .rchip{cursor:pointer}
-.rdesk .paper{width:30%;height:120%;top:-30%}
 
 .desk{position:absolute;width:11%;height:10%;background:repeating-linear-gradient(90deg,rgba(0,0,0,.035) 0 2px,transparent 2px 14px),linear-gradient(var(--desk-a),var(--desk-b) 75%);border-radius:4px;cursor:pointer;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 7px 0 var(--desk-e),0 14px 16px rgba(0,0,0,.4)}
@@ -212,17 +210,8 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 .desk::after{content:"";position:absolute;left:-10%;right:-10%;top:-30%;height:150%;pointer-events:none;opacity:0;transition:opacity .6s;background:radial-gradient(ellipse at 50% 20%,rgba(160,200,255,.13),transparent 70%)}
 .desk.on::after{opacity:1}
 /* En las salas, una laptop pequeña sobre la mesita */
-.rdesk{position:absolute;background:linear-gradient(#a3825f,#8a6c50);border-radius:3px;z-index:2;pointer-events:none;box-shadow:0 4px 0 #5b4433,0 8px 10px rgba(0,0,0,.35)}
-.rdesk::before{content:"";position:absolute;left:30%;top:-95%;width:40%;height:110%;background:#0b0f15;border:2px solid #232b38;border-radius:2px;transition:background .4s}
-.rdesk::after{content:"";position:absolute;left:26%;top:12%;width:48%;height:22%;background:#c9d1dc;border-radius:1px}
-.rdesk.on::before{background:linear-gradient(#5fcbb9 0 12%,transparent 12% 30%,#7cb6f0 30% 42%,transparent 42% 60%,#f3b74f 60% 72%,transparent 72%) 30% 25%/60% 60% no-repeat,#0f1722}
-.rdesk.deleg::before{background:linear-gradient(#a99cf2 0 12%,transparent 12% 30%,#d99ad6 30% 42%,transparent 42%) 30% 25%/60% 60% no-repeat,#151229}
 .paper{position:absolute;left:-8%;top:-14%;width:22%;height:62%;background:#f4efe2;border-radius:2px;box-shadow:2px 2px 0 rgba(0,0,0,.35);transform:rotate(-8deg)}
 .paper::before{content:"";position:absolute;inset:22% 18% auto;height:45%;background:repeating-linear-gradient(#9aa3b0 0 1px,transparent 1px 4px)}
-.rt-chips{display:grid;gap:4px;padding:0 8px}
-.rchip{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--ink);min-width:0}
-.rchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rchip small{color:var(--muted)}
 .ring{--p:0;width:16px;height:16px;border-radius:50%;flex:none;background:conic-gradient(var(--amber) calc(var(--p)*1turn),#3b3557 0);display:grid;place-items:center}
 .ring::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--cron)}
 .ring.paused{background:#3b3557}
@@ -720,7 +709,6 @@ details.rc-sec[open]>summary h4::after{transform:rotate(90deg)}
 .map-wrap.iso .r-break::before{background:linear-gradient(#5a5446,#3f3a30)}
 .map-wrap.iso .r-coord::before{background:linear-gradient(#55623f,#3a4530)}
 .map-wrap.iso .r-war::before{background:linear-gradient(#5d4450,#3f2e37)}
-.map-wrap.iso .r-cron::before{background:linear-gradient(#4b4566,#332f48)}
 .map-wrap.iso .desk{transform-style:preserve-3d}
 .map-wrap.iso .desk .mon{transform-origin:50% 100%;transform:rotateX(-75deg)}
 .map-wrap.iso .desk .dplant{transform-origin:50% 100%;transform:rotateX(-80deg)}
@@ -1487,7 +1475,7 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 .eotm[hidden]{display:none}
 .eotm.live{cursor:pointer}
 .eotm small{font:600 7px/1.15 var(--mono);letter-spacing:.06em;color:#d9a531;text-align:center;white-space:nowrap}
-.eotm-face{display:block;width:52px;height:56px;margin:2px 0 1px}
+.eotm-face{display:block;width:40px;height:43px;margin:2px 0 1px}
 .eotm-face svg{width:100%;height:100%;overflow:visible}
 .eotm b{font:600 12px/1.15 var(--mono);color:#ffe7a8;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .eotm i{font:500 10px/1.1 var(--mono);font-style:normal;color:#d9a531}
@@ -1496,7 +1484,6 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 @keyframes flame-flick{0%{transform:scale(1,1)}45%{transform:scale(.88,1.12)}100%{transform:scale(1.07,.93)}}
 @media (prefers-reduced-motion:reduce){.flame{animation:none}}
 /* Sala de épica chica (como Rutinas): sus salas en lista con scroll */
-#sala-chips{max-height:calc(100% - 30px);overflow-y:auto;padding-bottom:6px;scrollbar-width:thin}
 
 /* Vista de una sala: el mapa muestra solo esa sala y sus robots; en la oficina, los robots de salas no se dibujan. */
 .offview{display:none !important}
@@ -1507,8 +1494,6 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 .r-sala.in-sala>.room-h small{order:3}
 .r-sala.in-sala>.room-h [data-sala-open]{order:4}
 .sala-empty{position:absolute;left:0;right:0;top:45%;text-align:center;color:var(--muted);font-size:13px;margin:0}
-.rchip.need small{color:var(--amber)}
-.rchip.cur{outline:1px solid var(--teal)}
 
 /* Sala por dentro: piso del color de quien la armó, tablero, mesa común y puerta */
 .r-sala.in-sala{--sala-c:#a99cf2;background:
@@ -1533,7 +1518,6 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 .sala-door{position:absolute;z-index:2;display:flex;align-items:center;justify-content:center;background:#6b4f38;border-radius:4px 4px 0 0;box-shadow:inset 0 0 0 2px #4a3524}
 .sala-door span{font:600 9px var(--mono);letter-spacing:.12em;color:#e7d6bf}
 .sala-board .sb-head .btn{background:#efe6d2;color:#5b4433;border-color:#c9b99c}
-.rchip.done small{color:#b9d06a}
 
 /* Cambio de materas al renovarse la cuota: las plantas se levantan y se marchitan, entra la matera nueva y brotan */
 @keyframes repot-out{0%{transform:none}25%{transform:translateY(-18%) rotate(-7deg)}45%{transform:translateY(-22%) rotate(6deg);filter:saturate(.3) brightness(.8)}100%{transform:translateY(10%) scale(.15);opacity:0;filter:saturate(0)}}
@@ -1719,7 +1703,6 @@ html.hc .kpi span,html.hc .rc{color:var(--ink)}
 html.hc .robot.bub-below .bubble::after{border-top-color:transparent;border-bottom-color:#fff}
 
 /* Salas · 3 avance del equipo (chip del mapa, tarjetas y tablero), 5 tus notas en el tablero, 6 sobres que viajan. */
-.rchip.prog{position:relative;padding-bottom:4px}
 .rchip-bar,.rt-prog,.sb-prog{display:block;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--teal) var(--p),color-mix(in srgb,var(--line) 80%,transparent) var(--p))}
 .rchip-bar{position:absolute;left:14px;right:2px;bottom:0}
 .rchip-bar.full,.rt-prog.full{background:#b9d06a}
@@ -1802,9 +1785,9 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .sala-face svg{width:19px;height:19px;overflow:visible}
 .sala-face .sala-book{font-size:13px;line-height:1}
 .sala-face.big{width:28px;height:28px;box-shadow:none;margin-right:2px} .sala-face.big svg{width:26px;height:26px} .sala-face.big .sala-book{font-size:17px}
-.rchip.need .sala-face{animation:sfneed 1.8s ease-in-out infinite}
+.sroom.need .sala-face{animation:sfneed 1.8s ease-in-out infinite}
 @keyframes sfneed{50%{box-shadow:0 0 0 2px var(--st),0 0 0 5px color-mix(in srgb,var(--amber) 35%,transparent)}}
-@media (prefers-reduced-motion:reduce){.rchip.need .sala-face{animation:none}}
+@media (prefers-reduced-motion:reduce){.sroom.need .sala-face{animation:none}}
 
 /* Tablero de la sala, compacto: el porqué en 1 línea (clic lo abre), reparto y gasto en una fila de chips (el detalle al
    pasar el mouse), el contexto siempre con espacio y las notas en una franja que se desplaza: nada queda tapado. */
@@ -1881,8 +1864,6 @@ html.hc .robot.bub-flip .bubble::after{border-top-color:transparent;border-botto
    con un aviso que abre al robot directo. */
 .room.sala-need{animation:warneed 1.8s ease-in-out infinite}
 @keyframes warneed{0%,100%{box-shadow:inset 0 0 0 2px rgba(243,183,79,.55)}50%{box-shadow:inset 0 0 0 3px rgba(243,183,79,1),0 0 18px 3px rgba(243,183,79,.45)}}
-.rchip.need{background:color-mix(in srgb,var(--amber) 22%,transparent);border-radius:7px;padding:3px 4px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--amber) 60%,transparent)}
-.rchip.need>span:not(.sala-face){white-space:normal}
 .rchip-alert{display:block;max-width:100%;margin-top:1px;padding:0;border:0;background:none;font:700 10.5px var(--body);color:var(--amber);cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rchip-alert:hover,.rchip-alert:focus-visible{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){.room.sala-need{animation:none;box-shadow:inset 0 0 0 3px rgba(243,183,79,.9)}}
@@ -1961,42 +1942,15 @@ html[data-theme=light] .alert.stall-box{background:#fff8e8;border-color:#ecd29a}
 @media (prefers-reduced-motion:reduce){.robot.stuck::after{animation:none}}
 .qbar .btn+.btn{margin-left:0}
 
-/* Salas de épica as sticky notes on a cork board. The cork and the notes keep their own colours in both themes. */
-#sala-chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:11px 10px;align-content:start;margin:0 6px 6px;padding:12px 10px 10px;border-radius:5px;
-  background:radial-gradient(circle at 20% 30%,rgba(90,52,20,.35) 0 1px,transparent 2px) 0 0/9px 9px,radial-gradient(circle at 70% 60%,rgba(255,225,170,.28) 0 1px,transparent 2px) 0 0/7px 7px,radial-gradient(circle at 45% 80%,rgba(70,38,12,.3) 0 1.5px,transparent 2.5px) 0 0/13px 13px,linear-gradient(135deg,#c79a63,#b78750);
-  box-shadow:inset 0 0 0 3px #8a6139,inset 0 0 10px rgba(0,0,0,.35)}
-#sala-chips>.room-b{grid-column:1/-1;padding:4px;color:#3b2512;font-weight:600;text-align:center}
-.sala-note{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:8px 6px 6px;border-radius:2px;color:#2b2218;background:var(--nb,#fbf1d4);transform:rotate(var(--rot,0deg));box-shadow:0 2px 3px rgba(0,0,0,.4),inset 0 -10px 12px -10px rgba(0,0,0,.18);transition:transform .15s}
-.sala-note:hover{transform:rotate(0deg) scale(1.05);z-index:2}
-.sala-note.sn-empty{--nb:#fbf1d4}
-.sala-note.sn-work{--nb:#c9f0e8}
-.sala-note.sn-done{--nb:#d4efb8}
-.sala-note.sn-need{--nb:#f8cf7a;box-shadow:0 2px 3px rgba(0,0,0,.4),0 0 0 2px rgba(243,183,79,.9);animation:snneed 1.8s ease-in-out infinite}
 @keyframes snneed{50%{box-shadow:0 2px 3px rgba(0,0,0,.4),0 0 0 2px rgba(243,183,79,1),0 0 12px 3px rgba(243,183,79,.7)}}
-.sala-note.cur{outline:2px solid #1f8f7e;outline-offset:2px}
-.sala-note.need{background:var(--nb);padding:9px 6px 7px;border-radius:2px}
-.sn-pin{position:absolute;top:-8px;left:50%;margin-left:-6px;font-size:12px;line-height:1;font-style:normal;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));pointer-events:none}
 .sn-head{display:flex;align-items:center;gap:4px;min-width:0}
 .sn-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 10.5px var(--body);color:#2b2218}
-.sala-note .sala-face{width:18px;height:18px;box-shadow:0 0 0 1.5px rgba(43,34,24,.35);background:rgba(255,255,255,.55)}
-.sala-note .sala-face svg{width:15px;height:15px}
-.sala-note.need .sala-face{box-shadow:0 0 0 1.5px #b9770e}
 .sn-bots{display:flex;flex-wrap:wrap;align-items:center;gap:2px;min-height:16px}
 .sn-bot{position:relative;display:inline-grid;place-items:center;width:15px;height:15px}
 .sn-bot svg{width:15px;height:15px;overflow:visible}
 .sn-bot.ok svg{opacity:.8}
 .sn-bot.ok b{position:absolute;right:-3px;bottom:-4px;font:800 10px/1 var(--body);color:#1f8a3b;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 2px #fff}
 .sn-more{font:700 9.5px var(--body);color:#5b4433}
-.sala-note .sn-state{color:#4a3b2a;font:600 9.5px var(--body)}
-.sala-note.done .sn-state{color:#256b1c;font-weight:700}
-.sala-note .rchip-alert{color:#7a4300;font-size:9.5px;white-space:normal;line-height:1.2}
-.sala-note .rchip-bar{position:absolute;left:5px;right:5px;bottom:2px;height:3px;background:linear-gradient(90deg,#1f8f7e var(--p),rgba(43,34,24,.18) var(--p))}
-.sala-note .rchip-bar.full{background:#3d9a3d}
-.sala-note.prog{padding-bottom:10px}
-html.hc .sala-note{box-shadow:0 0 0 1.5px #2b2218,0 2px 3px rgba(0,0,0,.5)}
-html.hc .sala-note .sn-state,html.hc .sn-more{color:#1a120a}
-html.hc .sala-note.cur{outline-width:3px}
-@media (prefers-reduced-motion:reduce){.sala-note{transition:none}.sala-note:hover{transform:rotate(var(--rot,0deg))}.sala-note.sn-need{animation:none}}
 
 /* ---------- Claude accounts: Ajustes › Cuentas, coffee-pot menu, «Sin cuota» (amber, never grey) ---------- */
 .vista-menu{max-height:calc(100vh - 90px);overflow:auto}
@@ -2049,3 +2003,81 @@ html.hc .bcoffee .cacct{outline:1px solid currentColor}
 .cu-body p{margin:4px 0}
 .cu-edit textarea{width:100%;font-family:var(--mono);font-size:12.5px}
 #cu-q{flex:1 1 220px;min-width:0}
+
+/* ---------- Pasillo y columna de salas ---------- */
+/* La columna de la derecha, de arriba a abajo: cada sala de épica o rutina es un cuarto con su puerta hacia el pasillo.
+   Libre = puerta abierta y piso a la vista; con equipo = puerta cerrada y un cartel (nombre, quién está, qué hace).
+   Los carteles llevan sus propios colores (nunca gris: gris es desconectado): crema vacía, turquesa trabajando, ámbar te necesitan, verde terminó. */
+.corridor{position:absolute;pointer-events:none;display:grid;place-items:end center;padding-bottom:6px;
+  background:linear-gradient(90deg,rgba(255,255,255,.025),rgba(255,255,255,.07) 50%,rgba(255,255,255,.025)),repeating-linear-gradient(0deg,transparent 0 22px,rgba(255,255,255,.05) 22px 24px);
+  border-left:2px dashed color-mix(in srgb,var(--wall) 70%,transparent);border-right:2px dashed color-mix(in srgb,var(--wall) 70%,transparent)}
+.corridor span{writing-mode:vertical-rl;transform:rotate(180deg);font:600 9px var(--body);letter-spacing:.35em;text-transform:uppercase;color:var(--muted);opacity:.8}
+.r-war .room-h{padding:4px 8px}
+.r-war .room-h span{font-size:13px}
+.sala-col{position:absolute;inset:0;z-index:2;pointer-events:none}
+.sala-col>.sroom{pointer-events:auto}
+.sroom{position:absolute;display:grid;grid-template-columns:27% minmax(0,1fr);align-items:stretch;overflow:hidden;cursor:pointer;color:#2b2218;
+  border:3px solid var(--wall);border-top-color:#4c5b73;border-radius:6px;background:var(--war);box-shadow:inset 0 8px 14px rgba(0,0,0,.2),0 3px 0 rgba(0,0,0,.28);transition:border-color .15s}
+.sroom:hover,.sroom:focus-visible{border-color:var(--amber);outline:none}
+.sroom.sn-empty{--nb:#fbf1d4}
+.sroom.sn-work{--nb:#c9f0e8}
+.sroom.sn-done{--nb:#d4efb8}
+.sroom.sn-need{--nb:#f8cf7a;animation:snneed 1.8s ease-in-out infinite}
+.sroom.cur{outline:2px solid #1f8f7e;outline-offset:-2px}
+.sdoor{position:relative;display:block;background:linear-gradient(90deg,#9a6c44,#7a5333 70%,#6b4528);border-right:3px solid #4a2f1a;
+  box-shadow:inset 0 0 0 3px rgba(0,0,0,.18);transform-origin:0 50%;transition:transform .22s ease-in}
+.sdoor::before{content:"";position:absolute;left:18%;right:18%;top:10%;height:34%;border:2px solid rgba(0,0,0,.22);border-radius:2px}
+.sdoor::after{content:"";position:absolute;right:14%;top:52%;width:7px;height:7px;border-radius:50%;background:#e8c46a;box-shadow:0 1px 0 rgba(0,0,0,.4)}
+.ssign{margin:4px 4px 4px 5px;padding:5px 6px;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:3px;position:relative;overflow:hidden;border-radius:3px;
+  background:var(--nb,#fbf1d4);box-shadow:0 2px 3px rgba(0,0,0,.4),inset 0 -8px 10px -8px rgba(0,0,0,.18)}
+.ssign .sn-head{display:flex;align-items:center;gap:4px;min-width:0}
+.ssign .sala-face{width:18px;height:18px;box-shadow:0 0 0 1.5px rgba(43,34,24,.35);background:rgba(255,255,255,.55)}
+.ssign .sala-face svg{width:15px;height:15px}
+.ssign .sala-face .sala-book .ic{width:13px;height:13px}
+.sroom.need .sala-face{box-shadow:0 0 0 1.5px #b9770e}
+.ssign .sn-name{font:700 11px var(--body)}
+.sn-what{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font:600 9.5px/1.25 var(--body);color:#4a3b2a}
+.sroom.tight .sn-what{-webkit-line-clamp:1}
+.ssign .sn-state{color:#4a3b2a;font:600 9.5px var(--body)}
+.sroom.done .sn-state{color:#256b1c;font-weight:700}
+.ssign .rchip-alert{color:#7a4300;font-size:9.5px;white-space:normal;line-height:1.2;text-align:left}
+.ssign .rchip-alert .ic{width:1.05em;height:1.05em;vertical-align:-.15em}
+.ssign .rchip-bar{position:absolute;left:6px;right:6px;bottom:2px;height:3px;background:linear-gradient(90deg,#1f8f7e var(--p),rgba(43,34,24,.18) var(--p))}
+.ssign .rchip-bar.full{background:#3d9a3d}
+.sroom.prog .ssign{padding-bottom:10px}
+.sroom.tight .ssign{padding-top:3px;padding-bottom:3px;gap:2px}
+.sroom.tight.prog .ssign{padding-bottom:8px}
+.sroom.tight .sn-bots{min-height:14px}
+.sroom.more{grid-template-columns:20% minmax(0,1fr)}
+.sroom.more .ssign{align-items:center;text-align:center}
+.sroom.more .sn-name{font-size:13px;flex:none}
+.sroom.free{display:block;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:18px 18px;box-shadow:inset 0 0 22px rgba(0,0,0,.25)}
+.sroom.free .sdoor{position:absolute;left:0;top:6%;bottom:6%;width:20%;border-right:0;transform:perspective(220px) rotateY(-72deg);opacity:.95}
+.sfree{position:absolute;left:30%;right:4%;top:50%;transform:translateY(-50%);text-align:center;font:600 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sroom.free:hover .sfree{color:var(--amber)}
+.map-wrap.iso .sala-col{transform-style:preserve-3d}
+html.hc .ssign{box-shadow:0 0 0 1.5px #2b2218,0 2px 3px rgba(0,0,0,.5)}
+html.hc .ssign .sn-state,html.hc .ssign .sn-what,html.hc .sn-more{color:#1a120a}
+@media (prefers-reduced-motion:reduce){.sroom{transition:none}.sroom.sn-need{animation:none;box-shadow:inset 0 0 0 3px rgba(243,183,79,.9)}.sdoor{transition:none}}
+
+/* Calendario de rutinas en la pared de «Tu escritorio»: cuándo corre cada una (hoy, mañana, día); las que corren ahora, resaltadas. */
+.rt-cal{position:absolute;z-index:4;display:flex;flex-direction:column;gap:2px;padding:3px 6px 4px;overflow:hidden;cursor:pointer;color:#2b2218;
+  background:#f4efe2;border-top:5px solid #1f8f7e;border-radius:3px;box-shadow:0 3px 0 rgba(0,0,0,.35),0 6px 10px rgba(0,0,0,.3)}
+.rt-cal:hover,.rt-cal:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.cal-h{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font:700 10.5px var(--body);border-bottom:1px solid rgba(43,34,24,.25);padding-bottom:1px}
+.cal-h small{font:600 8.5px var(--body);color:#4a3b2a;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.cal-rows{display:grid;gap:1px;min-height:0}
+.cal-row{display:grid;grid-template-columns:34px 34px minmax(0,1fr);gap:4px;align-items:baseline;font:600 9.5px var(--body);padding:0 2px;border-radius:2px}
+.cal-row.run{background:rgba(243,183,79,.55);font-weight:700}
+.cal-d{font-weight:700;color:#1f6f63;text-transform:lowercase}
+.cal-row.run .cal-d{color:#7a4300}
+.cal-t{font-family:var(--mono);font-size:9px}
+.cal-t .ic{width:1em;height:1em;vertical-align:-.12em}
+.cal-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-more,.cal-empty{font:600 9px var(--body);color:#4a3b2a}
+html.hc .rt-cal{box-shadow:0 0 0 1.5px #2b2218}
+.map-wrap.iso .rt-cal{transform-origin:50% 100%;transform:rotateZ(calc(-1 * var(--rz))) rotateX(calc(-1 * var(--rx)))}
+
+/* ---------- sala-anim: animación al entrar a una sala (se quita con 33-animacion-sala.js) ---------- */
+.sroom.opening .sdoor{transform:perspective(220px) rotateY(-72deg)}
+.sroom.opening{border-color:var(--amber)}

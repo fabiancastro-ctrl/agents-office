@@ -28,8 +28,9 @@ function setRect(el, x, y, w, h) {
 
 const samePlace = (p, q) => p.type === q.type && p.idx === q.idx && p.room === q.room && p.slot === q.slot;
 
-// Calcula filas de escritorios y salas de rutina (incoming = lugar que se va a ocupar) y, si cambian,
-// recoloca salas, escritorios y robots con la nueva altura del mapa.
+// Calcula las filas de escritorios y, si cambian, recoloca todo con la nueva altura del mapa (incoming = lugar que se va
+// a ocupar). Solo la sala que estás viendo tiene su cuarto dibujado en el mapa; las salas de épica y las rutinas viven
+// tras sus puertas en la columna de la derecha (renderSalaCol).
 function layout(incoming) {
   // incoming reserva lugar (filas, asientos) pero no se cuenta como robot: si no, el que llega sale dos veces en «N robots».
   const counted = new Set([...st.robots.values()].map(a => a.data.place));
@@ -39,9 +40,8 @@ function layout(incoming) {
   const rows = Math.max(BASE_ROWS, Math.ceil((Math.max(-1, ...used) + 1) / COLS));
   const byRoom = new Map(),
     v = st.view;
-  for (const p of places) {
-    if (p.type !== 'room') continue;
-    if (v ? p.sala !== v : p.sala) continue; // en la oficina no se dibujan las salas; dentro de una, solo esa
+  for (const p of v ? places : []) {
+    if (p.type !== 'room' || p.sala !== v) continue;
     const r = byRoom.get(p.room) || { id: p.room, name: p.name, sala: p.sala, maxSlot: -1, n: 0 };
     r.maxSlot = Math.max(r.maxSlot, p.slot);
     if (counted.has(p)) r.n++;
@@ -49,12 +49,8 @@ function layout(incoming) {
   }
   if (v && !byRoom.has(`sala-${v}`))
     byRoom.set(`sala-${v}`, { id: `sala-${v}`, name: st.salas.find(s => s.id === v)?.name || '', sala: v, maxSlot: -1, n: 0 });
-  // Orden estable: una sala no cambia de lugar mientras exista.
   geo.roomOrder = [...geo.roomOrder.filter(id => byRoom.has(id)), ...[...byRoom.keys()].filter(id => !geo.roomOrder.includes(id))];
-  const specs = geo.roomOrder.map(id => ({
-    ...byRoom.get(id),
-    seatRows: Math.max(1, Math.ceil((byRoom.get(id).maxSlot + 1) / ROOM_COLS))
-  }));
+  const specs = geo.roomOrder.map(id => byRoom.get(id));
   for (const sp of specs) {
     const re = geo.roomEls.get(sp.id);
     if (re) {
@@ -62,53 +58,46 @@ function layout(incoming) {
       re.el.querySelector('.sala-empty')?.toggleAttribute('hidden', sp.n > 0);
     }
   }
-  const sig =
-    (v ? v + '@' + Math.round((MAP.clientWidth || 0) / 40) : '') +
-    '|' +
-    rows +
-    '|' +
-    specs.map(sp => sp.id + ':' + (v ? sp.maxSlot : sp.seatRows)).join(',');
+  const sig = (v ? v + '@' + Math.round((MAP.clientWidth || 0) / 40) : '') + '|' + rows + '|' + specs.map(sp => `${sp.id}:${sp.maxSlot}`).join(',');
   if (sig === geo.sig) return;
   geo.sig = sig;
   geo.rows = rows;
-  // Dentro de una sala el mapa es solo ella, a todo lo ancho; en la oficina, las de rutina debajo de los escritorios.
-  let y = 43 + rows * ROW_H;
+  // Dentro de una sala el mapa es solo ella, a todo lo ancho; en la oficina, los escritorios y debajo la franja de tu escritorio.
   if (v) salaGeom(Math.max(0, ...specs.map(sp => sp.maxSlot + 1)));
-  geo.rooms = v
-    ? specs.map(sp => ({ ...sp, top: 2, boxH: SV.H - 4, h: SV.H - 2 }))
-    : specs.map(sp => {
-        const boxH = 6 + sp.seatRows * SEAT_ROW_H;
-        const r = { ...sp, top: y, boxH, h: boxH + 6 };
-        y += r.h;
-        return r;
-      });
-  geo.H = v ? SV.H : y + 5;
+  else geo.SY = 43 + rows * ROW_H;
+  geo.rooms = v ? specs.map(sp => ({ ...sp, top: 2, boxH: SV.H - 4, h: SV.H - 2 })) : [];
+  geo.H = v ? SV.H : geo.SY + STRIP;
   MAP.classList.toggle('sala-view', !!v);
-  const e = extra();
+  const e = extra(),
+    Ct = geo.SY + 3; // arriba de la esquina de tu escritorio
   MAP.style.aspectRatio = `16 / ${((10 * geo.H) / 100).toFixed(3)}`;
-  setRect($('.room.r-break'), 2, 3, 52, 30);
+  // Parte izquierda: descanso arriba, escritorios debajo y, en la esquina de abajo, tu escritorio con el calendario de rutinas.
+  setRect($('.room.r-break'), 2, 3, OFFICE_R - 2, 30);
   setRect($('.deco.sofa'), 4.5, 7.5, 15, 5);
-  setRect($('.deco.sofa.s2'), 27, 7.5, 15, 5);
+  setRect($('.deco.sofa.s2'), 21, 7.5, 15, 5);
   setRect($('.deco.btable'), 9.5, 21, 12, 4);
-  setRect($('.deco.bcoffee'), 49, 6.5, 2.8, 8);
-  setRect($('.deco.pingpong'), 32, 20.5, 15, 4.5);
-  setRect($('.room.r-cron'), 56, 3, 20, 30);
-  setRect($('.room.r-war'), 78, 3, 20, 30); // como Rutinas: las salas se ven en lista (con scroll si son muchas)
-  setRect($('#room-open'), 2, 38, 74, 59 + e);
-  setRect($('#room-coord'), 78, 38, 20, 59 + e); // tu escritorio, a la par de los escritorios
-  setRect($('#inbox'), 80, 76 + e, 7, 8);
-  setRect($('#alarm'), 88.1, 77 + e, 2.2, null);
-  setRect($('#me'), 91, 74 + e, 5, 11);
-  setRect($('#eotm'), 80.2, 44, 11, 20.5); // cuadro del empleado de la semana, colgado arriba en tu escritorio
-  setRect($('#qclock'), 92.3, 45.5, 5.2, 12); // reloj de la cuota semanal
-  setRect($('.door'), 36, 97.2 + e, 8, 2.8);
-  document.querySelectorAll('.win').forEach((w, k) => setRect(w, 18.6 + k * 18, 37.1, 4.2, 1.8)); // en los huecos entre escritorios
+  setRect($('.deco.bcoffee'), 60.5, 6.5, 2.8, 8);
+  setRect($('.deco.pingpong'), 40, 20.5, 15, 4.5);
+  setRect($('#tboard'), 44, 5.2, 5.6, 8.4);
+  setRect($('#room-open'), 2, 38, OFFICE_R - 2, geo.H - 41);
+  setRect($('#room-coord'), 2, Ct, 58, 21);
+  setRect($('#eotm'), 3.5, Ct + 4.5, 10.5, 15.5); // cuadro del empleado de la semana, colgado en la pared de tu escritorio
+  setRect($('#inbox'), 15.5, Ct + 9.5, 6.5, 7);
+  setRect($('#alarm'), 17.7, Ct + 5.6, 2.2, null);
+  setRect($('#me'), 24, Ct + 6.5, 5, 11);
+  setRect($('#trophies'), 23.5, Ct + 18.3); // repisa al pie de tu escritorio
+  setRect($('#archivador'), 31, Ct + 8.5, 2.8, 8); // archivador: robots despedidos con su resumen
+  setRect($('#qclock'), 34.5, Ct + 5, 5.2, 12); // reloj de la cuota semanal
+  setRect($('#rt-cal'), 41.5, Ct + 4.3, 17.5, 16); // calendario de rutinas en la pared
+  setRect($('.door'), 61.5, geo.H - 2.8, 5.5, 2.8);
+  document.querySelectorAll('.win').forEach((w, k) => setRect(w, 15.5 + k * COL_DX, 37.1, 4.2, 1.8)); // en los huecos entre escritorios
   setRect($('.deco.plant.p1'), 2.9, 27.8, 1.7, 4.5);
-  setRect($('.deco.coffee'), 54.25, 27.5, 1.5, 5.5);
-  setRect($('.deco.plant.p2'), 76.15, 28.5, 1.7, 4.5);
+  setRect($('.deco.coffee'), 64.2, 27.5, 1.5, 5.5);
+  setRect($('.deco.plant.p2'), 65.2, 28.5, 1.7, 4.5);
+  // Pasillo y columna de salas, de arriba a abajo del mapa.
+  setRect($('#corridor'), CORR.x, 3, CORR.w, geo.H - 6);
+  setRect($('.room.r-war'), SALA_COL.x, 3, SALA_COL.w, geo.H - 6);
   placeGrowth(e);
-  setRect($('#trophies'), 79.6, 89.2 + e); // repisa al pie de tu escritorio, debajo de la bandeja
-  setRect($('#archivador'), 87.5, 80.8 + e, 2.8, 8); // archivador: robots despedidos con su resumen
   ensureDesks(rows * COLS);
   // Mesas un poco más chicas que su lugar (13 × 10): mismo centro y mismo borde de abajo, así los robots no se mueven.
   deskEls.forEach((d, i) => {
@@ -117,6 +106,7 @@ function layout(incoming) {
     d.el.hidden = i >= rows * COLS;
   });
   drawRooms();
+  renderSalaCol();
   for (const x of brk.bots.values()) if (!x.el.classList.contains('moving')) placeAt(x, x.pos);
   for (const a of st.robots.values()) {
     if (a.el.classList.contains('moving')) {
@@ -141,7 +131,7 @@ function drawRooms() {
     let re = geo.roomEls.get(r.id);
     if (!re) {
       const el = document.createElement('div');
-      // Sala temporal de una rutina o de una sala de épica: el clic abre su panel.
+      // Solo existe el cuarto de la sala que estás viendo (por dentro): cabecera con la salida, tablero, mesa común y su puerta.
       if (r.sala && st.view) {
         // dentro de la sala: cabecera con la salida, tablero, mesa común y su puerta
         const s = st.salas.find(x => x.id === r.sala);
@@ -180,17 +170,9 @@ function drawRooms() {
         geo.roomEls.set(r.id, (re = { el, seats: [], props: [board, table, dr, wb] }));
         renderBoard();
         renderOutsideNeed();
-      } else {
-        el.className = 'room r-rt';
-        el.dataset.room = 'cron';
-        el.innerHTML = `<div class="room-h"><span>Rutina «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small></div>`;
-      }
-      if (!re) {
-        MAP.appendChild(el);
-        geo.roomEls.set(r.id, (re = { el, seats: [] }));
       }
     }
-    if (re.props) {
+    if (re?.props) {
       setRect(re.el, 1, r.top + 1, 98, r.boxH);
       const round = SV.mode === 'round';
       re.el.classList.toggle('round', round);
@@ -234,36 +216,15 @@ function drawRooms() {
         d.el.style.zIndex = tz;
       });
       syncLaptops();
-      continue;
     }
-    setRect(re.el, ROOM_X - 1, r.top + 1, ROOM_W + 2, r.boxH);
-    while (re.seats.length < r.seatRows * ROOM_COLS) {
-      const el = document.createElement('div');
-      el.className = 'rdesk';
-      el.innerHTML = '<div class="paper" hidden></div>';
-      MAP.appendChild(el);
-      re.seats.push({ el, paper: el.firstChild });
-    }
-    while (re.seats.length > r.seatRows * ROOM_COLS) re.seats.pop().el.remove();
-    re.seats.forEach((d, j) => {
-      const p = roomSeat(r, j);
-      setRect(d.el, p.x - 3.5, p.y - 15, 7, 4);
-    });
   }
 }
 
-const roomSeat = (r, j) => ({
-  x: ROOM_X + (ROOM_W * ((j % ROOM_COLS) + 0.5)) / ROOM_COLS,
-  y: r.top + 1 + 7 + Math.floor(j / ROOM_COLS) * SEAT_ROW_H + 15
-});
 function seatOf(place) {
   if (!place) return door();
-  if (place.sala && !st.view) return salaDoor(place); // en la oficina su sala no se dibuja: camina al cuarto de salas y ahí desaparece
+  if (place.type === 'room' && !st.view) return roomDoor(place); // en la oficina su cuarto está tras una puerta del pasillo: camina hasta ahí y desaparece
   if (place.sala && place.sala === st.view) return tableSeat(place.slot);
-  if (place.type === 'room') {
-    const r = geo.rooms.find(x => x.id === place.room);
-    return r ? roomSeat(r, place.slot) : door();
-  }
+  if (place.type === 'room') return door();
   const d = deskPos(place.idx);
   return { x: d.x + 6.5, y: d.y + 19 };
 }
@@ -272,7 +233,7 @@ function deskFor(place) {
   return geo.roomEls.get(place.room)?.seats[place.slot];
 }
 // Fila frente a tu escritorio para los que llevan 3 min esperando respuesta; si se llena, sigue por el pasillo derecho.
-const queuePos = k => (k < 3 ? { x: 94 - k * 6.4, y: 95 + extra() } : { x: RIGHT_LANE, y: 95 + extra() - (k - 2) * 8 });
+const queuePos = k => (k < 3 ? { x: 38 - k * 6, y: geo.SY + 1.2 } : { x: CORR.c, y: geo.SY - (k - 2) * 8 });
 const restPos = a => (a.queueSlot != null && !st.view ? queuePos(a.queueSlot) : seatOf(a.data.place));
 
 /* ---------- vista de una sala ---------- */
@@ -572,11 +533,18 @@ function refreshBoardSoon() {
   clearTimeout(boardSoon);
   boardSoon = setTimeout(() => loadBoard(true), 1200);
 }
-// Punto dentro del cuarto «Salas de épica» donde entran y salen los robots de las salas (cada uno en su lugar).
-const salaDoor = place => ({ x: 82 + ((place.slot || 0) % 4) * 4.5, y: 31 });
+// Frente a la puerta de su cuarto en la columna de la derecha (sala de épica o rutina): ahí entran y salen los robots.
+// Si su sala quedó en «+N más», es la puerta de ese cuarto.
+function roomDoor(place) {
+  const key = place.sala || place.room,
+    slots = salaColSlots(),
+    sl = slots.find(x => x.key === key) || slots.find(x => x.kind === 'more') || slots[0];
+  return { x: SALA_DOOR_X, y: sl ? sl.top + sl.h * 0.72 : 20 };
+}
 // Clic en una sala: el mapa pasa a mostrar solo esa sala con sus robots; «← Oficina» (o Esc) vuelve. Así la oficina
 // principal no se llena con los equipos: ahí las salas solo salen en la lista de «Salas», con cuántos robots tienen.
-const shownHere = d => (st.view ? d.place.sala === st.view : !d.place.sala);
+// En la oficina se ven los de los escritorios; los de una sala o una rutina están tras la puerta de su cuarto.
+const shownHere = d => (st.view ? d.place.sala === st.view : d.place.type !== 'room');
 function viewClass(a) {
   const show = shownHere(a.data) || (!!a.transit && !st.view); // en la oficina se ve mientras camina hacia o desde las salas
   for (const el of [a.el, ...a.subEls.values(), a.extraEl, a.packEl].filter(Boolean)) {
@@ -591,8 +559,9 @@ function viewClass(a) {
     !!st.view && SV.mode === 'round' && a.data.place?.sala === st.view && tableSeat(a.data.place.slot).x * RT.xU < RT.cx
   );
 }
-function enterSala(id) {
+function enterSala(id, animated) {
   if (!st.salas.some(s => s.id === id)) return;
+  if (animated && salaZoomIn(id, () => enterSala(id))) return; // animación opcional (33-animacion-sala.js)
   if (st.selected) select(null);
   st.view = id;
   try {
@@ -605,6 +574,7 @@ function enterSala(id) {
 }
 function leaveSala() {
   if (!st.view) return;
+  const was = st.view;
   st.view = null;
   try {
     history.replaceState(null, '', location.pathname + location.search);
@@ -612,16 +582,16 @@ function leaveSala() {
     /* sin historial */
   }
   layout();
+  salaZoomOut(was);
 }
 
-// Franjas horizontales del mapa: una por fila de escritorios y una por sala de rutina, cada una con su pasillo
-// debajo (el de la ultima pasa junto a la puerta y la bandeja). Los pasillos verticales van entre columnas.
-const AISLE_COLS = [20.5, 38.5, 56.5, 74];
+// Franjas horizontales del mapa: una por fila de escritorios y la de abajo (tu escritorio y la puerta), cada una con su
+// pasillo debajo. Los pasillos verticales van entre columnas de escritorios y, a la derecha, el pasillo grande de las salas.
+const AISLE_COLS = [17.6, 33.8, 50, CORR.c];
 function bands() {
   const b = [];
   for (let r = 0; r < geo.rows; r++) b.push({ top: 43 + r * ROW_H, aisle: 65 + r * ROW_H });
-  for (const rm of geo.rooms) b.push({ top: rm.top, aisle: rm.top + rm.h - 2, room: true });
-  b[b.length - 1].aisle = geo.H - 5;
+  b.push({ top: geo.SY, aisle: geo.SY + 1.2 });
   return b;
 }
 function bandIndex(b, y) {
@@ -629,8 +599,22 @@ function bandIndex(b, y) {
   while (i < b.length - 1 && y >= b[i + 1].top) i++;
   return i;
 }
+const inCol = p => p.x >= SALA_DOOR_X - 0.5; // frente a la puerta de un cuarto de la columna de salas
+// De un punto de la oficina al carril del pasillo (lane): por el pasillo horizontal de su franja y luego por el pasillo.
+function laneRoute(f, lane) {
+  const b = bands(),
+    y1 = f.y > 37 ? b[bandIndex(b, f.y)].aisle : CY;
+  return [{ x: f.x, y: y1 }, { x: CORR.c, y: y1 }, lane];
+}
 function route(f, t) {
   if (Math.hypot(f.x - t.x, f.y - t.y) < 2) return [t];
+  // Hacia o desde una sala de la columna de la derecha: siempre por el pasillo, hasta su puerta.
+  if (inCol(t) && inCol(f)) return [{ x: CORR.c, y: f.y }, { x: CORR.c, y: t.y }, t];
+  if (inCol(t)) return [...laneRoute(f, { x: CORR.c, y: t.y }), t];
+  if (inCol(f)) {
+    const lane = { x: CORR.c, y: f.y };
+    return [lane, ...laneRoute(t, lane).slice(0, 2).reverse(), t];
+  }
   if (f.y > 37 && t.y > 37) {
     const b = bands(),
       i1 = bandIndex(b, f.y),
@@ -639,10 +623,8 @@ function route(f, t) {
       a2 = b[i2].aisle;
     const pts = [{ x: f.x, y: a1 }];
     if (i1 !== i2) {
-      // Las salas de rutina ocupan casi todo el ancho: para cruzarlas se usa el pasillo derecho.
-      const crossesRoom = b.slice(Math.min(i1, i2) + 1, Math.max(i1, i2) + 1).some(x => x.room);
       const mid = (f.x + t.x) / 2;
-      const vx = crossesRoom ? RIGHT_LANE : AISLE_COLS.reduce((best, x) => (Math.abs(x - mid) < Math.abs(best - mid) ? x : best));
+      const vx = AISLE_COLS.reduce((best, x) => (Math.abs(x - mid) < Math.abs(best - mid) ? x : best));
       pts.push({ x: vx, y: a1 }, { x: vx, y: a2 });
     }
     pts.push({ x: t.x, y: a2 }, t);
@@ -650,35 +632,17 @@ function route(f, t) {
       i === 0 ? Math.hypot(p.x - f.x, p.y - f.y) > 0.3 : Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 0.3
     );
   }
-  // Dentro de una misma sala de arriba (p. ej. la de descanso): directo.
-  if (f.y <= 37 && t.y <= 37 && Math.abs(f.x - t.x) < 24 && sameTopRoom(f.x, t.x)) return [t];
-  // De la zona de escritorios a las salas de arriba (o al revés): por su pasillo, luego un pasillo vertical
-  // (el derecho si hay salas de rutina en medio) y después el pasillo superior.
-  if (f.y > 37 || t.y > 37) {
-    const low = f.y > 37 ? f : t,
-      high = f.y > 37 ? t : f;
-    const b = bands(),
-      i = bandIndex(b, low.y);
-    const vx = b.slice(0, i + 1).some(x => x.room)
-      ? RIGHT_LANE
-      : AISLE_COLS.reduce((best, x) => (Math.abs(x - low.x) < Math.abs(best - low.x) ? x : best));
-    const pts = [{ x: low.x, y: b[i].aisle }, { x: vx, y: b[i].aisle }, { x: vx, y: CY }, { x: high.x, y: CY }, high];
-    return f.y > 37 ? pts : [...pts.reverse().slice(1), t];
-  }
-  // Fuera de la zona de escritorios (salas de arriba): pasillo superior.
-  const fr = f.x > 76.5,
-    tr = t.x > 76.5;
-  if (!fr && !tr) return [{ x: f.x, y: CY }, { x: t.x, y: CY }, t];
-  if (!fr && tr) return [{ x: f.x, y: CY }, { x: CX, y: CY }, { x: CX, y: t.y }, t];
-  if (fr && !tr) return [{ x: CX, y: f.y }, { x: CX, y: CY }, { x: t.x, y: CY }, t];
-  return [{ x: CX, y: f.y }, { x: CX, y: t.y }, t];
+  // Dentro del descanso (arriba): directo.
+  if (f.y <= 37 && t.y <= 37) return [t];
+  // De la zona de escritorios al descanso (o al revés): por su pasillo, luego un pasillo vertical y después el pasillo superior.
+  const low = f.y > 37 ? f : t,
+    high = f.y > 37 ? t : f;
+  const b = bands(),
+    i = bandIndex(b, low.y);
+  const vx = AISLE_COLS.reduce((best, x) => (Math.abs(x - low.x) < Math.abs(best - low.x) ? x : best));
+  const pts = [{ x: low.x, y: b[i].aisle }, { x: vx, y: b[i].aisle }, { x: vx, y: CY }, { x: high.x, y: CY }, high];
+  return f.y > 37 ? pts : [...pts.reverse().slice(1), t];
 }
-const TOP_ROOMS = [
-  [2, 54],
-  [56, 76],
-  [78, 98]
-];
-const sameTopRoom = (x1, x2) => TOP_ROOMS.some(([l, r]) => x1 >= l && x1 <= r && x2 >= l && x2 <= r);
 function placeAt(a, p) {
   a.el.style.transition = 'none';
   a.el.style.left = p.x + '%';

@@ -51,47 +51,122 @@ function salaInfo(s) {
   const tone = need ? 'need' : done ? 'done' : n ? 'work' : 'empty';
   return { bots, n, needers, need, done, prog, tone };
 }
+// Rooms of the right-hand column: the epic salas and the routine rooms (robots seated in a room that is not a sala).
+function colItems() {
+  const items = st.salas.map(s => ({ key: s.id, kind: 'sala', s }));
+  const seen = new Set();
+  for (const a of st.robots.values()) {
+    const p = a.data.place;
+    if (p?.type !== 'room' || p.sala || seen.has(p.room)) continue;
+    seen.add(p.room);
+    items.push({ key: p.room, kind: 'rutina', name: p.name || 'rutina' });
+  }
+  return items;
+}
+function routineRobots(key) {
+  return [...st.robots.values()].filter(a => a.data.place?.type === 'room' && !a.data.place.sala && a.data.place.room === key);
+}
+// Slots of the column, top to bottom: every sala/routine keeps its room while it exists, there is always a free room, and
+// from 6 rooms on the last one is «+N más» (it opens the list). Rooms are tall with few items and shrink with more.
+function salaColSlots() {
+  const items = colItems(),
+    idx = geo.colIdx;
+  for (const k of [...idx.keys()]) if (!items.some(i => i.key === k)) idx.delete(k);
+  const taken = new Set(idx.values());
+  for (const it of items) {
+    if (idx.has(it.key)) continue;
+    let i = 0;
+    while (taken.has(i)) i++;
+    if (i >= SALA_MAX_SLOTS - 1) continue;
+    idx.set(it.key, i);
+    taken.add(i);
+  }
+  const over = items.filter(i => !idx.has(i.key)),
+    total = over.length ? SALA_MAX_SLOTS : Math.max(-1, ...taken) + 2;
+  const top = SALA_COL.top,
+    h = Math.min(SALA_SLOT_MAXH, (geo.H - 9 - top - (total - 1) * SALA_GAP) / total); // 9: leaves the zoom control free
+  const slots = [];
+  for (let i = 0; i < total; i++) {
+    const it = items.find(x => idx.get(x.key) === i),
+      base = { i, top: top + i * (h + SALA_GAP), h, total };
+    if (it) slots.push({ ...base, kind: it.kind, key: it.key, item: it });
+    else if (over.length && i === total - 1) slots.push({ ...base, kind: 'more', over });
+    else slots.push({ ...base, kind: 'free' });
+  }
+  geo.colSlots = slots;
+  return slots;
+}
+// Hoisted function declarations: layout() draws the column before this file has run.
+function rectCss(x, y, w, h) {
+  return `left:${x}%;top:${(y / geo.H) * 100}%;width:${w}%;height:${(h / geo.H) * 100}%`;
+}
+function botFaces(bots) {
+  const faces = bots
+    .slice(0, 5)
+    .map(a => {
+      const d = a.data;
+      return `<span class="sn-bot${d.state === 'done' ? ' ok' : ''}">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}${d.state === 'done' ? '<b aria-hidden="true">✓</b>' : ''}</span>`;
+    })
+    .join('');
+  return faces + (bots.length > 5 ? `<span class="sn-more">+${bots.length - 5}</span>` : '');
+}
+function needing(bots) {
+  return bots
+    .map(a => a.data)
+    .filter(d => d.state === 'input' || d.spawnReq || d.consoleLost)
+    .sort((x, y) => (Date.parse(x.inputAt || '') || 0) - (Date.parse(y.inputAt || '') || 0));
+}
+function needAlert(needers) {
+  return `<button type="button" class="rchip-alert" data-need-robot="${esc(needers[0].name)}" title="Abrir a ${esc(needers[0].name)} sin entrar${
+    needers.length > 1 ? ` (también: ${esc(needers.slice(1).map(d => d.name).join(', '))})` : ''
+  }">${icon('warn')} ${needers.length === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${needers.length} te necesitan`}</button>`;
+}
+// The room behind its door: closed with a sign (name, who is inside, what they do, team progress or alert), open and empty
+// when free. The whole room is the click target.
+function slotHtml(sl) {
+  const pos = `style="${rectCss(SALA_COL.x + 1, sl.top, SALA_COL.w - 2, sl.h)}"`,
+    tight = sl.total >= 5 ? ' tight' : '';
+  if (sl.kind === 'free')
+    return `<div class="sroom free${tight}" data-room="war" role="button" tabindex="0" ${pos} title="Sala libre. Clic para crear una sala de épica"><i class="sdoor open" aria-hidden="true"></i><span class="sfree">libre</span></div>`;
+  if (sl.kind === 'more') {
+    const n = sl.over.length,
+      all = sl.over.flatMap(o => (o.kind === 'sala' ? salaRobots(o.s.id) : routineRobots(o.key)));
+    const ne = needing(all);
+    return `<div class="sroom more${ne.length ? ' need sn-need' : ''}${tight}" data-room="war" role="button" tabindex="0" ${pos} title="${n} más entre salas y rutinas. Clic para ver la lista"><i class="sdoor" aria-hidden="true"></i><div class="ssign"><b class="sn-name">+${n} más</b><small class="sn-state">salas y rutinas</small>${ne.length ? needAlert(ne) : ''}</div></div>`;
+  }
+  if (sl.kind === 'rutina') {
+    const bots = routineRobots(sl.key),
+      ne = needing(bots),
+      rt = st.routines.find(r => r.id === sl.key);
+    const what = (bots.find(a => a.data.label)?.data.label || (rt?.running ? 'revisando ahora…' : '')).slice(0, 90);
+    const tone = ne.length ? 'need' : 'work';
+    return `<div class="sroom srt sn-${tone}${ne.length ? ' need' : ''}${tight}" data-rt-room="${esc(sl.key)}" role="button" tabindex="0" ${pos} title="Rutina «${esc(sl.item.name)}» · ${bots.length} robot${bots.length === 1 ? '' : 's'} adentro. Clic: abrir a ${esc(bots[0]?.data.name || 'la rutina')}"><i class="sdoor" aria-hidden="true"></i><div class="ssign"><span class="sn-head"><span class="sala-face"><b class="sala-book" aria-hidden="true">${icon('clock')}</b></span><b class="sn-name">Rutina: ${esc(sl.item.name)}</b></span><span class="sn-bots">${botFaces(bots)}</span>${what ? `<span class="sn-what">${esc(what)}</span>` : ''}${ne.length ? needAlert(ne) : `<small class="sn-state">${bots.length} robot${bots.length === 1 ? '' : 's'}</small>`}</div></div>`;
+  }
+  const s = sl.item.s,
+    { bots, n, needers, need, done, prog, tone } = salaInfo(s);
+  const owner = s.owner && st.robots.get(s.owner)?.data;
+  const what = (owner?.label || s.purpose || (s.key ? `Épica ${s.key}` : '')).replace(/\s+/g, ' ').trim().slice(0, 90);
+  const state = need
+    ? needAlert(needers)
+    : `<small class="sn-state">${done ? '✓ terminó' : prog ? `${prog.ok}/${prog.n} entregaron` : n ? `${s.thread.length} msj` : 'sin robots'}</small>`;
+  return `<div class="sroom sn-${tone}${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}${tight}" data-sala="${esc(s.id)}" role="button" tabindex="0" ${pos} title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'} · ${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><i class="sdoor" aria-hidden="true"></i><div class="ssign"><span class="sn-head"><span class="sala-face">${salaFace(s)}</span><b class="sn-name">${esc(s.name)}</b></span><span class="sn-bots">${botFaces(bots)}</span>${what ? `<span class="sn-what">${esc(what)}</span>` : ''}${state}${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%" aria-hidden="true"></i>` : ''}</div></div>`;
+}
+function renderSalaCol() {
+  const box = $('#sala-chips'),
+    html = salaColSlots().map(slotHtml).join('');
+  if (box._html === html) return;
+  box._html = html;
+  box.innerHTML = html;
+}
 function renderSalaChips() {
   renderOutsideNeed();
   $('#sala-count').textContent = `${st.salas.length} sala${st.salas.length === 1 ? '' : 's'}`;
-  $('#sala-chips').innerHTML =
-    st.salas
-      .map(s => {
-        const { bots, n, needers, need, done, prog, tone } = salaInfo(s);
-        // Stable small tilt per room: hash of the id with >>> (unsigned), mapped to -2.4..+2.4 degrees.
-        let h = 0;
-        for (const ch of s.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-        const rot = (((h >>> 3) % 7) - 3) * 0.8;
-        const faces = bots
-          .slice(0, 5)
-          .map(a => {
-            const d = a.data;
-            return `<span class="sn-bot${d.state === 'done' ? ' ok' : ''}">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}${d.state === 'done' ? '<b aria-hidden="true">✓</b>' : ''}</span>`;
-          })
-          .join('');
-        const more = n > 5 ? `<span class="sn-more">+${n - 5}</span>` : '';
-        const alert = need
-          ? `<button type="button" class="rchip-alert" data-need-robot="${esc(needers[0].name)}" title="Abrir a ${esc(needers[0].name)} sin entrar a la sala${
-              need > 1
-                ? ` (también: ${esc(
-                    needers
-                      .slice(1)
-                      .map(d => d.name)
-                      .join(', ')
-                  )})`
-                : ''
-            }">${icon('warn')} ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}</button>`
-          : `<small class="sn-state">${done ? '✓ terminó' : prog ? `${prog.ok}/${prog.n} entregaron` : n ? `${s.thread.length} msj` : 'sin robots'}</small>`;
-        return `<div class="rchip sala-note sn-${tone}${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" style="--rot:${rot.toFixed(1)}deg" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'} · ${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><i class="sn-pin" aria-hidden="true">📌</i><span class="sn-head"><span class="sala-face">${salaFace(s)}</span><b class="sn-name">${esc(s.name)}</b></span><span class="sn-bots">${faces}${more}</span>${alert}${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
-      })
-      .join('') || '<div class="room-b">Sin salas. Clic para crear una por épica de Jira.</div>';
-  // Si alguien dentro de una sala te necesita, todo el cuarto «Salas de épica» late en ámbar (sus robots no se ven afuera).
-  $('#sala-chips')
-    .closest('.room')
-    ?.classList.toggle(
-      'sala-need',
-      st.salas.some(s => salaRobots(s.id).some(a => a.data.state === 'input' || a.data.spawnReq || a.data.consoleLost))
-    );
+  renderSalaCol();
+  // Si alguien dentro de una sala te necesita, toda la columna late en ámbar (sus robots no se ven afuera).
+  $('.room.r-war').classList.toggle(
+    'sala-need',
+    colItems().some(it => needing(it.kind === 'sala' ? salaRobots(it.key) : routineRobots(it.key)).length)
+  );
   renderColumn();
 }
 
@@ -319,3 +394,15 @@ async function refreshPane(name) {
     /* el robot pudo haberse ido */
   }
 }
+
+// A routine room has no inside view: its door opens the robot working in it (or the routines panel if it is empty).
+function openRoutineRoom(key) {
+  const first = routineRobots(key)[0];
+  select(first ? first.data.name : '@cron');
+}
+MAP.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.sroom, .rt-cal')) {
+    e.preventDefault();
+    e.target.click();
+  }
+});

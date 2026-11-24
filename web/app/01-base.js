@@ -112,40 +112,44 @@ const plainMd = s =>
     .replace(/\s*\n+\s*/g, ' ')
     .replace(/\*\*/g, '')
     .trim();
-const CY = 35.5,
-  CX = 77;
-// Coordenadas: x en % del ancho; y en "unidades" donde el mapa base (2 filas de escritorios) mide 100.
-// Cada fila extra suma ROW_H unidades: el mapa crece hacia abajo y py() convierte unidades a % de su altura.
+const CY = 35.5;
+// Coordenadas: x en % del ancho; y en "unidades" donde el mapa base (2 filas de escritorios) mide 100 más la franja
+// de abajo (STRIP). Cada fila extra suma ROW_H unidades: el mapa crece hacia abajo y py() convierte unidades a % de su altura.
 const COLS = 4,
   ROW_H = 26,
-  BASE_ROWS = 2;
-// Salas temporales de rutinas: debajo de los escritorios, una por rutina con robots en la oficina.
-const ROOM_COLS = 6,
-  SEAT_ROW_H = 17,
-  ROOM_X = 3,
-  ROOM_W = 69,
-  RIGHT_LANE = 74.5;
+  BASE_ROWS = 2,
+  COL_DX = 16.2, // distancia entre columnas de escritorios
+  STRIP = 26; // franja bajo los escritorios: tu escritorio (esquina), calendario de rutinas y la puerta
+// Oficina a la izquierda, pasillo en medio y la columna de salas (epicas y rutinas) a la derecha.
+const OFFICE_R = 67.5, // borde derecho de la oficina
+  CORR = { x: 68, w: 6, c: 70.8 }, // pasillo: borde izquierdo, ancho y carril por donde caminan los robots
+  SALA_COL = { x: 74.4, w: 24.1, top: 9 }, // columna de salas
+  SALA_DOOR_X = 72.8, // donde el robot espera frente a la puerta de su sala (dentro del pasillo)
+  SALA_MAX_SLOTS = 6, // cuartos de la columna: de salas y rutinas, el último puede ser «+N más»
+  SALA_GAP = 1.4,
+  SALA_SLOT_MAXH = 34;
 // Plantas que aparecen al crecer la oficina (renderGrowth). Van aquí arriba porque layout() las ubica al arrancar.
 const GROW_AT = [10, 40, 120, 300]; // tareas en la semana de la cuota
 // [nivel desde el que aparece, x, y, ancho, alto, ¿sigue a las filas extra de escritorios?, clase extra]
 const GROW_PLANTS = [
-  [1, 51.6, 20.5, 1.7, 4.5],
+  [1, 57.6, 20.5, 1.7, 4.5],
   [1, 3.2, 20, 1.7, 4.5],
-  [2, 57.5, 27.6, 1.9, 5],
-  [2, 95.4, 56, 1.9, 5],
-  [2, 31.5, 91.6, 1.9, 5, true],
-  [3, 45.4, 91.6, 1.9, 5, true],
-  [3, 3.2, 90.6, 2.4, 6.4, true, 'big'],
-  [3, 79.2, 56, 1.9, 5],
-  [4, 72.4, 89.6, 2.8, 7.4, true, 'big'],
-  [4, 96, 89, 2.4, 6.4, true, 'big']
+  [2, 33, 27.6, 1.9, 5],
+  [2, 65.4, 56, 1.9, 5],
+  [2, 46, 27.6, 1.9, 5],
+  [3, 56, 27.6, 1.9, 5],
+  [3, 26, 26.6, 2.4, 6.4, false, 'big'],
+  [3, 65.4, 40, 1.9, 5],
+  [4, 36.5, 26.2, 2.8, 7.4, false, 'big'],
+  [4, 52, 25.8, 2.4, 6.4, false, 'big']
 ];
-const geo = { rows: BASE_ROWS, H: 100, rooms: [], roomOrder: [], roomEls: new Map(), sig: '' };
+// sala-slots: sala/rutina -> cuarto de la columna (estable mientras exista); SY: donde empieza la franja de abajo.
+const geo = { rows: BASE_ROWS, H: 100, SY: 95, rooms: [], roomOrder: [], roomEls: new Map(), sig: '', colIdx: new Map(), colSlots: [] };
 const extra = () => geo.H - 100;
 const py = y => (y / geo.H) * 100 + '%';
-const door = () => ({ x: 40, y: 99 + extra() });
-const coordDrop = () => ({ x: 86, y: 92 + extra() });
-const deskPos = i => ({ x: 5 + (i % COLS) * 18, y: 43 + Math.floor(i / COLS) * ROW_H });
+const door = () => ({ x: 64.25, y: geo.H - 1 });
+const coordDrop = () => ({ x: 19, y: geo.SY + 22 });
+const deskPos = i => ({ x: 3 + (i % COLS) * COL_DX, y: 43 + Math.floor(i / COLS) * ROW_H });
 // Lugares de los subagentes alrededor del robot: dos a los lados y cinco debajo.
 // Subagentes alrededor de su robot: a los lados, en su pasillo. Nunca más abajo de ~2,5 unidades: ahí empieza la fila
 // de escritorios siguiente y se le subían a los monitores. Los que no caben se cuentan en «+N».

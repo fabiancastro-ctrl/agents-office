@@ -94,6 +94,7 @@
       <div class="vm-row"><span>Tamaño del texto</span><button class="btn sm" id="btn-fz" type="button" title="Tamaño del texto de las tarjetas, las métricas, los paneles y los globos del mapa. Clic para cambiarlo; se guarda en este navegador." aria-label="Tamaño del texto">Aa 100 %</button></div>
       <div class="vm-row"><span>Alto contraste</span><button class="sw" id="btn-hc" type="button" aria-pressed="false" aria-label="Alto contraste" data-on="Sí" data-off="No" title="Alto contraste: textos y bordes más marcados, y globos blancos con letra negra en el mapa. Se guarda en este navegador."></button></div>
       <div class="vm-row"><span>Robots en alta definición</span><button class="sw" id="btn-hd" type="button" aria-pressed="false" aria-label="Robots en alta definición" data-on="Sí" data-off="No" title="Robots en alta definición: volumen, brillo en el visor y microanimaciones. Se guarda en este navegador."></button></div>
+      <div class="vm-row"><span>Animación al entrar a una sala</span><button class="sw" id="btn-salaanim" type="button" aria-pressed="true" aria-label="Animación al entrar a una sala" data-on="Sí" data-off="No" title="Al entrar a una sala se abre su puerta y la vista se acerca a ese cuarto (y al salir, una vuelta corta). Se guarda en este navegador; con «reducir movimiento» del sistema no se anima."></button></div>
       <h5 class="vm-h">Mapa</h5>
       <div class="vm-row"><span>Vista 2.5D</span><button class="sw" id="btn-view" type="button" aria-pressed="false" aria-label="Vista 2.5D" data-on="Sí" data-off="No" title="Alterna entre el plano 2D y la vista en perspectiva 2.5D"></button></div>
       <div class="vm-row"><span>Cables de choque entre robots</span><button class="sw" id="btn-cables" type="button" aria-pressed="true" aria-label="Cables de choque entre robots" data-on="Visibles" data-off="Ocultos" title="Línea roja punteada entre dos robots que editaron el mismo archivo (pasa el ratón para ver cuáles). Se guarda en este navegador."></button></div>
@@ -122,19 +123,20 @@
       </div>
       <div class="deco sofa"></div><div class="deco sofa s2"></div><div class="deco btable"></div><div class="deco bcoffee" id="bcoffee" role="button" tabindex="0" aria-haspopup="menu"><i class="cpot"><i class="cliq"></i></i></div>
       <div class="deco pingpong"><i class="ball"></i></div>
-      <div class="room r-cron" data-room="cron" style="left:56%;top:3%;width:20%;height:30%">
-        <div class="room-h"><span>Rutinas</span><small id="rt-count">0 activas</small></div>
-        <div class="rt-chips" id="rt-chips"></div>
+      <div class="corridor" id="corridor" aria-hidden="true"><span>Pasillo</span></div>
+      <div class="room r-war" data-room="war" style="left:74.4%;top:2.5%;width:24.1%;height:95%" title="Salas de épica y rutinas: cada una tras su puerta. Clic para ver la lista">
+        <div class="room-h"><span>Salas</span><small id="sala-count">0 salas</small></div>
       </div>
-      <div class="room r-war" data-room="war" style="left:78%;top:3%;width:20%;height:30%">
-        <div class="room-h"><span>Salas de épica</span><small id="sala-count">0 salas</small></div>
-        <div class="rt-chips" id="sala-chips"></div>
-      </div>
-      <div class="room r-open" id="room-open" style="left:2%;top:38%;width:74%;height:59%">
+      <div class="sala-col" id="sala-chips"></div>
+      <div class="room r-open" id="room-open" style="left:2%;top:38%;width:65.5%;height:59%">
         <div class="room-h"><span>Escritorios</span><small>cada robot = una consola tmux con claude</small></div>
       </div>
-      <div class="room r-coord" id="room-coord" data-room="inbox" style="left:78%;top:38%;width:20%;height:59%">
+      <div class="room r-coord" id="room-coord" data-room="inbox" style="left:2%;top:80%;width:58%;height:17%">
         <div class="room-h"><span>Tu escritorio</span><small>coordinador</small></div>
+      </div>
+      <div class="rt-cal" id="rt-cal" data-room="cron" role="button" tabindex="0" title="Rutinas: calendario de los próximos días. Clic para abrir las rutinas">
+        <div class="cal-h"><span>Rutinas</span><small id="rt-count">0 activas</small></div>
+        <div class="cal-rows" id="rt-chips"></div>
       </div>
       <div class="inbox" id="inbox" data-room="inbox"><b id="inbox-n">0</b></div>
       <div class="alarm" id="alarm" data-room="inbox" hidden title="Hay un review con hallazgos críticos sin ver en tu bandeja"><i></i></div>

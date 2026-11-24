@@ -545,7 +545,7 @@ function tickWaiting() {
     if (since && !a.data.spawnReq) a.sign.textContent = `? ${fmtWait(ms)}`;
     a.el.classList.toggle('dance', !!since && ms >= WAIT_DANCE_MS);
     a.el.classList.toggle('impatient', !!since && ms >= 60e3);
-    if (since && ms >= WAIT_QUEUE_MS && !st.view && !a.data.place.sala) line.push([since, a]); // la fila es frente a tu escritorio, en la oficina
+    if (since && ms >= WAIT_QUEUE_MS && !st.view && a.data.place.type !== 'room') line.push([since, a]); // la fila es frente a tu escritorio, en la oficina
   }
   line.sort((x, y) => x[0] - y[0]);
   const inLine = new Set(line.map(([, a]) => a));

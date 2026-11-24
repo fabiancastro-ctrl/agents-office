@@ -131,7 +131,7 @@ function openRoutine(id) {
 }
 function colOpen(e) {
   const sala = e.target.closest('[data-sala-go]');
-  if (sala) return enterSala(sala.dataset.salaGo);
+  if (sala) return enterSala(sala.dataset.salaGo, true);
   const rt = e.target.closest('[data-rt-go]');
   if (rt) return openRoutine(rt.dataset.rtGo);
   const nw = e.target.closest('[data-col-new]');
