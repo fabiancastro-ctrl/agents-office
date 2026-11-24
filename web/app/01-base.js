@@ -27,13 +27,14 @@ PANEL.addEventListener('click', e => {
 // vuelve (por defecto el que tenía) o una función que lo repinta. El temporal queda en btn._t por si hay que cancelarlo.
 function armed(btn, label, ms = 3000, restore) {
   if (btn.classList.contains('armed')) return true;
-  const prev = btn.textContent;
+  const prev = btn.innerHTML; // keeps an inline icon
   btn.classList.add('armed');
   btn.textContent = label;
   btn._t = setTimeout(() => {
     btn.classList.remove('armed');
     if (typeof restore === 'function') restore();
-    else btn.textContent = restore ?? prev;
+    else if (restore != null) btn.textContent = restore;
+    else btn.innerHTML = prev;
   }, ms);
   return false;
 }
@@ -43,6 +44,11 @@ const fmtWhen = (t, extra) =>
 const fmtTime = (t, extra) => new Date(t).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', ...extra }); // 14:05
 const fmtDay = (t, opts = { day: 'numeric', month: 'short' }) => new Date(t).toLocaleDateString('es', opts); // 3 may
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// Interface icon from the sprite in index.html (#i-<name>). Decorative unless `label` is given.
+const icon = (name, label) =>
+  label
+    ? `<svg class="ic" role="img" aria-label="${esc(label)}"><use href="#i-${name}"/></svg>`
+    : `<svg class="ic" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const COLORS = ROBOT_COLORS; // web/robot-art.js
 const STATE_LABEL = {
   idle: 'en espera',
