@@ -9,6 +9,22 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// Tests run on their own tmux server: every tmux call here and every test daemon inherits TMUX_TMPDIR, so nothing
+// a test does (not even kill-server) can reach the real offices on the default server. /tmp keeps the socket path
+// under the macOS 104-byte limit.
+const TMUX_DIR = fs.mkdtempSync('/tmp/ao-tmux-');
+process.env.TMUX_TMPDIR = TMUX_DIR;
+delete process.env.TMUX; // a test run started inside tmux must not talk to that server
+process.on('exit', () => {
+  try {
+    execFileSync('tmux', ['kill-server'], { stdio: 'ignore', env: { ...process.env, TMUX_TMPDIR: TMUX_DIR } });
+  } catch {
+    /* server already gone */
+  }
+  fs.rmSync(TMUX_DIR, { recursive: true, force: true });
+});
+
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const freePort = () =>
