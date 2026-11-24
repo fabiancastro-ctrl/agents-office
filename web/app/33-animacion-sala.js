@@ -19,7 +19,10 @@ function salaZoomTarget(id) {
     mr = MAP.getBoundingClientRect(),
     r = el?.getBoundingClientRect();
   if (!el || !r.width || !mr.width) return null;
-  return { el, x: r.left + r.width / 2 - mr.left, y: r.top + r.height / 2 - mr.top, k: Math.min(5, Math.min(mr.width / r.width, mr.height / r.height) * 0.9) };
+  const x = r.left + r.width / 2 - mr.left,
+    y = r.top + r.height / 2 - mr.top;
+  // dx/dy also bring the room to the middle of the map while it grows, so it does not swell over its neighbours.
+  return { el, x, y, dx: mr.width / 2 - x, dy: mr.height / 2 - y, k: Math.min(5, Math.min(mr.width / r.width, mr.height / r.height) * 0.9) };
 }
 const salaAnimOk = () =>
   salaAnim.on &&
@@ -35,7 +38,10 @@ function salaZoomIn(id, go) {
   t.el.classList.add('opening'); // the door swings open
   MAP.style.transformOrigin = `${t.x}px ${t.y}px`;
   WRAP.style.overflow = 'hidden';
-  const anim = MAP.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: `scale(${t.k.toFixed(2)})`, opacity: 0.25 }], {
+  const anim = MAP.animate([
+    { transform: 'translate(0,0) scale(1)', opacity: 1 },
+    { transform: `translate(${t.dx.toFixed(0)}px,${t.dy.toFixed(0)}px) scale(${t.k.toFixed(2)})`, opacity: 0.25 }
+  ], {
     duration: 520,
     delay: 160,
     easing: 'ease-in',
@@ -63,7 +69,10 @@ function salaZoomOut(id) {
   salaAnim.busy = true;
   MAP.style.transformOrigin = `${t.x}px ${t.y}px`;
   WRAP.style.overflow = 'hidden';
-  const anim = MAP.animate([{ transform: `scale(${(t.k * 0.6).toFixed(2)})`, opacity: 0.2 }, { transform: 'scale(1)', opacity: 1 }], {
+  const anim = MAP.animate([
+    { transform: `translate(${t.dx.toFixed(0)}px,${t.dy.toFixed(0)}px) scale(${(t.k * 0.6).toFixed(2)})`, opacity: 0.2 },
+    { transform: 'translate(0,0) scale(1)', opacity: 1 }
+  ], {
     duration: 320,
     easing: 'ease-out'
   });

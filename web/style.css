@@ -159,6 +159,7 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 .r-git{background:var(--git)} .r-jira{background:var(--jira)} .r-war{background:var(--war)} .r-coord{background:var(--coord)}
 /* El título va sobre la pared, en el pasillo: los monitores de la primera fila asoman por encima de las mesas */
 #room-open>.room-h{position:absolute;left:0;right:0;top:-26px;padding:0 6px}
+#room-open>.room-h small{margin-right:34px} /* the plant at the room corner covers the end of the line */
 .r-open{background:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,rgba(0,0,0,.08) 0 1px,transparent 1px 120px),var(--open);cursor:default} .r-open:hover{border-color:var(--wall)}
 .r-rt{background:var(--cron);border-style:dashed;z-index:1}
 .r-sala{background:var(--war)}
@@ -2052,8 +2053,8 @@ html.hc .bcoffee .cacct{outline:1px solid currentColor}
 .sroom.more .ssign{align-items:center;text-align:center}
 .sroom.more .sn-name{font-size:13px;flex:none}
 .sroom.free{display:block;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:18px 18px;box-shadow:inset 0 0 22px rgba(0,0,0,.25)}
-.sroom.free .sdoor{position:absolute;left:0;top:6%;bottom:6%;width:20%;border-right:0;transform:perspective(220px) rotateY(-72deg);opacity:.95}
-.sfree{position:absolute;left:30%;right:4%;top:50%;transform:translateY(-50%);text-align:center;font:600 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sroom.free .sdoor{position:absolute;left:0;top:0;bottom:0;width:27%;transform:perspective(260px) rotateY(-48deg);box-shadow:inset 0 0 0 3px rgba(0,0,0,.18),3px 0 8px rgba(0,0,0,.35)}
+.sfree{position:absolute;left:34%;right:4%;top:50%;transform:translateY(-50%);text-align:center;font:600 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .sroom.free:hover .sfree{color:var(--amber)}
 .map-wrap.iso .sala-col{transform-style:preserve-3d}
 html.hc .ssign{box-shadow:0 0 0 1.5px #2b2218,0 2px 3px rgba(0,0,0,.5)}
@@ -2079,5 +2080,5 @@ html.hc .rt-cal{box-shadow:0 0 0 1.5px #2b2218}
 .map-wrap.iso .rt-cal{transform-origin:50% 100%;transform:rotateZ(calc(-1 * var(--rz))) rotateX(calc(-1 * var(--rx)))}
 
 /* ---------- sala-anim: animación al entrar a una sala (se quita con 33-animacion-sala.js) ---------- */
-.sroom.opening .sdoor{transform:perspective(220px) rotateY(-72deg)}
+.sroom.opening .sdoor{transform:perspective(260px) rotateY(-72deg)}
 .sroom.opening{border-color:var(--amber)}
