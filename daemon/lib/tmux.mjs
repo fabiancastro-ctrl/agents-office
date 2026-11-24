@@ -29,13 +29,25 @@ import { salaPreamble, salas } from './salas.mjs';
 
 /* ---------- tmux ---------- */
 
-async function ensureSession() {
-  try {
-    await run('tmux', ['has-session', '-t', SESSION]);
-  } catch {
-    await run('tmux', ['new-session', '-d', '-s', SESSION, '-n', 'lobby', '-c', WORKSPACE]);
-  }
-  await run('tmux', ['set-option', '-t', SESSION, '@office_port', String(PORT)]).catch(() => {});
+// Concurrent launches share one check: two robots launched at once used to both try new-session and the second one
+// failed with "duplicate session". A session created by someone else in between also counts as success.
+let ensuring = null;
+function ensureSession() {
+  ensuring ??= (async () => {
+    try {
+      await run('tmux', ['has-session', '-t', SESSION]);
+    } catch {
+      await run('tmux', ['new-session', '-d', '-s', SESSION, '-n', 'lobby', '-c', WORKSPACE]).catch(async e => {
+        await run('tmux', ['has-session', '-t', SESSION]).catch(() => {
+          throw e;
+        });
+      });
+    }
+    await run('tmux', ['set-option', '-t', SESSION, '@office_port', String(PORT)]).catch(() => {});
+  })().finally(() => {
+    ensuring = null;
+  });
+  return ensuring;
 }
 
 // Si la sesión de tmux ya es de otra oficina que sigue viva en otro puerto, no arrancar: le robaríamos los robots.

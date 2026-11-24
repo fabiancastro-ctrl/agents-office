@@ -39,6 +39,17 @@ test('lanza un robot con el Claude falso y no abre dos con el mismo nombre', asy
   }
 });
 
+test('dos robots lanzados a la vez sin sesión de tmux entran los dos', async () => {
+  const o = await startOffice();
+  try {
+    const [a, b] = await Promise.all([o.api('POST', '/api/robots', libre('par-a')), o.api('POST', '/api/robots', libre('par-b'))]);
+    assert.deepEqual([a.status, b.status], [201, 201], JSON.stringify([a.body, b.body]));
+    await waitFor(() => ['par-a', 'par-b'].every(n => o.windows().includes(n)), { what: 'las dos consolas' });
+  } finally {
+    await o.stop();
+  }
+});
+
 test('un turno simulado deja al robot listo con su respuesta', async () => {
   const o = await startOffice();
   try {
