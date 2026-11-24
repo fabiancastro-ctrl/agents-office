@@ -67,7 +67,7 @@ function routineRobots(key) {
   return [...st.robots.values()].filter(a => a.data.place?.type === 'room' && !a.data.place.sala && a.data.place.room === key);
 }
 // Slots of the column, top to bottom: every sala/routine keeps its room while it exists, there is always a free room, and
-// from 6 rooms on the last one is «+N más» (it opens the list). Rooms are tall with few items and shrink with more.
+// from 6 rooms on the last one is «+N más» (it opens the list). Rooms have a compact fixed height.
 function salaColSlots() {
   const items = colItems(),
     idx = geo.colIdx;
@@ -83,16 +83,23 @@ function salaColSlots() {
   }
   const over = items.filter(i => !idx.has(i.key)),
     total = over.length ? SALA_MAX_SLOTS : Math.max(-1, ...taken) + 2;
-  const top = SALA_COL.top,
-    h = Math.min(SALA_SLOT_MAXH, (geo.H - 9 - top - (total - 1) * SALA_GAP) / total); // 9: leaves the zoom control free
-  const slots = [];
+  // Fixed room heights per kind (free rooms are lower); they only shrink, proportionally, when they do not fit the column.
+  const kinds = [];
   for (let i = 0; i < total; i++) {
-    const it = items.find(x => idx.get(x.key) === i),
-      base = { i, top: top + i * (h + SALA_GAP), h, total };
-    if (it) slots.push({ ...base, kind: it.kind, key: it.key, item: it });
-    else if (over.length && i === total - 1) slots.push({ ...base, kind: 'more', over });
-    else slots.push({ ...base, kind: 'free' });
+    const it = items.find(x => idx.get(x.key) === i);
+    kinds.push(it ? { kind: it.kind, key: it.key, item: it } : over.length && i === total - 1 ? { kind: 'more', over } : { kind: 'free' });
   }
+  const hs = kinds.map(k => (k.kind === 'free' ? SALA_FREE_H : SALA_ROOM_H)),
+    avail = geo.H - 9 - SALA_COL.top - (total - 1) * SALA_GAP, // 9: leaves the zoom control free
+    sum = hs.reduce((x, y) => x + y, 0),
+    k = sum > avail ? avail / sum : 1;
+  let top = SALA_COL.top;
+  const slots = kinds.map((kd, i) => {
+    const h = hs[i] * k,
+      sl = { ...kd, i, top, h, total };
+    top += h + SALA_GAP;
+    return sl;
+  });
   geo.colSlots = slots;
   return slots;
 }

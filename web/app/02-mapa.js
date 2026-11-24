@@ -64,36 +64,34 @@ function layout(incoming) {
   geo.rows = rows;
   // Dentro de una sala el mapa es solo ella, a todo lo ancho; en la oficina, los escritorios y debajo la franja de tu escritorio.
   if (v) salaGeom(Math.max(0, ...specs.map(sp => sp.maxSlot + 1)));
-  else geo.SY = 43 + rows * ROW_H;
   geo.rooms = v ? specs.map(sp => ({ ...sp, top: 2, boxH: SV.H - 4, h: SV.H - 2 })) : [];
-  geo.H = v ? SV.H : geo.SY + STRIP;
+  geo.H = v ? SV.H : 43 + rows * ROW_H + 5;
   MAP.classList.toggle('sala-view', !!v);
-  const e = extra(),
-    Ct = geo.SY + 3; // arriba de la esquina de tu escritorio
+  const e = extra();
   MAP.style.aspectRatio = `16 / ${((10 * geo.H) / 100).toFixed(3)}`;
-  // Parte izquierda: descanso arriba, escritorios debajo y, en la esquina de abajo, tu escritorio con el calendario de rutinas.
-  setRect($('.room.r-break'), 2, 3, OFFICE_R - 2, 30);
-  setRect($('.deco.sofa'), 4.5, 7.5, 15, 5);
-  setRect($('.deco.sofa.s2'), 21, 7.5, 15, 5);
-  setRect($('.deco.btable'), 9.5, 21, 12, 4);
-  setRect($('.deco.bcoffee'), 60.5, 6.5, 2.8, 8);
-  setRect($('.deco.pingpong'), 40, 20.5, 15, 4.5);
-  setRect($('#tboard'), 44, 5.2, 5.6, 8.4);
-  setRect($('#room-open'), 2, 38, OFFICE_R - 2, geo.H - 41);
-  setRect($('#room-coord'), 2, Ct, 58, 21);
-  setRect($('#eotm'), 3.5, Ct + 4.5, 10.5, 15.5); // cuadro del empleado de la semana, colgado en la pared de tu escritorio
-  setRect($('#inbox'), 15.5, Ct + 9.5, 6.5, 7);
-  setRect($('#alarm'), 17.7, Ct + 5.6, 2.2, null);
-  setRect($('#me'), 24, Ct + 6.5, 5, 11);
-  setRect($('#trophies'), 23.5, Ct + 18.3); // repisa al pie de tu escritorio
-  setRect($('#archivador'), 31, Ct + 8.5, 2.8, 8); // archivador: robots despedidos con su resumen
-  setRect($('#qclock'), 34.5, Ct + 5, 5.2, 12); // reloj de la cuota semanal
-  setRect($('#rt-cal'), 41.5, Ct + 4.3, 17.5, 16); // calendario de rutinas en la pared
-  setRect($('.door'), 61.5, geo.H - 2.8, 5.5, 2.8);
+  // Arriba: descanso (chico) y tu escritorio con el calendario de rutinas en la pared. Debajo, los escritorios.
+  setRect($('.room.r-break'), 2, 3, 33, 30);
+  setRect($('.deco.sofa'), 3.8, 7.5, 11.5, 5);
+  setRect($('.deco.sofa.s2'), 16.6, 7.5, 11.5, 5);
+  setRect($('.deco.btable'), 5, 21, 10, 4);
+  setRect($('.deco.bcoffee'), 32.4, 16, 2.8, 8);
+  setRect($('.deco.pingpong'), 17, 20.5, 13.5, 4.5);
+  setRect($('#tboard'), 29, 5.2, 4.6, 8.4);
+  setRect($('#room-open'), 2, 38, OFFICE_R - 2, 59 + e);
+  setRect($('#room-coord'), 36.5, 3, 31, 30);
+  setRect($('#eotm'), 38.5, 6.5, 10.5, 15.5); // cuadro del empleado de la semana, colgado en la pared de tu escritorio
+  setRect($('#rt-cal'), 50.5, 6.8, 16, 14); // calendario de rutinas en la pared
+  setRect($('#inbox'), 38.5, 24, 6.5, 5.5);
+  setRect($('#alarm'), 45.6, 25, 2.2, null);
+  setRect($('#me'), 49, 21.5, 4.5, 10);
+  setRect($('#trophies'), 54, 27); // repisa al pie de tu escritorio
+  setRect($('#archivador'), 59.5, 23, 2.8, 8); // archivador: robots despedidos con su resumen
+  setRect($('#qclock'), 63, 22, 3.9, 10); // reloj de la cuota semanal
+  setRect($('.door'), 36, 97.2 + e, 8, 2.8);
   document.querySelectorAll('.win').forEach((w, k) => setRect(w, 15.5 + k * COL_DX, 37.1, 4.2, 1.8)); // en los huecos entre escritorios
   setRect($('.deco.plant.p1'), 2.9, 27.8, 1.7, 4.5);
-  setRect($('.deco.coffee'), 64.2, 27.5, 1.5, 5.5);
-  setRect($('.deco.plant.p2'), 65.2, 28.5, 1.7, 4.5);
+  setRect($('.deco.coffee'), 29.5, 27.5, 1.5, 5.5);
+  setRect($('.deco.plant.p2'), 65.4, 33.3, 1.7, 4.5);
   // Pasillo y columna de salas, de arriba a abajo del mapa.
   setRect($('#corridor'), CORR.x, 3, CORR.w, geo.H - 6);
   setRect($('.room.r-war'), SALA_COL.x, 3, SALA_COL.w, geo.H - 6);
@@ -233,7 +231,7 @@ function deskFor(place) {
   return geo.roomEls.get(place.room)?.seats[place.slot];
 }
 // Fila frente a tu escritorio para los que llevan 3 min esperando respuesta; si se llena, sigue por el pasillo derecho.
-const queuePos = k => (k < 3 ? { x: 38 - k * 6, y: geo.SY + 1.2 } : { x: CORR.c, y: geo.SY - (k - 2) * 8 });
+const queuePos = k => (k < 3 ? { x: 62 - k * 6, y: CY } : { x: CORR.c, y: CY + (k - 2) * 8 });
 const restPos = a => (a.queueSlot != null && !st.view ? queuePos(a.queueSlot) : seatOf(a.data.place));
 
 /* ---------- vista de una sala ---------- */
@@ -591,7 +589,7 @@ const AISLE_COLS = [17.6, 33.8, 50, CORR.c];
 function bands() {
   const b = [];
   for (let r = 0; r < geo.rows; r++) b.push({ top: 43 + r * ROW_H, aisle: 65 + r * ROW_H });
-  b.push({ top: geo.SY, aisle: geo.SY + 1.2 });
+  b[b.length - 1].aisle = geo.H - 5; // el de la última fila pasa junto a la puerta
   return b;
 }
 function bandIndex(b, y) {
