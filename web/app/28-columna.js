@@ -48,7 +48,7 @@ function salasPaneHtml() {
         .join('');
       const more = n > 6 ? `<span class="sn-more">+${n - 6}</span>` : '';
       const state = need
-        ? `⚠ ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}`
+        ? `${icon('warn')} ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}`
         : done
           ? '✓ terminó'
           : prog

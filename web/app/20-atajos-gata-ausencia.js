@@ -171,13 +171,13 @@ function awayBack(force) {
   for (const a of st.robots.values()) {
     const d = a.data,
       was = snap.get(d.name);
-    const who = `<a data-away="${esc(d.name)}">${esc(d.name)}</a>${d.title ? ` <small>📌 ${esc(d.title)}</small>` : ''}`;
+    const who = `<a data-away="${esc(d.name)}">${esc(d.name)}</a>${d.title ? ` <small>${icon('pin')} ${esc(d.title)}</small>` : ''}`;
     if (!was) items.push({ k: 'new', h: `${who} entró a trabajar` });
     else if (d.state === 'input' && was.state !== 'input') items.push({ k: 'need', h: `${who} ${needWhat(d)}` });
     else if (d.state === 'done' && was.state !== 'done')
       items.push({
         k: d.critical ? 'crit' : 'done',
-        h: `${who} terminó${d.critical ? ` con ⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : ''}`
+        h: `${who} terminó${d.critical ? ` con ${icon('warn')} ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : ''}`
       });
     else if (isStuck(d) && was.state !== 'input') items.push({ k: 'stuck', h: `${who} lleva ${fmtDur(idleMs(d))} sin actividad` });
   }

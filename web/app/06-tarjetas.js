@@ -17,11 +17,11 @@ const tokOf = d => (d.usage?.out || 0) + (d.usage?.in || 0) + (d.usage?.cacheWri
 const spendText = d => {
   const s = d.spend;
   if (!s?.officeWeek) return '';
-  return `${fmtTok(s.week)} desde que se renovó tu cuota (${s.pct} % de la oficina; la misma semana del empleado de la semana) · ${fmtTok(s.hour)} en la última hora${s.hot ? ` · 🔥 se disparó: ${s.hot === 'hour' ? 'mucho en la última hora' : 'más de la cuarta parte de la semana'}` : ''}`;
+  return `${fmtTok(s.week)} desde que se renovó tu cuota (${s.pct} % de la oficina; la misma semana del empleado de la semana) · ${fmtTok(s.hour)} en la última hora${s.hot ? ` · se disparó: ${s.hot === 'hour' ? 'mucho en la última hora' : 'más de la cuarta parte de la semana'}` : ''}`;
 };
 const spendChip = d =>
   d.spend?.officeWeek
-    ? `<span class="rc-spend${d.spend.hot ? ' hot' : ''}" title="Gasto: ${esc(spendText(d))}. Es su parte de lo que gastó la oficina, no del límite de tu suscripción.">${d.spend.hot ? '🔥 ' : ''}${d.spend.pct} % sem.</span>`
+    ? `<span class="rc-spend${d.spend.hot ? ' hot' : ''}" title="Gasto: ${esc(spendText(d))}. Es su parte de lo que gastó la oficina, no del límite de tu suscripción.">${d.spend.hot ? `${icon('flame')} ` : ''}${d.spend.pct} % sem.</span>`
     : '';
 const runningSubs = d => d.subs.filter(s => s.status !== 'done').length;
 const prefGet = (k, def) => {
@@ -372,12 +372,12 @@ function cardHtml(a) {
     docs = d.docs.length,
     tok = tokOf(d);
   const pill = d.consoleLost
-    ? '<span class="pill p-input">💥 se cayó</span>'
+    ? `<span class="pill p-input">${icon('burst')} se cayó</span>`
     : d.spawnReq
       ? `<span class="pill p-input">pide ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}</span>`
       : d.state === 'input' && d.inputAt
         ? `<span class="pill p-input">espera <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></span>`
-        : `<span class="pill p-${d.state}">${d.state === 'done' && d.critical > 0 ? `⚠ ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : esc(stateLabel(d))}</span>`;
+        : `<span class="pill p-${d.state}">${d.state === 'done' && d.critical > 0 ? `${icon('warn')} ${d.critical} crítico${d.critical === 1 ? '' : 's'}` : esc(stateLabel(d))}</span>`;
   const perm = d.hold || d.needsPermission;
   const line = d.consoleLost
     ? 'Su consola se cerró (tmux). Su sesión sigue en disco: «Reanudar» la abre de nuevo y recuerda todo.'
@@ -390,7 +390,7 @@ function cardHtml(a) {
             ? `Pide permiso: ${d.hold ? d.hold.tool : d.activity || 'una herramienta'}`
             : plainMd(d.bubble) || 'Tiene una pregunta para ti'
           : onHold(d)
-            ? `⏳ En espera: ${holdText(d)}`
+            ? `En espera: ${holdText(d)}`
             : d.state === 'done'
               ? plainMd(d.bubble) || 'Terminó su turno'
               : d.activity || (d.state === 'walking' ? 'Llegando a su escritorio' : 'Pensando…');
@@ -406,7 +406,7 @@ function cardHtml(a) {
   else if (d.state === 'input')
     actions = `<form class="rc-reply" data-card-reply><input id="reply-${esc(d.name)}" placeholder="Responder a ${esc(d.name)}…" autocomplete="off"><button class="btn primary sm">Enviar</button></form>`;
   else if (d.state === 'done')
-    actions = `${relevoBtns(d, true)}${isSleepy(d) ? `<span class="rc-sleep" title="Sin actividad hace ${fmtDur(sleepMs(d))}. Despídelo con su resumen y retoma la tarea cuando vuelva lo que espera.">💤 ${fmtDur(sleepMs(d))}</span>${canSummary(d) ? '<button class="btn sm" data-card-act="sumkill">📝 Resumen y despedir</button>' : ''}` : ''}${canCompact(d) ? `<button class="btn sm" data-card-act="compact" title="Contexto al ${d.ctx.pct} %">🧹 Compactar</button>` : ''}<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
+    actions = `${relevoBtns(d, true)}${isSleepy(d) ? `<span class="rc-sleep" title="Sin actividad hace ${fmtDur(sleepMs(d))}. Despídelo con su resumen y retoma la tarea cuando vuelva lo que espera.">${icon('sleep')} ${fmtDur(sleepMs(d))}</span>${canSummary(d) ? `<button class="btn sm" data-card-act="sumkill">${icon('note')} Resumen y despedir</button>` : ''}` : ''}${canCompact(d) ? `<button class="btn sm" data-card-act="compact" title="Contexto al ${d.ctx.pct} %">${icon('broom')} Compactar</button>` : ''}<button class="btn sm" data-card-act="open">Ver</button><button class="btn sm" data-card-act="again" title="Nuevo encargo con lo mismo">↻ Otro igual</button>${docs ? `<button class="btn sm" data-card-act="docs">Documentos (${docs})</button>` : ''}<button class="btn sm danger" data-card-act="kill">Despedir</button>`;
   const stuck = isStuck(d),
     urg = urgency(d);
   const cls = [
@@ -423,12 +423,12 @@ function cardHtml(a) {
     .join(' ');
   return `<article class="${cls}" data-card="${esc(d.name)}" id="card-${esc(d.name)}" tabindex="0" style="--c:${COLORS[d.color % COLORS.length]}">
     <div class="rc-h"><span class="rc-av">${robotSVG(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}</span>
-      <div class="rc-t"><b>${esc(d.name)} <button type="button" class="prio prio-btn${d.priority ? ` prio-${d.priority}` : ''}" data-card-act="prio" title="Prioridad: ${d.priority ? d.priority.toUpperCase() : 'normal'}. Clic para cambiarla (normal, P1, P0)">${d.priority ? d.priority.toUpperCase() : '⚑'}</button>${d.tools?.includes('artifact') ? ' <span class="tool-mark" title="Tiene las herramientas de Artifact">📄</span>' : ''}</b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">📌 ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small>${d.note ? `<span class="rc-note" title="${esc(d.note)}">🗒 ${esc(d.note)}</span>` : ''}</div>${pill}</div>
+      <div class="rc-t"><b>${esc(d.name)} <button type="button" class="prio prio-btn${d.priority ? ` prio-${d.priority}` : ''}" data-card-act="prio" title="Prioridad: ${d.priority ? d.priority.toUpperCase() : 'normal'}. Clic para cambiarla (normal, P1, P0)" aria-label="Prioridad: ${d.priority ? d.priority.toUpperCase() : 'normal'}">${d.priority ? d.priority.toUpperCase() : icon('flag')}</button>${d.tools?.includes('artifact') ? ` <span class="tool-mark" title="Tiene las herramientas de Artifact">${icon('doc', 'Artifact')}</span>` : ''}</b>${titleOf(d) ? `<span class="rc-title${d.title ? '' : ' auto'}" title="${esc(d.title ? titleOf(d) : `Sugerido: ${titleOf(d)}`)}">${icon('pin')} ${esc(titleOf(d))}</span>` : ''}<small title="${esc(d.label)}">${esc(d.label)}</small>${d.note ? `<span class="rc-note" title="${esc(d.note)}">${icon('memo')} ${esc(d.note)}</span>` : ''}</div>${pill}</div>
     <div class="rc-line ${toolClass(d) || ''}" title="${esc(line)}">${esc(line)}</div>
-    <div class="rc-f"><span title="Tiempo desde que entró">⏱ <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
-      ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">💤 estancado ${fmtDur(idleMs(d))}</span>` : ''}
-      ${d.clashes?.length ? `<span class="rc-clash" title="Otro robot editó ${d.clashes.length === 1 ? 'el mismo archivo' : 'los mismos archivos'}: ${esc(d.clashes.map(c => `${shownPath(c.file)} (${c.with.join(', ')})`).join(' · '))}">⚠ choque${d.clashes.length > 1 ? ` ×${d.clashes.length}` : ''}</span>` : ''}
-      ${d.repo ? `<span class="rc-repo" title="Repo donde trabaja (sale de lo que edita o de la carpeta de su consola)">⎇ ${esc(d.repo)}</span>` : ''}<span title="Tokens de esta sesión">◆ ${fmtTok(tok)}</span>${spendChip(d)}${d.loop ? `<span class="rc-loop" title="Posible bucle: ${esc(d.loop.who)} repitió lo mismo ${d.loop.n} veces seguidas (${esc(d.loop.what)}). Si es una espera a propósito, ignóralo.">⟳ ×${d.loop.n}</span>` : ''}${subs ? `<span class="rc-subs" title="Subagentes trabajando">⑂ ${subs}</span>` : ''}${docs ? `<span title="Documentos escritos">▤ ${docs}</span>` : ''}</div>
+    <div class="rc-f"><span title="Tiempo desde que entró">${icon('timer')} <i data-start="${esc(d.startedAt || '')}">${d.startedAt ? fmtDur(Date.now() - Date.parse(d.startedAt)) : '–'}</i></span>
+      ${stuck ? `<span class="rc-stuck" title="Sin herramientas, subagentes ni mensajes desde ${new Date(lastEventMs(d)).toTimeString().slice(0, 5)}. Puede estar en un comando largo o colgado: ábrelo para ver su consola.">${icon('sleep')} estancado ${fmtDur(idleMs(d))}</span>` : ''}
+      ${d.clashes?.length ? `<span class="rc-clash" title="Otro robot editó ${d.clashes.length === 1 ? 'el mismo archivo' : 'los mismos archivos'}: ${esc(d.clashes.map(c => `${shownPath(c.file)} (${c.with.join(', ')})`).join(' · '))}">${icon('warn')} choque${d.clashes.length > 1 ? ` ×${d.clashes.length}` : ''}</span>` : ''}
+      ${d.repo ? `<span class="rc-repo" title="Repo donde trabaja (sale de lo que edita o de la carpeta de su consola)">${icon('branch')} ${esc(d.repo)}</span>` : ''}<span title="Tokens de esta sesión">◆ ${fmtTok(tok)}</span>${spendChip(d)}${d.loop ? `<span class="rc-loop" title="Posible bucle: ${esc(d.loop.who)} repitió lo mismo ${d.loop.n} veces seguidas (${esc(d.loop.what)}). Si es una espera a propósito, ignóralo.">⟳ ×${d.loop.n}</span>` : ''}${subs ? `<span class="rc-subs" title="Subagentes trabajando">⑂ ${subs}</span>` : ''}${docs ? `<span title="Documentos escritos">▤ ${docs}</span>` : ''}</div>
     ${actions ? `<div class="rc-acts">${actions}</div>` : ''}
   </article>`;
 }
@@ -447,9 +447,9 @@ function repoBar(all) {
     cardUi.repo = '';
     return '';
   }
-  const chip = (v, label, n) =>
-    `<button type="button" class="rf-chip${cardUi.repo === v ? ' on' : ''}" data-repo-filter="${esc(v)}" aria-pressed="${cardUi.repo === v}">${esc(label)} <small>${n}</small></button>`;
-  return `<div class="repo-bar" role="toolbar" aria-label="Filtrar por repo">${chip('', 'Todos', all.length)}${repos.map(r => chip(r, '⎇ ' + r, count.get(r))).join('')}${count.has('') ? chip('—', 'sin repo', count.get('')) : ''}</div>`;
+  const chip = (v, label, n, ic) =>
+    `<button type="button" class="rf-chip${cardUi.repo === v ? ' on' : ''}" data-repo-filter="${esc(v)}" aria-pressed="${cardUi.repo === v}">${ic ? `${icon(ic)} ` : ''}${esc(label)} <small>${n}</small></button>`;
+  return `<div class="repo-bar" role="toolbar" aria-label="Filtrar por repo">${chip('', 'Todos', all.length)}${repos.map(r => chip(r, r, count.get(r), 'branch')).join('')}${count.has('') ? chip('—', 'sin repo', count.get('')) : ''}</div>`;
 }
 const repoMatch = d => !cardUi.repo || (cardUi.repo === '—' ? !d.repo : d.repo === cardUi.repo);
 function dimByRepo() {
@@ -477,9 +477,9 @@ function renderCards() {
   const html = !all.length
     ? `<div class="rc-zero"><b>La oficina está vacía</b><p>Lanza un encargo o haz clic en un robot de la sala de descanso.</p><button class="btn primary" data-card-act="new">Nuevo encargo</button></div>`
     : bar +
-      sec('need', '✋ Te necesitan', by.need, '') +
-      sec('work', '⚙ Trabajando', by.work, '') +
-      sec('hold', '⏳ En espera', by.hold, '') +
+      sec('need', `${icon('hand')} Te necesitan`, by.need, '') +
+      sec('work', `${icon('gear')} Trabajando`, by.work, '') +
+      sec('hold', `${icon('hourglass')} En espera`, by.hold, '') +
       (by.done.length
         ? `<details class="rc-sec sec-done" id="sec-done"${doneOpen ? ' open' : ''}><summary><h4>✓ Listos <small>${by.done.length}</small></h4></summary>${by.done.map(cardHtml).join('')}</details>`
         : '');

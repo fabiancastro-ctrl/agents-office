@@ -111,7 +111,7 @@ test('consola caída: se detecta sin borrar al robot y «Reanudar» abre su mism
     const say = await o.api('POST', '/api/robots/vivo/say', { text: 'hola' });
     assert.equal(say.status, 409, 'no deja escribirle mientras está caído');
     const js = await (await fetch(`${o.url}/app.js`)).text();
-    assert.match(js, /💥 se cayó/);
+    assert.match(js, /\$\{icon\('burst'\)\} se cayó/);
     assert.match(js, /data-card-act="revive">↻ Reanudar/);
     assert.doesNotMatch(js, /reanudar a todos|resume-all|reviveAll/i, 'resume is one robot at a time');
     const rv = await o.api('POST', '/api/robots/vivo/revivir');
