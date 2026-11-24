@@ -47,7 +47,7 @@ function changesBlock(d) {
       `<small class="muted chg-at">Consultado ${fmtTime(c.at, { second: '2-digit' })}</small>`;
   }
   const pend = c ? c.repos.reduce((n, r) => n + r.files.filter(f => f.pending).length, 0) : null;
-  const sum = `🧾 Cambios <small>${d.files} archivo${d.files === 1 ? '' : 's'} tocado${d.files === 1 ? '' : 's'}${pend != null ? ` · ${pend} sin commit` : ''}</small>`;
+  const sum = `${icon('receipt')} Cambios <small>${d.files} archivo${d.files === 1 ? '' : 's'} tocado${d.files === 1 ? '' : 's'}${pend != null ? ` · ${pend} sin commit` : ''}</small>`;
   return `<details class="rp-block chg" id="chg-box"${chg.open ? ' open' : ''}><summary><h4>${sum}</h4><button type="button" class="btn sm ghost chg-ref" data-chg-refresh title="Vuelve a consultar git">↻</button></summary><div class="chg-list">${body}</div></details>`;
 }
 
@@ -99,7 +99,7 @@ function clashBox(d) {
   const rows = d.clashes
     .map(
       c =>
-        `<div class="clash-row"><span>⚠ También editó este archivo: <b title="${esc(c.file)}">${esc(shownPath(c.file))}</b> <small>(${c.with.map(esc).join(', ')})</small></span><button type="button" class="btn sm" data-act="clash-ack" data-file="${esc(c.file)}">Entendido</button></div>`
+        `<div class="clash-row"><span>${icon('warn')} También editó este archivo: <b title="${esc(c.file)}">${esc(shownPath(c.file))}</b> <small>(${c.with.map(esc).join(', ')})</small></span><button type="button" class="btn sm" data-act="clash-ack" data-file="${esc(c.file)}">Entendido</button></div>`
     )
     .join('');
   return `<div class="alert clash-box" id="clash-box">${rows}</div>`;
@@ -110,5 +110,5 @@ const shownPath = p => p.split('/').slice(-2).join('/'); // parent folder + file
 function stalledBox(d) {
   if (!d.stalled) return '';
   const at = new Date(lastEventMs(d)).toTimeString().slice(0, 5);
-  return `<div class="alert stall-box" id="stall-box"><b>💤 Estancado desde las ${at} (${fmtDur(idleMs(d))})</b><span class="note">Sin herramientas, subagentes ni mensajes. Puede estar en un comando largo o colgado: mira su consola.</span><div class="row"><button type="button" class="btn sm" data-act="console">Mirar</button></div></div>`;
+  return `<div class="alert stall-box" id="stall-box"><b>${icon('sleep')} Estancado desde las ${at} (${fmtDur(idleMs(d))})</b><span class="note">Sin herramientas, subagentes ni mensajes. Puede estar en un comando largo o colgado: mira su consola.</span><div class="row"><button type="button" class="btn sm" data-act="console">Mirar</button></div></div>`;
 }

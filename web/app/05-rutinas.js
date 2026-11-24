@@ -172,7 +172,7 @@ function cronPanel() {
         <div class="seg full" role="radiogroup" aria-label="Tipo de rutina">
           <label><input type="radio" name="rttype" id="rt-type-watch" value="watch" checked ${rtUi.edit ? 'disabled' : ''}>Vigilar PRs</label>
           <label><input type="radio" name="rttype" id="rt-type-agenda" value="agenda" ${rtUi.edit ? 'disabled' : ''}>Tarea programada</label>
-          <label><input type="radio" name="rttype" id="rt-type-wake" value="wake" ${rtUi.edit ? 'disabled' : ''}>⏰ Despertador</label>
+          <label><input type="radio" name="rttype" id="rt-type-wake" value="wake" ${rtUi.edit ? 'disabled' : ''}>${icon('clock')} Despertador</label>
         </div>
         <div class="field"><label for="rt-name">Nombre</label><input id="rt-name" placeholder="se genera solo"></div>
         <div class="field"><label for="rt-mode">Permisos de los robots</label><select id="rt-mode"><option value="">Heredar tu modo</option><option value="default">Preguntar (default)</option><option value="acceptEdits">Aceptar ediciones</option><option value="plan">Solo planear</option></select></div>
@@ -239,7 +239,7 @@ function cronPanel() {
         </div>
       </div>
       <div class="rt-prev" id="rt-preview">${rtUi.preview}</div>
-      <div class="dlg-foot"><div class="row"><button class="btn sm" type="button" data-rt-preview title="Consulta GitHub o Nexus y te dice qué haría ahora, sin lanzar robots ni gastar cuota">👁 Probar sin gastar</button>${rtUi.edit ? '<button class="btn sm" type="button" data-rt-cancel>Cancelar edición</button>' : ''}</div>
+      <div class="dlg-foot"><div class="row"><button class="btn sm" type="button" data-rt-preview title="Consulta GitHub o Nexus y te dice qué haría ahora, sin lanzar robots ni gastar cuota">${icon('eye')} Probar sin gastar</button>${rtUi.edit ? '<button class="btn sm" type="button" data-rt-cancel>Cancelar edición</button>' : ''}</div>
         <button class="btn primary">${rtUi.edit ? 'Guardar cambios' : 'Crear rutina'}</button></div>
     </form>`;
 }

@@ -26,10 +26,10 @@ MAP.addEventListener('click', e => {
   const sdm = e.target.closest('[data-sala-dismiss]');
   if (sdm) {
     // dos clics: el primero arma, el segundo (en 3 s) despide
-    const t = sdm.textContent;
+    const t = sdm.innerHTML;
     if (
       !armed(sdm, '¿Seguro? Clic otra vez', 3000, () => {
-        sdm.textContent = t;
+        sdm.innerHTML = t;
         renderBoard();
       })
     )

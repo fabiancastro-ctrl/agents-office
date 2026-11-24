@@ -147,7 +147,7 @@ function drawRooms() {
         const s = st.salas.find(x => x.id === r.sala);
         el.className = 'room r-rt r-sala sv in-sala';
         if (Number.isInteger(s?.color)) el.style.setProperty('--sala-c', COLORS[s.color % COLORS.length]); // el piso, del color de quien la armó
-        el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span title="Sala «${esc(r.name)}»">Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm out-need" data-out-need hidden></button><button type="button" class="btn sm" data-sala-dismiss="${esc(r.sala)}" hidden title="Da de baja (sin resumen) a los hijos que ya entregaron su resultado. Dos clics.">👋 Despedir a los que entregaron</button><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
+        el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span title="Sala «${esc(r.name)}»">Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm out-need" data-out-need hidden></button><button type="button" class="btn sm" data-sala-dismiss="${esc(r.sala)}" hidden title="Da de baja (sin resumen) a los hijos que ya entregaron su resultado. Dos clics.">${icon('hand')} Despedir a los que entregaron</button><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
         MAP.appendChild(el);
         const prop = (cls, html, x, y0, w, h) => {
           const p = document.createElement('div');
@@ -430,7 +430,7 @@ function renderBoard() {
   const db = MAP.querySelector('[data-sala-dismiss]');
   if (db && !db.classList.contains('armed')) {
     db.hidden = !ready;
-    db.textContent = `👋 Despedir a los que entregaron (${ready})`;
+    db.innerHTML = `${icon('hand')} Despedir a los que entregaron (${ready})`;
   }
   const ctx = board.for === s.id ? board.ctx.replace(/^# .*\n+/, '').replace(/^_Sala creada por la oficina.*_\n+/m, '') : '';
   // Corcho: tus notas (📌, solo para ti) y las últimas 8 del hilo, en una franja que se desplaza: ninguna queda tapada.
@@ -446,13 +446,13 @@ function renderBoard() {
   const ta = el.querySelector('.sb-nf textarea'),
     draft = ta ? { v: ta.value, f: document.activeElement === ta, a: ta.selectionStart, b: ta.selectionEnd } : null;
   const prog = salaProgress(s);
-  el.innerHTML = `<div class="sb-head"><b>📋 Tablero</b><span><button type="button" class="btn sm ghost" data-sala-note-add ${mine.length >= 4 ? 'disabled title="Ya hay 4 notas tuyas: quita una con su ×"' : 'title="Pega una nota tuya en el tablero: es solo para ti, no se manda a los robots ni gasta tokens"'}>📌 Nota</button> <button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></span></div>
+  el.innerHTML = `<div class="sb-head"><b>${icon('clip')} Tablero</b><span><button type="button" class="btn sm ghost" data-sala-note-add ${mine.length >= 4 ? 'disabled title="Ya hay 4 notas tuyas: quita una con su ×"' : 'title="Pega una nota tuya en el tablero: es solo para ti, no se manda a los robots ni gasta tokens"'}>${icon('pin')} Nota</button> <button type="button" class="btn sm ghost" data-sala-ctx title="Abrir CONTEXT.md completo">Ver todo</button></span></div>
     <div class="sb-why${board.whyOpen ? ' open' : ''}" data-sala-why title="${board.whyOpen ? 'Clic para resumir' : `Por qué se creó esta sala. Clic para verlo completo.`}">${esc(why)}</div>
     ${s.spend && !s.roster?.length ? spendHtml(s) : ''}
     ${board.noteFor === s.id ? `<form class="sb-nf" data-sala-note-form><textarea rows="2" maxlength="240" placeholder="Tu nota (Enter pega, Esc cancela)…"></textarea><button class="btn sm">Pegar</button></form>` : ''}
     ${s.roster?.length ? `<div class="sb-team"><b>Reparto${prog ? ` · ${prog.ok}/${prog.n} entregaron` : ''}</b>${s.spend ? spendHtml(s) : ''}${prog ? `<i class="sb-prog${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%"></i>` : ''}<span class="sb-chips">${s.roster.map(e => `<span class="sb-mem st-${esc(e.state.replace(/\s+/g, '-'))}" title="${esc(`${e.name}${e.title ? ' · ' + e.title : ''} · ${e.state}`)}"><i class="sb-dot"></i><code>${esc(e.name)}</code></span>`).join('')}</span></div>` : ''}
     <div class="sb-ctx md-chat">${ctx.trim() ? mdHtml(ctx) : '<p class="muted">El contexto se carga…</p>'}</div>
-    <div class="sb-notes">${mine.map(n => `<div class="sb-note mine" title="Tu nota (${esc(fmtWhen(n.at, { hour: 'numeric' }))}): solo la ves tú"><button type="button" class="sb-nx" data-sala-note-del="${esc(n.id)}" title="Quitar la nota" aria-label="Quitar la nota">×</button><b>📌 Tú</b>${esc(n.text)}</div>`).join('')}${notes.length ? notes.map(({ m, i }, k) => `<div class="sb-note n${k % 4}${salaMail.flying.has(m.id) ? ' arriving' : ''}" data-mid="${esc(m.id)}" data-note-i="${i}" role="button" tabindex="0" title="${esc(`${m.from} · ${hhmm(m.at)}\n${plainMd(m.text).slice(0, 500)}${m.text.length > 500 ? '…' : ''}\n\nClic: abrir el mensaje completo en el hilo`)}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 160))}</div>`).join('') : mine.length ? '' : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
+    <div class="sb-notes">${mine.map(n => `<div class="sb-note mine" title="Tu nota (${esc(fmtWhen(n.at, { hour: 'numeric' }))}): solo la ves tú"><button type="button" class="sb-nx" data-sala-note-del="${esc(n.id)}" title="Quitar la nota" aria-label="Quitar la nota">×</button><b>${icon('pin')} Tú</b>${esc(n.text)}</div>`).join('')}${notes.length ? notes.map(({ m, i }, k) => `<div class="sb-note n${k % 4}${salaMail.flying.has(m.id) ? ' arriving' : ''}" data-mid="${esc(m.id)}" data-note-i="${i}" role="button" tabindex="0" title="${esc(`${m.from} · ${hhmm(m.at)}\n${plainMd(m.text).slice(0, 500)}${m.text.length > 500 ? '…' : ''}\n\nClic: abrir el mensaje completo en el hilo`)}"><b>${esc(m.from)}</b>${esc(plainMd(m.text).slice(0, 160))}</div>`).join('') : mine.length ? '' : '<div class="sb-note n0"><b>Notas</b>Lo que cada robot diga al cerrar su turno se pega aquí.</div>'}</div>`;
   el.querySelector('.sb-ctx').scrollTop = keep;
   el.querySelector('.sb-notes').scrollLeft = keepX;
   const nta = el.querySelector('.sb-nf textarea');

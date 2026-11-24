@@ -28,6 +28,8 @@ button{cursor:pointer}
 /* Icon set: 16 px grid, one stroke, currentColor. Sized in em so it follows the «Aa» zoom. */
 .ic-sprite{position:absolute;width:0;height:0;overflow:hidden}
 .ic{width:1.05em;height:1.05em;flex:none;vertical-align:-.16em;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:square;stroke-linejoin:miter;overflow:visible}
+.sala-face .sala-book .ic{width:1em;height:1em}
+.eotm-zoom .ic{width:11px;height:11px;vertical-align:middle}
 /* Pixelify Sans dibuja «fi» como una ligadura que parece una A («OAcina»): sin ligaduras en toda la página */
 html{font-variant-ligatures:none}
 

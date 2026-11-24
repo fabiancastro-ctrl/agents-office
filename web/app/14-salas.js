@@ -2,7 +2,7 @@
 const salaRobots = id => [...st.robots.values()].filter(a => a.data.place.sala === id);
 // Cara de quien armó la sala (con su color y apariencia, aunque ya se haya ido); si la creaste tú (sala de épica), un libro.
 function salaFace(s) {
-  if (!s.owner) return '<b class="sala-book" aria-hidden="true">📖</b>';
+  if (!s.owner) return `<b class="sala-book" aria-hidden="true">${icon('book')}</b>`;
   const live = st.robots.get(s.owner)?.data;
   return robotHead(COLORS[(live?.color ?? s.color ?? 0) % COLORS.length], lookOf(s.owner, null, { look: live?.look ?? s.ownerLook }));
 }
@@ -20,7 +20,7 @@ function renderOutsideNeed() {
   btn.hidden = !out.length;
   if (!out.length) return;
   btn.dataset.outNeed = out[0].name;
-  btn.textContent = out.length === 1 ? `🔴 ${out[0].name} te necesita afuera` : `🔴 ${out.length} te necesitan afuera`;
+  btn.innerHTML = `${icon('dot')} ${esc(out.length === 1 ? `${out[0].name} te necesita afuera` : `${out.length} te necesitan afuera`)}`;
   btn.title = `Fuera de esta sala te esperan: ${out.map(d => d.name + (d.place?.sala ? ` (en la sala «${st.salas.find(s => s.id === d.place.sala)?.name || 'otra'}»)` : '')).join(', ')}. Clic: abrir a ${out[0].name} (el que más lleva esperando) sin salir de la sala.`;
 }
 // Por qué te necesita, en pocas palabras (para el aviso de la sala en la lista «Salas de épica»).
@@ -80,7 +80,7 @@ function renderSalaChips() {
                       .join(', ')
                   )})`
                 : ''
-            }">⚠ ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}</button>`
+            }">${icon('warn')} ${need === 1 ? `${esc(needers[0].name)} ${needWhy(needers[0])}` : `${need} te necesitan`}</button>`
           : `<small class="sn-state">${done ? '✓ terminó' : prog ? `${prog.ok}/${prog.n} entregaron` : n ? `${s.thread.length} msj` : 'sin robots'}</small>`;
         return `<div class="rchip sala-note sn-${tone}${need ? ' need' : ''}${done ? ' done' : ''}${st.view === s.id ? ' cur' : ''}${prog ? ' prog' : ''}" data-sala="${esc(s.id)}" style="--rot:${rot.toFixed(1)}deg" title="Entrar a la sala${s.owner ? ` · la armó ${esc(s.owner)}` : ' · sala de épica creada por ti'} · ${esc(s.auto ? 'equipo' : s.key || 'sin clave')} · ${n} robot${n === 1 ? '' : 's'}${prog ? ` · ${prog.ok} de ${prog.n} hijos entregaron su resultado` : ''}"><i class="sn-pin" aria-hidden="true">📌</i><span class="sn-head"><span class="sala-face">${salaFace(s)}</span><b class="sn-name">${esc(s.name)}</b></span><span class="sn-bots">${faces}${more}</span>${alert}${prog ? `<i class="rchip-bar${prog.ok === prog.n ? ' full' : ''}" style="--p:${Math.round((prog.ok * 100) / prog.n)}%" aria-hidden="true"></i>` : ''}</div>`;
       })
@@ -101,7 +101,7 @@ function salasPanel() {
       const last = s.thread[s.thread.length - 1];
       return `<div class="rt-card" data-sala="${esc(s.id)}" role="button" tabindex="0" style="cursor:pointer">
       <div class="top-r"><span class="sala-face big">${salaFace(s)}</span><b>${esc(s.name)}</b>${s.key ? `<span class="pill p-idle">${esc(s.key)}</span>` : ''}</div>
-      ${(p => (p ? `<div class="sub-h">📦 ${p.ok}/${p.n} entregaron<i class="rt-prog${p.ok === p.n ? ' full' : ''}" style="--p:${Math.round((p.ok * 100) / p.n)}%"></i></div>` : ''))(salaProgress(s))}
+      ${(p => (p ? `<div class="sub-h">${icon('box')} ${p.ok}/${p.n} entregaron<i class="rt-prog${p.ok === p.n ? ' full' : ''}" style="--p:${Math.round((p.ok * 100) / p.n)}%"></i></div>` : ''))(salaProgress(s))}
       <div class="sub-h">${salaRobots(s.id).length} robots · ${s.thread.length} mensajes · ${s.docs.length} documentos${s.folder ? ' · ' + esc(s.folder) : ''}</div>
       ${last ? `<div class="sub-h">Último: ${esc(last.from)} · ${esc(last.text.slice(0, 120))}</div>` : ''}
     </div>`;
@@ -139,7 +139,7 @@ function salaPanel(s) {
   const max = st.config.maxRobots || 3;
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done').length;
   return `<div class="ph"><div style="min-width:0"><h3>Sala «${esc(s.name)}»</h3><div class="sub-h">${esc(s.auto ? `Equipo que armó ${s.owner}: se cierra sola cuando se van todos` : s.key || 'sin clave de Jira')}${s.folder ? ' · documentos en ' + esc(s.folder) : ''}</div></div>
-      <div class="row" style="margin-left:auto"><button class="btn sm" data-sala-act="context">Ver CONTEXT.md</button><button class="btn sm" data-sala-act="export" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo, para compartirla">⬇ Exportar</button><button class="btn sm" data-copy-link="sala:${esc(s.id)}" title="Copia un enlace que abre la oficina directo en esta sala (solo funciona en este computador)">🔗 Copiar enlace</button><button class="btn sm" data-sala-act="reveal">Finder</button><button class="btn sm danger" data-sala-act="close" ${present.length ? 'disabled title="Da de baja a sus robots primero"' : ''}>Cerrar sala</button></div></div>
+      <div class="row" style="margin-left:auto"><button class="btn sm" data-sala-act="context">Ver CONTEXT.md</button><button class="btn sm" data-sala-act="export" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo, para compartirla">${icon('down')} Exportar</button><button class="btn sm" data-copy-link="sala:${esc(s.id)}" title="Copia un enlace que abre la oficina directo en esta sala (solo funciona en este computador)">${icon('link')} Copiar enlace</button><button class="btn sm" data-sala-act="reveal">Finder</button><button class="btn sm danger" data-sala-act="close" ${present.length ? 'disabled title="Da de baja a sus robots primero"' : ''}>Cerrar sala</button></div></div>
     <div class="rp-grid">
       <div class="rp-col">
         <h4>Hilo de la sala</h4>
@@ -163,7 +163,7 @@ function salaPanel(s) {
           <div class="field" id="f-sk-args" hidden><label for="sk-args">Argumentos</label><input id="sk-args"></div>
           <div class="field"><label for="sk-mode">Permisos</label><select id="sk-mode"><option value="">Heredar tu modo</option><option value="default">Preguntar (default)</option><option value="acceptEdits">Aceptar ediciones</option><option value="plan">Solo planear</option></select></div>
           <div class="note">El robot recibe, además del encargo, las rutas de CONTEXT.md, del hilo${s.folder ? ' y de la carpeta de la épica' : ''} con instrucciones de leerlas primero.</div>
-          <div class="row between"><span class="stats">${active}/${max} trabajando</span><button class="btn primary" title="${active >= max ? 'La oficina está llena: el robot espera en la puerta y entra solo cuando se libere un escritorio' : ''}">${active >= max ? '🚪 Dejar en la puerta' : 'Mandar robot'}</button></div>
+          <div class="row between"><span class="stats">${active}/${max} trabajando</span><button class="btn primary" title="${active >= max ? 'La oficina está llena: el robot espera en la puerta y entra solo cuando se libere un escritorio' : ''}">${active >= max ? `${icon('door')} Dejar en la puerta` : 'Mandar robot'}</button></div>
         </form>
         ${docs}
       </div>

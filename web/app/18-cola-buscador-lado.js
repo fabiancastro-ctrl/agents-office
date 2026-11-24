@@ -80,7 +80,7 @@ function searchResults(q) {
     if (hits.length)
       groups.push({
         key: a.data.name,
-        head: `${robotHead(COLORS[a.data.color % COLORS.length], lookOf(a.data.name, a.data.place, a.data))}<b>${esc(a.data.name)}</b>${titleOf(a.data) ? `<small>📌 ${esc(titleOf(a.data))}</small>` : ''}`,
+        head: `${robotHead(COLORS[a.data.color % COLORS.length], lookOf(a.data.name, a.data.place, a.data))}<b>${esc(a.data.name)}</b>${titleOf(a.data) ? `<small>${icon('pin')} ${esc(titleOf(a.data))}</small>` : ''}`,
         hits,
         robot: a.data.name
       });
@@ -108,7 +108,7 @@ function searchResults(q) {
   );
 }
 function searchPanel() {
-  return `<div class="dlg-head"><h3>🔎 Buscar en las conversaciones</h3></div>
+  return `<div class="dlg-head"><h3>${icon('search')} Buscar en las conversaciones</h3></div>
     <form class="srch" id="search-form" role="search"><input id="search-in" type="search" placeholder="wallet#32, crítico, el nombre de un PR…" autocomplete="off" spellcheck="false"></form>
     <div class="sr" id="search-res">${searchResults(searchUi.q)}</div>
     <div class="sr" id="search-arch"></div>`;
@@ -129,7 +129,7 @@ async function searchArchive() {
             .slice(0, 12)
             .map(
               a =>
-                `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-w">${av(a)}${esc(a.name)} · se fue ${when(a)}</span><span class="sr-t">${esc(a.title || a.label)}${a.note ? ` · 🗒 ${esc(a.note)}` : ''}</span></button>`
+                `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-w">${av(a)}${esc(a.name)} · se fue ${when(a)}</span><span class="sr-t">${esc(a.title || a.label)}${a.note ? ` · ${icon('memo')} ${esc(a.note)}` : ''}</span></button>`
             )
             .join('')}</section>`
         : '';
@@ -141,7 +141,7 @@ async function searchArchive() {
         r.results
           .map(
             a =>
-              `<section class="sr-g"><h4>${av(a)}<b>${esc(a.name)}</b><small>${a.title ? `📌 ${esc(a.title)} · ` : ''}se fue ${when(a)}</small></h4>${a.hits.length ? a.hits.map(h => `<button type="button" class="sr-hit" data-arch="${esc(a.id)}" data-i="${h.i}"><span class="sr-w">${esc(h.who || (h.kind === 'user' ? 'Tú' : a.name))} · ${hhmm(h.at)}</span><span class="sr-t">${snippet(h.text, qn) || esc(plainMd(h.text).slice(0, 160))}</span></button>`).join('') : `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-t">${esc(a.label)}</span></button>`}</section>`
+              `<section class="sr-g"><h4>${av(a)}<b>${esc(a.name)}</b><small>${a.title ? `${icon('pin')} ${esc(a.title)} · ` : ''}se fue ${when(a)}</small></h4>${a.hits.length ? a.hits.map(h => `<button type="button" class="sr-hit" data-arch="${esc(a.id)}" data-i="${h.i}"><span class="sr-w">${esc(h.who || (h.kind === 'user' ? 'Tú' : a.name))} · ${hhmm(h.at)}</span><span class="sr-t">${snippet(h.text, qn) || esc(plainMd(h.text).slice(0, 160))}</span></button>`).join('') : `<button type="button" class="sr-hit" data-arch="${esc(a.id)}"><span class="sr-t">${esc(a.label)}</span></button>`}</section>`
           )
           .join('')
       : '';
@@ -164,7 +164,7 @@ async function searchClosedSalas(q, box) {
         r.results
           .map(
             s =>
-              `<section class="sr-g" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><h4>🚪 <b>${esc(s.name)}</b><small>cerrada ${when(s.closedAt)}</small></h4>${s.hits.length ? s.hits.map(h => `<button type="button" class="sr-hit" data-docpath="${esc(h.path)}"><span class="sr-w">${h.where === 'hilo' ? `💬 ${esc(h.who)}` : '📋 contexto'}</span><span class="sr-t">${snippet(h.text, qn) || esc(plainMd(h.text).slice(0, 160))}</span></button>`).join('') + (s.more ? `<small class="muted">y ${s.more} más</small>` : '') : `<button type="button" class="sr-hit" data-docpath="${esc(s.context)}"><span class="sr-t">${esc(s.purpose || 'Abrir su contexto')}</span></button>`}</section>`
+              `<section class="sr-g" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><h4>${icon('door')} <b>${esc(s.name)}</b><small>cerrada ${when(s.closedAt)}</small></h4>${s.hits.length ? s.hits.map(h => `<button type="button" class="sr-hit" data-docpath="${esc(h.path)}"><span class="sr-w">${h.where === 'hilo' ? `${icon('chat')} ${esc(h.who)}` : `${icon('clip')} contexto`}</span><span class="sr-t">${snippet(h.text, qn) || esc(plainMd(h.text).slice(0, 160))}</span></button>`).join('') + (s.more ? `<small class="muted">y ${s.more} más</small>` : '') : `<button type="button" class="sr-hit" data-docpath="${esc(s.context)}"><span class="sr-t">${esc(s.purpose || 'Abrir su contexto')}</span></button>`}</section>`
           )
           .join('')
     );
@@ -211,10 +211,10 @@ function setArchCount(n) {
   b.hidden = !n;
 }
 function archivoPanel() {
-  return `<div class="dlg-head"><h3>🗄 Archivo de despedidos</h3><p>Aquí quedan los robots que despediste con «📝 Despedir con su resumen», con el <b>super resumen</b> que escribieron al irse («Dar de baja» no deja nada). Con «↻ Retomar» entra un robot nuevo solo con ese resumen y lo que le digas. Cada resumen también queda como documento en <code>docs/resumenes-robots/</code> de tu carpeta de trabajo. «Quitar» saca al robot de la lista y manda su resumen a la Papelera, de donde se recupera.</p></div>
-    <div class="arch-bar"><input class="arch-q" id="arch-q" type="search" placeholder="Filtrar por nombre, título, nota o resumen…" autocomplete="off"><button type="button" class="btn sm ghost" id="arch-relevos" data-arch-relevos hidden title="Quita de la lista a todos los relevados por contexto (son automáticos: su robot siguió con el mismo nombre y el resumen) y manda sus resúmenes a la Papelera">🧹 Limpiar relevos</button></div>
+  return `<div class="dlg-head"><h3>${icon('archive')} Archivo de despedidos</h3><p>Aquí quedan los robots que despediste con «Despedir con su resumen», con el <b>super resumen</b> que escribieron al irse («Dar de baja» no deja nada). Con «↻ Retomar» entra un robot nuevo solo con ese resumen y lo que le digas. Cada resumen también queda como documento en <code>docs/resumenes-robots/</code> de tu carpeta de trabajo. «Quitar» saca al robot de la lista y manda su resumen a la Papelera, de donde se recupera.</p></div>
+    <div class="arch-bar"><input class="arch-q" id="arch-q" type="search" placeholder="Filtrar por nombre, título, nota o resumen…" autocomplete="off"><button type="button" class="btn sm ghost" id="arch-relevos" data-arch-relevos hidden title="Quita de la lista a todos los relevados por contexto (son automáticos: su robot siguió con el mismo nombre y el resumen) y manda sus resúmenes a la Papelera">${icon('broom')} Limpiar relevos</button></div>
     <div class="arch-list" id="arch-list"><p class="muted">Cargando…</p></div>
-    <section class="dlg-sec"><h4>🚪 Salas cerradas</h4><p class="note">Las salas que cerraste o que se cerraron solas al irse su equipo. Su contexto y su hilo siguen en <code>runs/salas/&lt;id&gt;/</code>.</p><div class="arch-list" id="arch-salas"><p class="muted">Cargando…</p></div></section>`;
+    <section class="dlg-sec"><h4>${icon('door')} Salas cerradas</h4><p class="note">Las salas que cerraste o que se cerraron solas al irse su equipo. Su contexto y su hilo siguen en <code>runs/salas/&lt;id&gt;/</code>.</p><div class="arch-list" id="arch-salas"><p class="muted">Cargando…</p></div></section>`;
 }
 async function loadArchivo() {
   try {
@@ -242,7 +242,7 @@ function drawArchivo() {
       : ss
           .map(
             s => `<article class="ac-item" style="--c:${Number.isInteger(s.color) ? COLORS[s.color % COLORS.length] : 'var(--war)'}"><div class="ac-h"><b>${esc(s.name)}</b>${s.key ? `<span class="ac-title">${esc(s.key)}</span>` : ''}<small>${esc(s.reason || 'cerrada')} · ${whenS(s.closedAt)}</small></div>
-        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">📋 Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">💬 Hilo (${s.messages} msj)</button><button type="button" class="btn sm" data-sala-exp="${esc(s.id)}" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo">⬇ Exportar</button>${s.reopen ? `<button type="button" class="btn sm" data-sala-reopen="${esc(s.id)}" title="La vuelve a abrir con su contexto, su hilo y sus notas; después mudas a los robots desde su ventana («🚪 Mudar a una sala»). Ya no se cierra sola.">↩ Reabrir</button>` : ''}<button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">🗑 Borrar</button></div></article>`
+        ${s.purpose ? `<p class="ac-x">${esc(s.purpose)}</p>` : ''}<div class="row"><button type="button" class="btn sm" data-docpath="${esc(s.context)}">${icon('clip')} Contexto</button><button type="button" class="btn sm" data-docpath="${esc(s.threadFile)}">${icon('chat')} Hilo (${s.messages} msj)</button><button type="button" class="btn sm" data-sala-exp="${esc(s.id)}" title="Guarda la sala completa (porqué, reparto, contexto e hilo) en docs/salas/ de tu carpeta de trabajo">${icon('down')} Exportar</button>${s.reopen ? `<button type="button" class="btn sm" data-sala-reopen="${esc(s.id)}" title="La vuelve a abrir con su contexto, su hilo y sus notas; después mudas a los robots desde su ventana («Mudar a una sala»). Ya no se cierra sola.">↩ Reabrir</button>` : ''}<button type="button" class="btn sm ghost" data-sala-del="${esc(s.id)}" title="La quita del archivo y manda su contexto y su hilo a la Papelera (de ahí se recuperan)">${icon('trash')} Borrar</button></div></article>`
           )
           .join('');
   }
@@ -250,7 +250,7 @@ function drawArchivo() {
     rb = $('#arch-relevos', PANEL);
   if (rb && !rb.classList.contains('armed')) {
     rb.hidden = !nRelevos;
-    rb.textContent = `🧹 Limpiar relevos (${nRelevos})`;
+    rb.innerHTML = `${icon('broom')} Limpiar relevos (${nRelevos})`;
     rb.disabled = false;
   }
   const list = archUi.list.filter(a => !q || norm(`${a.name} ${a.title} ${a.note} ${a.label} ${a.excerpt}`).includes(q));
@@ -261,8 +261,8 @@ function drawArchivo() {
       ? '<p class="muted">Nada coincide con el filtro.</p>'
       : list
           .map(
-            a => `<article class="ac-item" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><div class="ac-h">${robotHead(COLORS[(a.color || 0) % COLORS.length], lookOf(a.name, null, { look: a.look }))}<b>${esc(a.name)}</b>${a.title ? `<span class="ac-title">📌 ${esc(a.title)}</span>` : ''}<span class="ac-by ${a.summaryBy === 'robot' ? 'r' : ''}">📝 ${a.summaryBy === 'robot' ? 'resumen del robot' : 'resumen de la oficina'}</span>${a.relevo ? '<span class="ac-by">🔁 relevo</span>' : ''}<small>se fue ${when(a.leftAt)}</small></div>
-      ${a.note ? `<div class="ac-note">🗒 ${esc(a.note)}</div>` : ''}<p class="ac-x">${esc(a.excerpt || a.label)}</p>
+            a => `<article class="ac-item" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><div class="ac-h">${robotHead(COLORS[(a.color || 0) % COLORS.length], lookOf(a.name, null, { look: a.look }))}<b>${esc(a.name)}</b>${a.title ? `<span class="ac-title">${icon('pin')} ${esc(a.title)}</span>` : ''}<span class="ac-by ${a.summaryBy === 'robot' ? 'r' : ''}">${icon('note')} ${a.summaryBy === 'robot' ? 'resumen del robot' : 'resumen de la oficina'}</span>${a.relevo ? `<span class="ac-by">${icon('repeat')} relevo</span>` : ''}<small>se fue ${when(a.leftAt)}</small></div>
+      ${a.note ? `<div class="ac-note">${icon('memo')} ${esc(a.note)}</div>` : ''}<p class="ac-x">${esc(a.excerpt || a.label)}</p>
       <div class="row"><button type="button" class="btn primary sm" data-arch="${esc(a.id)}" data-retake>↻ Retomar</button><button type="button" class="btn sm" data-arch="${esc(a.id)}">Ver resumen</button><button type="button" class="btn sm ghost" data-arch-del="${esc(a.id)}" title="Lo quita de esta lista y manda su resumen a la Papelera (de ahí se recupera)">Quitar</button></div></article>`
           )
           .join('');
@@ -289,7 +289,7 @@ PANEL.addEventListener('click', async e => {
       await api('POST', `/api/salas-cerradas/${so.dataset.salaReopen}/reabrir`);
       archUi.salas = (archUi.salas || []).filter(x => x.id !== so.dataset.salaReopen);
       drawArchivo();
-      toast('Sala reabierta: múdale robots desde su ventana («🚪 Mudar a una sala»).');
+      toast('Sala reabierta: múdale robots desde su ventana («Mudar a una sala»).');
     } catch {
       so.disabled = false;
     }
@@ -298,7 +298,8 @@ PANEL.addEventListener('click', async e => {
   const sd = e.target.closest('[data-sala-del]');
   if (sd) {
     // dos clics: el primero arma, el segundo (en 3 s) borra
-    if (!armed(sd, '¿Borrar?', 3000, '🗑 Borrar')) return;
+    const sdHtml = sd.innerHTML;
+    if (!armed(sd, '¿Borrar?', 3000, () => (sd.innerHTML = sdHtml))) return;
     sd.disabled = true;
     try {
       const r = await api('DELETE', `/api/salas-cerradas/${sd.dataset.salaDel}`);
@@ -346,9 +347,9 @@ function archPanel(a) {
   if (!a) return '<p class="muted">Abre un robot desde el buscador.</p>';
   const L = lookOf(a.name, null, { look: a.look });
   const when = t => fmtWhen(t);
-  return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % COLORS.length], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>📌 ${esc(a.title)}</b></div>` : ''}${a.note ? `<div class="rt-note"><span>🗒 ${esc(a.note)}</span></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="export-arch" title="Guarda su conversación en docs/conversaciones-robots/ (si su transcript sigue en disco, completa; si no, lo que guardó la oficina) con su resumen al final">⬇ Exportar</button><button type="button" class="btn sm" data-act="wake-arch" title="Crea un despertador que retoma esta tarea cuando pase algo (un PR aprobado, un ticket que cambia, una hora)">⏰ Retomar cuando…</button><button type="button" class="btn sm" data-act="arch-back">← Volver</button></div>
+  return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % COLORS.length], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>${icon('pin')} ${esc(a.title)}</b></div>` : ''}${a.note ? `<div class="rt-note"><span>${icon('memo')} ${esc(a.note)}</span></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="export-arch" title="Guarda su conversación en docs/conversaciones-robots/ (si su transcript sigue en disco, completa; si no, lo que guardó la oficina) con su resumen al final">${icon('down')} Exportar</button><button type="button" class="btn sm" data-act="wake-arch" title="Crea un despertador que retoma esta tarea cuando pase algo (un PR aprobado, un ticket que cambia, una hora)">${icon('clock')} Retomar cuando…</button><button type="button" class="btn sm" data-act="arch-back">← Volver</button></div>
     <div class="rp-grid"><div class="rp-col"><h4>Conversación <small class="muted">(sin herramientas)</small></h4><div class="log" id="arch-log" data-src="@arch" style="--c:${COLORS[(a.color || 0) % COLORS.length]}">${renderLog(a.log, a.name)}</div></div>
-    <div class="rp-col"><div class="sumbox lg agent" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><span class="w">📝 Super resumen · ${a.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'}</span><span class="lg-acts">${a.summaryPath ? `<button type="button" class="cp-btn" data-docpath="${esc(a.summaryPath)}" title="${esc(a.summaryPath)}">📄 Documento</button>` : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg">📋 Copiar</button></span><div class="x md-chat">${mdHtml(a.summary || '_Sin resumen._')}</div></div>
+    <div class="rp-col"><div class="sumbox lg agent" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><span class="w">${icon('note')} Super resumen · ${a.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'}</span><span class="lg-acts">${a.summaryPath ? `<button type="button" class="cp-btn" data-docpath="${esc(a.summaryPath)}" title="${esc(a.summaryPath)}">${icon('doc')} Documento</button>` : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg">${icon('clip')} Copiar</button></span><div class="x md-chat">${mdHtml(a.summary || '_Sin resumen._')}</div></div>
     <form class="rehire" id="retake-form" data-arch-id="${esc(a.id)}"><h4>↻ Retomar con este resumen</h4><p class="note">Entra un robot nuevo solo con este resumen (no con toda su conversación). Si necesita más, se lo das tú o lo busca en los documentos y la memoria.</p><textarea id="retake-in" rows="3" placeholder="Qué cambió o qué sigue. Ej.: Ramiro ya respondió: el stock lo maneja el WMS">${esc(a.note ? `Ya llegó lo que esperabas (${a.note}). ` : '')}</textarea><button class="btn primary sm">Retomar</button></form>
     ${
       a.docs.length
@@ -424,7 +425,7 @@ function renderSide() {
   const d = a.data,
     color = COLORS[d.color % COLORS.length];
   box.querySelector('.sd-h').innerHTML =
-    `<span class="sd-av">${robotHead(color, lookOf(d.name, d.place, d))}</span><div class="sd-n"><b>${esc(d.name)}</b>${titleOf(d) ? `<small>📌 ${esc(titleOf(d))}</small>` : ''}</div><span class="pill p-${d.state}">${esc(stateLabel(d))}</span><button type="button" class="btn sm ghost" data-side="swap" title="Abrir este en grande y poner el otro al lado">⇄</button><button type="button" class="btn sm ghost" data-side="close" title="Cerrar la conversación de al lado" aria-label="Cerrar">✕</button>`;
+    `<span class="sd-av">${robotHead(color, lookOf(d.name, d.place, d))}</span><div class="sd-n"><b>${esc(d.name)}</b>${titleOf(d) ? `<small>${icon('pin')} ${esc(titleOf(d))}</small>` : ''}</div><span class="pill p-${d.state}">${esc(stateLabel(d))}</span><button type="button" class="btn sm ghost" data-side="swap" title="Abrir este en grande y poner el otro al lado">⇄</button><button type="button" class="btn sm ghost" data-side="close" title="Cerrar la conversación de al lado" aria-label="Cerrar">✕</button>`;
   const perm = d.hold || d.needsPermission;
   box.querySelector('.sd-alert').innerHTML = perm
     ? `<div class="alert sm"><b>Pide permiso</b><span class="sub-h">${esc(d.hold ? d.hold.tool : d.activity || '')}</span><div class="row"><button class="btn primary sm" data-side="allow">Aprobar</button><button class="btn danger sm" data-side="deny">Denegar</button></div></div>`
@@ -456,7 +457,7 @@ PANEL.addEventListener('change', e => {
 function salaPicker(d) {
   const cur = d.place?.sala || '';
   if (!st.salas.length && !cur) return '';
-  return `<select class="mt-sel sd-pick" id="sala-pick" title="Muda a este robot a una sala (lo de la sala le llega con tu próximo mensaje, sin gastar un turno) o devuélvelo a un escritorio" aria-label="Sala del robot"><option value=""${cur ? '' : ' selected'}>${cur ? '↩ A un escritorio' : '🚪 Mudar a una sala…'}</option>${st.salas.map(s => `<option value="${esc(s.id)}"${s.id === cur ? ' selected' : ''}>🚪 ${esc(s.name)}</option>`).join('')}</select>`;
+  return `<select class="mt-sel sd-pick" id="sala-pick" title="Muda a este robot a una sala (lo de la sala le llega con tu próximo mensaje, sin gastar un turno) o devuélvelo a un escritorio" aria-label="Sala del robot"><option value=""${cur ? '' : ' selected'}>${cur ? '↩ A un escritorio' : 'Mudar a una sala…'}</option>${st.salas.map(s => `<option value="${esc(s.id)}"${s.id === cur ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select>`;
 }
 PANEL.addEventListener('change', async e => {
   if (e.target.id !== 'sala-pick' || !st.selected) return;

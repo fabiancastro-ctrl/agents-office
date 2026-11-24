@@ -110,7 +110,7 @@ function renderGrowth() {
     setGrowLevel(Math.max(was, lvl));
     MAP.classList.add('repotting');
     MAP.style.setProperty('--pot', pot((s.pot || 0) - 1)); // se marchitan en la matera de la semana que se va
-    toast('🌱 Se renovó tu cuota semanal: cambié las materas. Las plantas vuelven a crecer con el trabajo de esta semana.');
+    toast('Se renovó tu cuota semanal: cambié las materas. Las plantas vuelven a crecer con el trabajo de esta semana.', 'sprout');
     growUi.timer = setTimeout(() => {
       setGrowLevel(lvl);
       MAP.style.setProperty('--pot', pot(s.pot || 0));
@@ -157,7 +157,7 @@ function renderFame() {
   const live = st.robots.get(em.name)?.data;
   const crown = live?.crown || 0;
   const look = lookOf(em.name, live?.place || null, live || { look: em.look, crown: 0 });
-  const html = `<button type="button" class="eotm-zoom" data-fame-wall title="Muro de la fama: los últimos 4 empleados de la semana" aria-label="Ver los últimos 4 empleados de la semana">🔍</button><small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % COLORS.length], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
+  const html = `<button type="button" class="eotm-zoom" data-fame-wall title="Muro de la fama: los últimos 4 empleados de la semana" aria-label="Ver los últimos 4 empleados de la semana">${icon('search')}</button><small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % COLORS.length], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
   if (box._html !== html) {
     box._html = html;
     box.innerHTML = html;
