@@ -67,11 +67,11 @@ function connect() {
       if (st.selected === '@new') schedulePanel();
     } else if (m.type === 'salas') {
       st.salas = m.salas;
-      if (st.view && !st.salas.some(s => s.id === st.view)) {
+      if (st.view && !viewExists(st.view)) {
         leaveSala();
         toast('La sala se cerró: volviste a la oficina.');
       }
-      if (st.view) renderBoard();
+      if (st.view && !isRtView(st.view)) renderBoard();
       renderSalaChips();
       if (st.selected === '@war' || st.selected?.startsWith('@sala:')) schedulePanel();
     } else if (m.type === 'routines') {

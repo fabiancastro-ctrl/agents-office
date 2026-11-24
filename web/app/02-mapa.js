@@ -41,14 +41,23 @@ function layout(incoming) {
   const byRoom = new Map(),
     v = st.view;
   for (const p of v ? places : []) {
-    if (p.type !== 'room' || p.sala !== v) continue;
-    const r = byRoom.get(p.room) || { id: p.room, name: p.name, sala: p.sala, maxSlot: -1, n: 0 };
+    if (p.type !== 'room' || viewKeyOf(p) !== v) continue;
+    const r = byRoom.get(p.room) || { id: p.room, name: p.name, sala: p.sala, rt: !p.sala, maxSlot: -1, n: 0 };
     r.maxSlot = Math.max(r.maxSlot, p.slot);
     if (counted.has(p)) r.n++;
     byRoom.set(p.room, r);
   }
-  if (v && !byRoom.has(`sala-${v}`))
-    byRoom.set(`sala-${v}`, { id: `sala-${v}`, name: st.salas.find(s => s.id === v)?.name || '', sala: v, maxSlot: -1, n: 0 });
+  if (v && !byRoom.has(viewRoomId(v))) {
+    const rt = isRtView(v);
+    byRoom.set(viewRoomId(v), {
+      id: viewRoomId(v),
+      name: rt ? routineName(v.slice(3)) : st.salas.find(s => s.id === v)?.name || '',
+      sala: rt ? undefined : v,
+      rt,
+      maxSlot: -1,
+      n: 0
+    });
+  }
   geo.roomOrder = [...geo.roomOrder.filter(id => byRoom.has(id)), ...[...byRoom.keys()].filter(id => !geo.roomOrder.includes(id))];
   const specs = geo.roomOrder.map(id => byRoom.get(id));
   for (const sp of specs) {
@@ -128,12 +137,16 @@ function drawRooms() {
     if (!re) {
       const el = document.createElement('div');
       // Solo existe el cuarto de la sala que estás viendo (por dentro): cabecera con la salida, tablero, mesa común y su puerta.
-      if (r.sala && st.view) {
+      if (st.view) {
         // dentro de la sala: cabecera con la salida, tablero, mesa común y su puerta
-        const s = st.salas.find(x => x.id === r.sala);
-        el.className = 'room r-rt r-sala sv in-sala';
+        const s = r.rt ? null : st.salas.find(x => x.id === r.sala);
+        el.className = 'room r-rt r-sala sv in-sala' + (r.rt ? ' in-rt' : '');
         if (Number.isInteger(s?.color)) el.style.setProperty('--sala-c', COLORS[s.color % COLORS.length]); // el piso, del color de quien la armó
-        el.innerHTML = `<div class="room-h"><button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button><span title="Sala «${esc(r.name)}»">Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm out-need" data-out-need hidden></button><button type="button" class="btn sm" data-sala-dismiss="${esc(r.sala)}" hidden title="Da de baja (sin resumen) a los hijos que ya entregaron su resultado. Dos clics.">${icon('hand')} Despedir a los que entregaron</button><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
+        const exit = '<button type="button" class="btn sm" data-sala-exit title="Volver a la oficina (Esc)">← Oficina</button>';
+        // A routine view has no board, thread or notes (those are sala-only): just the exit and a shortcut to the routines panel.
+        el.innerHTML = r.rt
+          ? `<div class="room-h">${exit}<span title="Rutina «${esc(r.name)}»">Rutina «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm" data-rt-open>Abrir rutina</button></div>`
+          : `<div class="room-h">${exit}<span title="Sala «${esc(r.name)}»">Sala «${esc(r.name)}»</span><small>${r.n} robot${r.n === 1 ? '' : 's'}</small><button type="button" class="btn sm out-need" data-out-need hidden></button><button type="button" class="btn sm" data-sala-dismiss="${esc(r.sala)}" hidden title="Da de baja (sin resumen) a los hijos que ya entregaron su resultado. Dos clics.">${icon('hand')} Despedir a los que entregaron</button><button type="button" class="btn sm" data-sala-open="${esc(r.sala)}">Hilo y contexto</button></div>`;
         MAP.appendChild(el);
         const prop = (cls, html, x, y0, w, h) => {
           const p = document.createElement('div');
@@ -163,6 +176,10 @@ function drawRooms() {
           34,
           7.6
         );
+        if (r.rt) {
+          board.hidden = true; // routine view: no board nor whiteboard
+          wb.hidden = true;
+        }
         geo.roomEls.set(r.id, (re = { el, seats: [], props: [board, table, dr, wb] }));
         renderBoard();
         renderOutsideNeed();
@@ -219,7 +236,7 @@ function drawRooms() {
 function seatOf(place) {
   if (!place) return door();
   if (place.type === 'room' && !st.view) return roomDoor(place); // en la oficina su cuarto está tras una puerta del pasillo: camina hasta ahí y desaparece
-  if (place.sala && place.sala === st.view) return tableSeat(place.slot);
+  if (st.view && viewKeyOf(place) === st.view) return tableSeat(place.slot);
   if (place.type === 'room') return door();
   const d = deskPos(place.idx);
   return { x: d.x + 6.5, y: d.y + 19 };
@@ -323,9 +340,9 @@ function tableSeat(k = 0) {
 }
 const salaEntry = () => ({ ...SV.door });
 function syncLaptops() {
-  const re = st.view && geo.roomEls.get(`sala-${st.view}`);
+  const re = st.view && geo.roomEls.get(viewRoomId(st.view));
   if (!re?.props) return;
-  const bots = [...st.robots.values()].filter(x => x.data.place.sala === st.view);
+  const bots = [...st.robots.values()].filter(x => viewKeyOf(x.data.place) === st.view);
   re.seats.forEach((d, j) => {
     const a = bots.find(x => x.data.place.slot === j);
     d.el.classList.toggle('placed', !!a && !a.el.classList.contains('moving'));
@@ -540,7 +557,7 @@ function roomDoor(place) {
 // Clic en una sala: el mapa pasa a mostrar solo esa sala con sus robots; «← Oficina» (o Esc) vuelve. Así la oficina
 // principal no se llena con los equipos: ahí las salas solo salen en la lista de «Salas», con cuántos robots tienen.
 // En la oficina se ven los de los escritorios; los de una sala o una rutina están tras la puerta de su cuarto.
-const shownHere = d => (st.view ? d.place.sala === st.view : d.place.type !== 'room');
+const shownHere = d => (st.view ? viewKeyOf(d.place) === st.view : d.place.type !== 'room');
 function viewClass(a) {
   const show = shownHere(a.data) || (!!a.transit && !st.view); // en la oficina se ve mientras camina hacia o desde las salas
   for (const el of [a.el, ...a.subEls.values(), a.extraEl, a.packEl].filter(Boolean)) {
@@ -548,25 +565,30 @@ function viewClass(a) {
     el.classList.toggle('sv', show && !!st.view);
   }
   // En la sala, los de la fila de abajo llevan el globo debajo del nombre: así no tapa la mesa ni los portátiles.
-  a.el.classList.toggle('bub-below', !!st.view && SV.mode === 'mesa' && a.data.place?.sala === st.view && a.data.place.slot % 2 === 1);
+  a.el.classList.toggle('bub-below', !!st.view && SV.mode === 'mesa' && viewKeyOf(a.data.place) === st.view && a.data.place.slot % 2 === 1);
   // Mesa redonda: en el lado izquierdo el cartel (LISTO, ?) va hacia afuera, así no tapa el nombre del vecino de arriba.
   a.el.classList.toggle(
     'sign-left',
-    !!st.view && SV.mode === 'round' && a.data.place?.sala === st.view && tableSeat(a.data.place.slot).x * RT.xU < RT.cx
+    !!st.view && SV.mode === 'round' && viewKeyOf(a.data.place) === st.view && tableSeat(a.data.place.slot).x * RT.xU < RT.cx
   );
 }
+// A view is a sala id or 'rt:<key>' (a routine room, whose robots have place.type 'room' and no place.sala).
+const isRtView = v => typeof v === 'string' && v.startsWith('rt:');
+const viewKeyOf = place => place?.sala || (place?.type === 'room' && place.room ? 'rt:' + place.room : null);
+const viewRoomId = v => (isRtView(v) ? v.slice(3) : `sala-${v}`);
+const viewExists = v => (isRtView(v) ? routineRobots(v.slice(3)).length > 0 : st.salas.some(s => s.id === v));
 function enterSala(id, animated) {
-  if (!st.salas.some(s => s.id === id)) return;
+  if (!viewExists(id)) return;
   if (animated && salaZoomIn(id, () => enterSala(id))) return; // animación opcional (33-animacion-sala.js)
   if (st.selected) select(null);
   st.view = id;
   try {
-    history.replaceState(null, '', '#sala=' + id);
+    history.replaceState(null, '', isRtView(id) ? location.pathname + location.search : '#sala=' + id);
   } catch {
     /* sin historial */
   }
   layout();
-  loadBoard(true);
+  if (!isRtView(id)) loadBoard(true);
 }
 function leaveSala() {
   if (!st.view) return;
@@ -683,7 +705,7 @@ function dropTrail(a) {
 async function walkSteps(a, dest) {
   a.el.classList.add('moving');
   // En la sala que estás viendo, el que llega trae su portátil en las manos (el que se va ya lleva su caja).
-  a.el.classList.toggle('carry-laptop', !!st.view && a.data?.place?.sala === st.view && !a.el.classList.contains('leaving'));
+  a.el.classList.toggle('carry-laptop', !!st.view && viewKeyOf(a.data?.place) === st.view && !a.el.classList.contains('leaving'));
   syncLaptops();
   // Los hijos flotantes dejan una estela de humo y chispas mientras se mueven (solo si se ven).
   const trail = a.el.classList.contains('flyer') && !a.el.classList.contains('offview') ? setInterval(() => dropTrail(a), 90) : 0;

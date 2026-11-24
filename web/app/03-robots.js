@@ -34,7 +34,7 @@ function createRobot(d, fromSnapshot) {
   } else {
     a.transit = true;
     a.packOn = isRelevo(d);
-    placeAt(a, st.view && d.place.sala === st.view ? salaEntry() : fromBreak || door());
+    placeAt(a, st.view && viewKeyOf(d.place) === st.view ? salaEntry() : fromBreak || door());
     queue(a, () => walkTo(a, seatOf(d.place)));
     if (a.packOn)
       queue(a, async () => {
@@ -652,7 +652,7 @@ function onLeft(name) {
       'beforeend',
       '<div class="lbox" aria-hidden="true"><i class="lb-plant"></i><i class="lb-mug"></i><i class="lb-paper"></i></div>'
     );
-    await walkTo(a, st.view && a.data.place.sala === st.view ? salaEntry() : door());
+    await walkTo(a, st.view && viewKeyOf(a.data.place) === st.view ? salaEntry() : door());
     a.el.remove();
     layout();
   });

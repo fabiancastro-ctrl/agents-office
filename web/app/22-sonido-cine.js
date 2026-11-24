@@ -112,7 +112,7 @@ addEventListener('hashchange', () => {
   const r = (location.hash.match(/^#robot=([\w-]+)$/) || [])[1],
     s = (location.hash.match(/^#sala=([\w-]+)$/) || [])[1];
   if (r && st.robots.has(r)) {
-    if (st.view && st.robots.get(r).data.place.sala !== st.view) leaveSala();
+    if (st.view && viewKeyOf(st.robots.get(r).data.place) !== st.view) leaveSala();
     select(r);
   } else if (s && s !== st.view) enterSala(s);
 });

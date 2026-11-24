@@ -16,6 +16,7 @@ async function quickKill(btn, name) {
 
 MAP.addEventListener('click', e => {
   if (e.target.closest('[data-sala-exit]')) return leaveSala();
+  if (e.target.closest('[data-rt-open]')) return select('@cron');
   const nr = e.target.closest('[data-need-robot]');
   if (nr) {
     e.stopPropagation();

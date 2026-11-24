@@ -147,7 +147,7 @@ function slotHtml(sl) {
       rt = st.routines.find(r => r.id === sl.key);
     const what = (bots.find(a => a.data.label)?.data.label || (rt?.running ? 'revisando ahora…' : '')).slice(0, 90);
     const tone = ne.length ? 'need' : 'work';
-    return `<div class="sroom srt sn-${tone}${ne.length ? ' need' : ''}${tight}" data-rt-room="${esc(sl.key)}" role="button" tabindex="0" ${pos} title="Rutina «${esc(sl.item.name)}» · ${bots.length} robot${bots.length === 1 ? '' : 's'} adentro. Clic: abrir a ${esc(bots[0]?.data.name || 'la rutina')}"><i class="sdoor" aria-hidden="true"></i><div class="ssign"><span class="sn-head"><span class="sala-face"><b class="sala-book" aria-hidden="true">${icon('clock')}</b></span><b class="sn-name">Rutina: ${esc(sl.item.name)}</b></span><span class="sn-bots">${botFaces(bots)}</span>${what ? `<span class="sn-what">${esc(what)}</span>` : ''}${ne.length ? needAlert(ne) : `<small class="sn-state">${bots.length} robot${bots.length === 1 ? '' : 's'}</small>`}</div></div>`;
+    return `<div class="sroom srt sn-${tone}${ne.length ? ' need' : ''}${tight}" data-rt-room="${esc(sl.key)}" role="button" tabindex="0" ${pos} title="Rutina «${esc(sl.item.name)}» · ${bots.length} robot${bots.length === 1 ? '' : 's'} adentro. Clic: entrar a la rutina"><i class="sdoor" aria-hidden="true"></i><div class="ssign"><span class="sn-head"><span class="sala-face"><b class="sala-book" aria-hidden="true">${icon('clock')}</b></span><b class="sn-name">Rutina: ${esc(sl.item.name)}</b></span><span class="sn-bots">${botFaces(bots)}</span>${what ? `<span class="sn-what">${esc(what)}</span>` : ''}${ne.length ? needAlert(ne) : `<small class="sn-state">${bots.length} robot${bots.length === 1 ? '' : 's'}</small>`}</div></div>`;
   }
   const s = sl.item.s,
     { bots, n, needers, need, done, prog, tone } = salaInfo(s);
@@ -402,10 +402,11 @@ async function refreshPane(name) {
   }
 }
 
-// A routine room has no inside view: its door opens the robot working in it (or the routines panel if it is empty).
+const routineName = key => routineRobots(key)[0]?.data.place.name || 'rutina';
+// Clicking a routine room enters it like a sala; if it is empty (rare) it opens the routines panel.
 function openRoutineRoom(key) {
-  const first = routineRobots(key)[0];
-  select(first ? first.data.name : '@cron');
+  if (!routineRobots(key).length) return select('@cron');
+  enterSala('rt:' + key, true);
 }
 MAP.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.sroom, .rt-cal')) {

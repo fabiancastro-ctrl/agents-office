@@ -1687,7 +1687,7 @@ html[data-theme=light] .ac-note{color:#7a5f12}
 .r-sala.in-sala>.room-h{align-items:center;font-size:17px;padding:8px 10px}
 .r-sala.in-sala>.room-h span{flex:1;text-align:center}
 .r-sala.in-sala>.room-h small{order:3}
-.r-sala.in-sala>.room-h [data-sala-open]{order:4}
+.r-sala.in-sala>.room-h [data-sala-open],.r-sala.in-sala>.room-h [data-rt-open]{order:4}
 .sala-empty{position:absolute;left:0;right:0;top:45%;text-align:center;color:var(--muted);font-size:13px;margin:0}
 
 /* Sala por dentro: piso del color de quien la armó, tablero, mesa común y puerta */

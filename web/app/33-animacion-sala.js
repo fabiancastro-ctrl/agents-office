@@ -15,7 +15,7 @@ $('#btn-salaanim').addEventListener('click', () => {
 });
 // Where the zoom is aimed at: the room's centre, in map pixels, and how much it takes to fill the map.
 function salaZoomTarget(id) {
-  const el = MAP.querySelector(`.sroom[data-sala="${CSS.escape(id)}"]`),
+  const el = MAP.querySelector(id.startsWith('rt:') ? `.sroom[data-rt-room="${CSS.escape(id.slice(3))}"]` : `.sroom[data-sala="${CSS.escape(id)}"]`),
     mr = MAP.getBoundingClientRect(),
     r = el?.getBoundingClientRect();
   if (!el || !r.width || !mr.width) return null;
