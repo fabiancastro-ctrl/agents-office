@@ -106,3 +106,17 @@ test('relevo por contexto: la decisión (oferta a los 300 k, automático en espe
     assert.ok(blockedBy({ [k]: 'x' }), k);
   assert.ok(blockedBy({ pendingSubs: 1 }));
 });
+
+test('uniforme del robot según el encargo (web/robot-art.js)', async () => {
+  const vm = await import('node:vm');
+  const ctx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(new URL('../web/robot-art.js', import.meta.url), 'utf8') + '\nthis.outfitOf = outfitOf;', ctx);
+  const o = ctx.outfitOf;
+  assert.equal(o({ skill: 'review-deep' }, null), 'inspector');
+  assert.equal(o({ title: 'Investiga el timeout del gateway' }, null), 'explorer');
+  assert.equal(o({ request: { text: 'Implementa el handler de pagos' } }, null), 'apron');
+  assert.equal(o({ title: 'Fix login' }, null), 'apron');
+  assert.equal(o({ origin: 'Lanzado por la rutina «vigía» para x#1', skill: 'review-deep' }, null), 'overall');
+  assert.equal(o({ origin: 'Lanzado por ti', title: 'Hola' }, null), '');
+  assert.equal(o({ skill: 'x' }, { type: 'room', sala: false }), 'hardhat');
+});

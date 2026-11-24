@@ -57,12 +57,20 @@ function lookOf(name, place, d) {
     crown: Number(d?.crown) || 0
   };
 }
-// Uniforme según el trabajo: inspector (reviews y auditorías), escritor (documentación) o casco (rutinas).
+// Uniforme según el trabajo, por prioridad: casco (cuartos), overol (lo lanzó una rutina: su origen dice «rutina «…»»),
+// inspector (reviews y auditorías), escritor (documentación), explorador (investigación) y delantal de herramientas
+// (implementación). Los dos últimos miran también el título y el inicio del encargo, que es lo único que tienen los
+// robots de encargo libre; los demás solo el skill.
+const ROUTINE_ORIGIN = /rutina\s+«/i;
 function outfitOf(d, place) {
   if (place?.type === 'room' && !place.sala) return 'hardhat';
+  if (ROUTINE_ORIGIN.test(String(d?.origin || ''))) return 'overall';
   const sk = String(d?.skill || d?.request?.skill || '');
   if (/review|audit|security|inspect|scan|validat/i.test(sk)) return 'inspector';
   if (/doc|create-hu|overview|adr|spec|readme|write|redact/i.test(sk)) return 'writer';
+  const job = `${sk} ${d?.title || ''} ${String(d?.request?.text || '').slice(0, 100)}`;
+  if (/research|investig|explor|search|analy|analiz/i.test(job)) return 'explorer';
+  if (/implement|fix|corrig|arregl|build|refactor|code|codific/i.test(job)) return 'apron';
   return '';
 }
 // Gorro de temporada: Navidad en diciembre, bruja la última semana de octubre y cono de fiesta en Año Nuevo.
@@ -151,6 +159,20 @@ const HATS = {
   hardhat: `<path d="M8.6 11.6q0-8.4 11.4-8.4t11.4 8.4z" fill="#f3c33b" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="6.6" y="10.4" width="26.8" height="2.4" rx="1.2" fill="#e0ab21"/><rect x="18.8" y="3.6" width="2.4" height="7" rx="1" fill="#ffd96b"/>`,
   inspector: `<path d="M8.4 11.4q0-8.2 11.6-8.2t11.6 8.2z" fill="#8a6447" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><path d="M10 7q10-5 20 0" stroke="#6b4b33" stroke-width=".9" fill="none"/><rect x="18" y="10.2" width="17" height="2.2" rx="1.1" fill="#6b4b33"/><circle cx="20" cy="3.6" r="1.2" fill="#6b4b33"/>`
 };
+// Sombrero de explorador: ala ancha, copa con cinta y un botón arriba.
+HATS.explorer = `<ellipse cx="20" cy="10.4" rx="16" ry="2.6" fill="#c9a26a" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><path d="M10.6 10q0-7.4 9.4-7.4t9.4 7.4z" fill="#d8b77e" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="10.6" y="7.4" width="18.8" height="2.2" fill="#7a5a34"/><circle cx="20" cy="3" r="1" fill="#7a5a34"/>`;
+// Uniformes del cuerpo (se dibujan sobre el torso pero sin cubrir los LEDs del pecho, y=29.4–35.6, ni la mano derecha).
+// Explorador: tirantes de la mochila; delantal: franja baja con dos bolsillos y herramientas; overol: peto bajo con
+// tirantes y botones.
+const OUTFIT_BODY = {
+  explorer: `<g class="o-body"><path d="M12.4 26.4l.4 9.6M27.6 26.4l-.4 9.6" stroke="#7a5a34" stroke-width="1.6" stroke-linecap="round"/><rect x="11.6" y="34" width="2.4" height="1.4" rx=".5" fill="#c9a26a"/><rect x="26" y="34" width="2.4" height="1.4" rx=".5" fill="#c9a26a"/></g>`,
+  apron: `<g class="o-body"><path d="M12.2 26.6v9.4M27.8 26.6v9.4" stroke="#6b4b33" stroke-width="1" stroke-linecap="round"/><path d="M10.6 36.2h18.8v3.2a2.6 2.6 0 0 1-2.6 .6H13.2a2.6 2.6 0 0 1-2.6-.6z" fill="#a9794f" stroke="#6b4b33" stroke-width=".6"/><rect x="12" y="37" width="6.6" height="2.8" rx=".7" fill="#8a6447" stroke="#6b4b33" stroke-width=".5"/><rect x="21.4" y="37" width="6.6" height="2.8" rx=".7" fill="#8a6447" stroke="#6b4b33" stroke-width=".5"/><path d="M14.2 37v-2.2M15.8 37v-1.4" stroke="#97a5ba" stroke-width="1" stroke-linecap="round"/><path d="M25 37l1.4-2.4" stroke="#f3b74f" stroke-width="1.1" stroke-linecap="round"/></g>`,
+  overall: `<g class="o-body"><path d="M12.4 26.4l-.2 9.6M27.6 26.4l.2 9.6" stroke="#3f6fc9" stroke-width="2.2" stroke-linecap="round"/><circle cx="12.3" cy="34.6" r=".8" fill="#e0b43c"/><circle cx="27.7" cy="34.6" r=".8" fill="#e0b43c"/><path d="M10.6 36h18.8v3.4a2.6 2.6 0 0 1-2.6 .6H13.2a2.6 2.6 0 0 1-2.6-.6z" fill="#3f6fc9" stroke="#2c56a8" stroke-width=".6"/><rect x="16.4" y="37" width="7.2" height="2.6" rx=".7" fill="#4f82e0" stroke="#2c56a8" stroke-width=".5"/></g>`
+};
+// Lo que va detrás del cuerpo: la mochila pequeña del explorador (asoma a los lados).
+const OUTFIT_BACK = {
+  explorer: `<g class="o-back"><rect x="7.6" y="25" width="24.8" height="11" rx="3" fill="#a07c4a" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="9" y="27" width="4" height="5.4" rx="1" fill="#7a5a34"/><rect x="27" y="27" width="4" height="5.4" rx="1" fill="#7a5a34"/></g>`
+};
 // Lo que el uniforme lleva en la mano izquierda (siempre visible).
 const OUTFIT_HAND = {
   inspector: `<g class="o-hand"><line x1="5.6" y1="38.5" x2="4.4" y2="41.4" stroke="#6b5340" stroke-width="1.6" stroke-linecap="round"/><circle cx="3.6" cy="43.6" r="2.7" fill="rgba(189,247,238,.3)" stroke="#cfe3f7" stroke-width="1.1"/></g>`,
@@ -229,10 +251,12 @@ function robotSVG(color, look = { ant: 0, visor: 0, acc: 0, uniform: '' }) {
     hat = hatOf(look);
   return `<svg viewBox="0 0 40 48" aria-hidden="true">
     <g class="legs">${leg('leg-l', 13)}${leg('leg-r', 22)}</g>
+    ${OUTFIT_BACK[look.outfit] || ''}
     ${arm('arm-l', 4, color, OUTFIT_HAND[look.outfit] || '')}
     <rect x="16.5" y="22.6" width="7" height="4.4" rx="1.2" fill="#3a4558"/>${HD_NECK}
     <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}" ${OUT}/>${SHADE_BODY}${HD_BODY}${CHEST}
     ${u ? `<path d="M10.5 26.4h19v3h-19z" fill="${u}"/><path d="M23.5 29l3.4 6-4.4-1.2z" fill="${u}"/>` : ''}
+    ${OUTFIT_BODY[look.outfit] || ''}
     ${BODY_ACC[look.acc] || ''}
     ${PROPS_BODY}
     ${arm('arm-r', 31, color, PROPS_HAND)}

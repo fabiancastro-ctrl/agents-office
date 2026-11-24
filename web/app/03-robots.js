@@ -60,7 +60,7 @@ function stateGestures(a, was, d) {
 }
 
 const artSig = d =>
-  JSON.stringify([d.color, d.look || null, d.crown || 0, d.skill || d.request?.skill || '', d.place?.type, d.place?.sala]);
+  JSON.stringify([d.color, d.look || null, d.crown || 0, d.skill || d.request?.skill || '', d.place?.type, d.place?.sala, outfitOf(d, d.place)]);
 function upsert(d, fromSnapshot = false) {
   layout(d.place); // agrega una fila de escritorios o la sala de su rutina si este robot la necesita
   let a = st.robots.get(d.name);
