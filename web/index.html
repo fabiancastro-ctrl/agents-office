@@ -61,9 +61,9 @@
   <div class="top-l"><div class="brand">Oficina de Agentes</div><button class="office-name" id="office-name" type="button" title="Nombre de esta oficina, para distinguirla de otras en el navegador. Clic para cambiarlo.">ponle nombre</button><span class="tag" id="conn">conectando…</span></div>
   <div class="top-c">
     <button class="btn primary" id="btn-new">Nuevo encargo</button>
-    <button class="btn door-chip" id="btn-door" hidden title="Encargos que lanzaste con la oficina llena: entran solos, en orden, cuando se libera un escritorio. Clic para verlos o sacar alguno.">🚪 <b id="door-n">0</b> en la puerta</button>
+    <button class="btn door-chip" id="btn-door" hidden title="Encargos que lanzaste con la oficina llena: entran solos, en orden, cuando se libera un escritorio. Clic para verlos o sacar alguno."><svg class="ic" aria-hidden="true"><use href="#i-door"/></svg> <b id="door-n">0</b> en la puerta</button>
     <button class="btn" id="btn-inbox" title="Documentos que tus robots dejaron para ti (tecla B)">Bandeja <b class="cnt" id="inbox-btn-n" hidden>0</b></button>
-    <button class="btn" id="btn-search" aria-label="Buscar" title="Buscar en todas las conversaciones de la oficina (tecla /)">🔎</button>
+    <button class="btn" id="btn-search" aria-label="Buscar" title="Buscar en todas las conversaciones de la oficina (tecla /)"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
     <button class="btn" id="btn-dismiss" hidden></button>
   </div>
   <div class="top-r">
@@ -74,16 +74,16 @@
       <button class="btn sm" id="cap-up" aria-label="Subir tope de robots">+</button>
     </div>
     <div class="more-wrap">
-      <button class="btn" id="btn-more" type="button" aria-expanded="false" aria-controls="more-menu" title="Más: rutinas, cierre del día, mensajes para enviar, uso de Claude, salud y ajustes">☰ <span class="lbl">Más</span></button>
+      <button class="btn" id="btn-more" type="button" aria-expanded="false" aria-controls="more-menu" title="Más: rutinas, cierre del día, mensajes para enviar, uso de Claude, salud y ajustes"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg> <span class="lbl">Más</span></button>
       <div class="more-menu" id="more-menu" role="menu" aria-label="Más opciones" hidden>
         <button class="mi" id="btn-routine" type="button" role="menuitem">Rutinas</button>
-        <button class="mi" id="btn-cierre" type="button" role="menuitem" title="Cierre del día: lo que queda abierto (quién te espera, quién terminó, salas, bandeja) para dejar todo en orden">🌙 Cierre</button>
-        <button class="mi" id="btn-pins" type="button" role="menuitem" title="Mensajes que guardaste con 📌 para pegarlos después en Google Chat o Slack (tecla P)">📌 Para enviar <b class="cnt" id="pins-n" hidden></b><kbd>P</kbd></button>
+        <button class="mi" id="btn-cierre" type="button" role="menuitem" title="Cierre del día: lo que queda abierto (quién te espera, quién terminó, salas, bandeja) para dejar todo en orden"><svg class="ic" aria-hidden="true"><use href="#i-moon"/></svg> Cierre</button>
+        <button class="mi" id="btn-pins" type="button" role="menuitem" title="Mensajes que guardaste con el pin para pegarlos después en Google Chat o Slack (tecla P)"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg> Para enviar <b class="cnt" id="pins-n" hidden></b><kbd>P</kbd></button>
         <button class="mi" id="btn-usage" type="button" role="menuitem" title="Uso y estado de Claude: límites de tu suscripción y tokens de la oficina">Uso Claude</button>
         <button class="mi-sub" id="week-chip" type="button" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button>
-        <button class="mi" id="btn-salud" type="button" role="menuitem" title="Salud, limpieza y respaldo de esta oficina (no gasta tokens)">🩺 Salud</button>
+        <button class="mi" id="btn-salud" type="button" role="menuitem" title="Salud, limpieza y respaldo de esta oficina (no gasta tokens)"><svg class="ic" aria-hidden="true"><use href="#i-pulse"/></svg> Salud</button>
         <button class="mi-sub" id="ws-chip" type="button"></button>
-        <button class="mi" id="btn-vista" type="button" role="menuitem" aria-expanded="false" aria-controls="vista-menu" title="Cómo se ve la oficina: estilo, tema, tamaño del texto, contraste, HD, 2.5D, compacta, avisos y sonido (tecla V)">⚙ Ajustes <kbd>V</kbd></button>
+        <button class="mi" id="btn-vista" type="button" role="menuitem" aria-expanded="false" aria-controls="vista-menu" title="Cómo se ve la oficina: estilo, tema, tamaño del texto, contraste, HD, 2.5D, compacta, avisos y sonido (tecla V)"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg> Ajustes <kbd>V</kbd></button>
       </div>
       <div class="vista-menu" id="vista-menu" role="group" aria-label="Ajustes" hidden>
       <h5 class="vm-h">Apariencia</h5>

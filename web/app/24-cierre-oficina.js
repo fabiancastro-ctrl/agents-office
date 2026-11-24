@@ -25,23 +25,23 @@ function cierrePanel() {
     door = st.door.length,
     pinsN = st.pins.length;
   const clear = !need.length && !done.length && !hold.length && !work.length && !st.salas.length && !unread && !door && !pinsN;
-  return `<div class="dlg-head"><h3>🌙 Cierre del día</h3><p>Lo que queda abierto en la oficina, para dejar todo en orden antes de irte. Sale de lo que la oficina ya sabe: no gasta tokens.</p></div>
+  return `<div class="dlg-head"><h3>${icon('moon')} Cierre del día</h3><p>Lo que queda abierto en la oficina, para dejar todo en orden antes de irte. Sale de lo que la oficina ya sabe: no gasta tokens.</p></div>
     ${clear ? '<section class="dlg-sec"><p class="cz-ok">✓ Todo en orden: no queda nada abierto.</p></section>' : ''}
-    ${sec('✋ Te esperan', need.length, `<div class="list">${need.map(d => row(d, d.consoleLost ? 'consola caída' : d.spawnReq ? 'pide robots' : d.ask ? 'te hizo una pregunta' : d.hold || d.needsPermission ? 'pide permiso' : 'espera tu respuesta', `${d.inputAt ? `<span class="pill p-input">${fmtDur(Date.now() - Date.parse(d.inputAt))}</span>` : ''}${open(d)}`)).join('')}</div>`, 'Nadie te espera.')}
+    ${sec(`${icon('hand')} Te esperan`, need.length, `<div class="list">${need.map(d => row(d, d.consoleLost ? 'consola caída' : d.spawnReq ? 'pide robots' : d.ask ? 'te hizo una pregunta' : d.hold || d.needsPermission ? 'pide permiso' : 'espera tu respuesta', `${d.inputAt ? `<span class="pill p-input">${fmtDur(Date.now() - Date.parse(d.inputAt))}</span>` : ''}${open(d)}`)).join('')}</div>`, 'Nadie te espera.')}
     ${sec(
       '✓ Listos',
       done.length,
       `<div class="list">${done.map(d => row(d, `terminó hace ${ago(d.lastEventAt || d.timeline?.at(-1)?.at)}${d.docs.length ? ` · ▤ ${d.docs.length}` : ''}${busyKids(d) ? ' · sus hijos siguen' : ''}`, `${open(d)}${busyKids(d) ? '' : `<button type="button" class="btn sm danger" data-cz-kill="${esc(d.name)}" title="Dar de baja sin resumen (sus documentos pendientes pasan a la bandeja)">Despedir</button>`}`)).join('')}</div>
-      ${canGo.length > 1 ? `<div class="row cz-bulk"><button type="button" class="btn sm danger${cierreUi.armed ? ' armed' : ''}" data-cz-killall>${cierreUi.armed ? `¿Seguro? Clic otra vez para despedir a ${canGo.length}` : `👋 Despedir a los ${canGo.length} listos`}</button><span class="note">Sin resumen. Los que tienen hijos trabajando se quedan.</span></div>` : ''}`,
+      ${canGo.length > 1 ? `<div class="row cz-bulk"><button type="button" class="btn sm danger${cierreUi.armed ? ' armed' : ''}" data-cz-killall>${cierreUi.armed ? `¿Seguro? Clic otra vez para despedir a ${canGo.length}` : `${icon('hand')} Despedir a los ${canGo.length} listos`}</button><span class="note">Sin resumen. Los que tienen hijos trabajando se quedan.</span></div>` : ''}`,
       'Nadie terminó y quedó esperando.'
     )}
-    ${sec('⏳ En espera', hold.length, `<div class="list">${hold.map(d => row(d, esc(holdText(d)), open(d))).join('')}</div><p class="note">Dejaron algo corriendo de fondo (una shell, un monitor, un despertador): siguen solos cuando eso termine.</p>`, 'Nadie dejó tareas de fondo corriendo.')}
-    ${sec('⚙ Siguen trabajando', work.length, `<p class="note">${work.map(d => `<b>${esc(d.name)}</b>${d.repo ? ` (⎇ ${esc(d.repo)})` : ''}`).join(' · ')} — seguirán aunque cierres la página.</p>`, 'Nadie está trabajando.')}
-    ${sec('🚪 Salas en curso', salasOpen.length, `<div class="list">${salasOpen.map(({ s, p, n }) => `<div class="item cz-row"><div class="meta-i"><b>${esc(s.name)}</b><div>${n} robot${n === 1 ? '' : 's'}${p ? ` · ${p.ok}/${p.n} entregaron` : ''}${s.done ? ' · ✓ terminó' : ''}${s.notes?.length ? ` · 📌 ${s.notes.length} nota${s.notes.length === 1 ? '' : 's'} tuya${s.notes.length === 1 ? '' : 's'}` : ''}</div></div><div class="row"><button type="button" class="btn sm" data-cz-sala="${esc(s.id)}">Entrar</button></div></div>`).join('')}</div>`, 'No hay salas abiertas.')}
-    <section class="dlg-sec"><h4>📥 Pendientes tuyos</h4><div class="cz-mini">
+    ${sec(`${icon('hourglass')} En espera`, hold.length, `<div class="list">${hold.map(d => row(d, esc(holdText(d)), open(d))).join('')}</div><p class="note">Dejaron algo corriendo de fondo (una shell, un monitor, un despertador): siguen solos cuando eso termine.</p>`, 'Nadie dejó tareas de fondo corriendo.')}
+    ${sec(`${icon('gear')} Siguen trabajando`, work.length, `<p class="note">${work.map(d => `<b>${esc(d.name)}</b>${d.repo ? ` (${icon('branch')} ${esc(d.repo)})` : ''}`).join(' · ')} — seguirán aunque cierres la página.</p>`, 'Nadie está trabajando.')}
+    ${sec(`${icon('door')} Salas en curso`, salasOpen.length, `<div class="list">${salasOpen.map(({ s, p, n }) => `<div class="item cz-row"><div class="meta-i"><b>${esc(s.name)}</b><div>${n} robot${n === 1 ? '' : 's'}${p ? ` · ${p.ok}/${p.n} entregaron` : ''}${s.done ? ' · ✓ terminó' : ''}${s.notes?.length ? ` · ${icon('pin')} ${s.notes.length} nota${s.notes.length === 1 ? '' : 's'} tuya${s.notes.length === 1 ? '' : 's'}` : ''}</div></div><div class="row"><button type="button" class="btn sm" data-cz-sala="${esc(s.id)}">Entrar</button></div></div>`).join('')}</div>`, 'No hay salas abiertas.')}
+    <section class="dlg-sec"><h4>${icon('inbox')} Pendientes tuyos</h4><div class="cz-mini">
       <button type="button" class="btn sm" data-cz-go="@inbox" ${unread ? '' : 'disabled'}>Bandeja: ${unread} sin leer</button>
-      <button type="button" class="btn sm" data-cz-go="@pins" ${pinsN ? '' : 'disabled'}>📌 Para enviar: ${pinsN}</button>
-      <button type="button" class="btn sm" data-cz-door ${door ? '' : 'disabled'}>🚪 En la puerta: ${door}</button>
+      <button type="button" class="btn sm" data-cz-go="@pins" ${pinsN ? '' : 'disabled'}>${icon('pin')} Para enviar: ${pinsN}</button>
+      <button type="button" class="btn sm" data-cz-door ${door ? '' : 'disabled'}>${icon('door')} En la puerta: ${door}</button>
     </div></section>`;
 }
 PANEL.addEventListener('click', async e => {
@@ -126,11 +126,11 @@ function syncSaludChip() {
   const bad = h.checks.filter(c => !c.ok).length;
   b.classList.toggle('warn', !!bad);
   $('#btn-more')?.classList.toggle('warn', !!bad); // the dot on «☰ Más» tells there is something in Salud
-  b.textContent = bad ? `🩺 Salud · ${bad} aviso${bad === 1 ? '' : 's'}` : '🩺 Salud';
+  b.innerHTML = `${icon('pulse')} ${bad ? `Salud · ${bad} aviso${bad === 1 ? '' : 's'}` : 'Salud'}`;
 }
 function oficinaPanel() {
   const h = oficinaUi.h;
-  if (!h) return `<div class="dlg-head"><h3>🩺 Oficina</h3></div><p>${oficinaUi.err ? esc(oficinaUi.err) : 'Revisando…'}</p>`;
+  if (!h) return `<div class="dlg-head"><h3>${icon('pulse')} Oficina</h3></div><p>${oficinaUi.err ? esc(oficinaUi.err) : 'Revisando…'}</p>`;
   const up = fmtDur(h.daemon.upMs);
   const checks = h.checks
     .map(
@@ -152,7 +152,7 @@ function oficinaPanel() {
     .join('');
   const c = h.clean || {};
   const imp = oficinaUi.imp;
-  return `<div class="dlg-head"><h3>🩺 Oficina</h3><p>Salud, limpieza y respaldo de esta oficina. Nada de esto gasta tokens: lee archivos y tmux, sin abrir /usage ni escribirle a los robots.</p></div>
+  return `<div class="dlg-head"><h3>${icon('pulse')} Oficina</h3><p>Salud, limpieza y respaldo de esta oficina. Nada de esto gasta tokens: lee archivos y tmux, sin abrir /usage ni escribirle a los robots.</p></div>
     <section class="dlg-sec"><div class="row between"><h4>Salud</h4><button type="button" class="btn sm" data-of="recheck" ${oficinaUi.loading ? 'disabled' : ''}>${oficinaUi.loading ? 'Revisando…' : 'Revisar otra vez'}</button></div>
       <div class="hl-list">${checks}</div>${bots}
       <p class="note">Daemon pid ${h.daemon.pid} · puerto ${h.daemon.port} · Node ${esc(h.daemon.node)} · encendido hace ${esc(up)} · datos en <code>${esc(h.daemon.data)}</code></p></section>
@@ -161,11 +161,11 @@ function oficinaPanel() {
       ${cand ? `<ul class="cl-list">${cand}</ul>` : ''}
       <div class="row cl-row"><label>Más viejo que <select id="cl-days" data-of="days">${(c.options || [3, 7, 14, 30]).map(d => `<option value="${d}"${d === c.days ? ' selected' : ''}>${d} días</option>`).join('')}</select></label>
         <label class="check"><input type="checkbox" id="cl-auto" data-of="auto"${c.auto ? ' checked' : ''}> Limpiar sola una vez por semana</label>
-        <button type="button" class="btn sm danger${oficinaUi.cleanArmed ? ' armed' : ''}" data-of="clean" ${h.freeable ? '' : 'disabled'}>${oficinaUi.cleanArmed ? '¿Seguro? Clic otra vez' : '🧹 Limpiar ahora'}</button></div>
+        <button type="button" class="btn sm danger${oficinaUi.cleanArmed ? ' armed' : ''}" data-of="clean" ${h.freeable ? '' : 'disabled'}>${oficinaUi.cleanArmed ? '¿Seguro? Clic otra vez' : `${icon('broom')} Limpiar ahora`}</button></div>
       <p class="note">Va a la Papelera (se recupera de ahí). Nunca toca lo de hoy, lo de un robot que está en la oficina, las salas abiertas o archivadas, tus rutinas ni tus estadísticas. De los eventos crudos se guarda antes lo que arma el uso por semana.${c.last ? ` Última limpieza: ${esc(new Date(c.last).toLocaleString('es'))} (${c.lastMoved || 0} elementos, ${fmtBytesW(c.lastBytes || 0)}).` : ''}</p></section>
     <section class="dlg-sec"><h4>Respaldo</h4>
       <p>Guarda en un archivo tus rutinas, encargos frecuentes, mensajes «para enviar», el nombre, estilo y tope de la oficina y la apariencia de los robots que están ahora. Sirve para pasarlos a otro computador o a otra oficina.</p>
-      <div class="row"><a class="btn sm" href="/api/respaldo" download>⬇ Descargar respaldo</a><label class="btn sm" for="bk-file">⬆ Importar respaldo…</label><input type="file" id="bk-file" accept=".json,application/json" hidden></div>
+      <div class="row"><a class="btn sm" href="/api/respaldo" download>${icon('down')} Descargar respaldo</a><label class="btn sm" for="bk-file">${icon('up')} Importar respaldo…</label><input type="file" id="bk-file" accept=".json,application/json" hidden></div>
       ${
         imp
           ? `<div class="bk-imp"><p><b>${esc(imp.file)}</b> (de ${esc(new Date(imp.data.at).toLocaleString('es'))}): ${imp.data.routines?.length || 0} rutinas · ${imp.data.favorites?.length || 0} frecuentes · ${imp.data.pins?.length || 0} para enviar · ${Object.keys(imp.data.looks || {}).length} apariencias.</p>
@@ -204,7 +204,8 @@ PANEL.addEventListener('click', async e => {
     try {
       const r = await api('POST', '/api/limpieza', { run: true, days: Number($('#cl-days').value) });
       toast(
-        `🧹 Llevé ${r.moved} elemento${r.moved === 1 ? '' : 's'} a la Papelera (${fmtBytesW(r.bytes)}).${r.errors.length ? ` ${r.errors.length} no se pudieron mover.` : ''}`
+        `Llevé ${r.moved} elemento${r.moved === 1 ? '' : 's'} a la Papelera (${fmtBytesW(r.bytes)}).${r.errors.length ? ` ${r.errors.length} no se pudieron mover.` : ''}`,
+        'broom'
       );
     } catch {
       /* toast ya mostrado */

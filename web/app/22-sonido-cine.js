@@ -84,7 +84,7 @@ soundBtn.addEventListener('click', () => {
 // X · Modo cine (tecla C): solo el mapa, a pantalla completa, sin barra, métricas ni tarjetas. C o Esc salen.
 function cinema(on = !document.body.classList.contains('cine')) {
   document.body.classList.toggle('cine', on);
-  if (on) toast('🎬 Modo cine · C o Esc para salir');
+  if (on) toast('Modo cine · C o Esc para salir', 'film');
   requestAnimationFrame(() => layout());
 }
 document.addEventListener('keydown', e => {

@@ -151,9 +151,10 @@ async function api(method, url, body) {
   return data;
 }
 
-function toast(msg) {
+function toast(msg, ic) {
   const t = $('#toast');
-  t.textContent = msg;
+  if (ic) t.innerHTML = `${icon(ic)} ${esc(msg)}`;
+  else t.textContent = msg;
   t.hidden = false;
   clearTimeout(toast.t);
   toast.t = setTimeout(() => (t.hidden = true), 4500);
