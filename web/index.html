@@ -81,6 +81,7 @@
         <button class="mi" id="btn-cierre" type="button" role="menuitem" title="Cierre del día: lo que queda abierto (quién te espera, quién terminó, salas, bandeja) para dejar todo en orden"><svg class="ic" aria-hidden="true"><use href="#i-moon"/></svg> Cierre</button>
         <button class="mi" id="btn-pins" type="button" role="menuitem" title="Mensajes que guardaste con el pin para pegarlos después en Google Chat o Slack (tecla P)"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg> Para enviar <b class="cnt" id="pins-n" hidden></b><kbd>P</kbd></button>
         <button class="mi" id="btn-cuaderno" type="button" role="menuitem" title="Cuaderno: las notas que comparten los robots de esta oficina y las que proponen para que las apruebes"><svg class="ic" aria-hidden="true"><use href="#i-notebook"/></svg> Cuaderno <b class="cnt" id="cuad-n" hidden></b></button>
+        <button class="mi" id="btn-fama" type="button" role="menuitem" title="El robot que más tokens gastó en cada semana de tu cuota, las últimas 4">Muro de la fama</button>
         <button class="mi" id="btn-usage" type="button" role="menuitem" title="Uso y estado de Claude: límites de tu suscripción y tokens de la oficina">Uso Claude</button>
         <button class="mi-sub" id="week-chip" type="button" title="Tokens de toda la oficina esta semana (lunes a domingo). Clic para el detalle."></button>
         <button class="mi" id="btn-salud" type="button" role="menuitem" title="Salud, limpieza y respaldo de esta oficina (no gasta tokens)"><svg class="ic" aria-hidden="true"><use href="#i-pulse"/></svg> Salud</button>
@@ -148,7 +149,6 @@
       <div class="trophies" id="trophies"></div>
       <div class="archivador" id="archivador" data-room="archivo" title="Archivo: robots despedidos con su resumen, para retomarlos (tecla H)"><i></i><i></i><i></i><b id="arch-n" hidden></b></div>
       <div class="tboard" id="tboard"></div>
-      <div class="eotm" id="eotm" hidden></div>
       <div class="qclock" id="qclock" hidden></div>
       <div class="growth" id="growth" aria-hidden="true"></div>
     </div>

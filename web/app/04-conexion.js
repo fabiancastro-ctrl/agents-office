@@ -46,7 +46,6 @@ function connect() {
         st.linked = true;
         setTimeout(() => select(rh), 60);
       }
-      renderFame(); // con los robots ya cargados: la cara del cuadro lleva su corona
       layout();
       PANEL.dataset.view = ''; // tras reconectar, repintado completo (el log pudo cambiar)
       renderRoutineChips();
@@ -57,7 +56,6 @@ function connect() {
       st.ready = true; // el siguiente checkAlerts toma esto como punto de partida
     } else if (m.type === 'robot') {
       upsert(m.robot);
-      if (m.robot.name === st.fame?.employee?.name) renderFame();
     } else if (m.type === 'setup') onSetupSaved(m);
     else if (m.type === 'config') {
       st.config = m.config;
@@ -135,7 +133,6 @@ function connect() {
     } else if (m.type === 'memoria') onMemoria(m.memoria);
     else if (m.type === 'fame') {
       st.fame = m.fame;
-      renderFame();
     } else if (m.type === 'door') {
       st.door = m.door;
       renderDoor();

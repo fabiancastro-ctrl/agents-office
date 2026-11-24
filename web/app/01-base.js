@@ -143,6 +143,63 @@ const GROW_PLANTS = [
   [4, 65.2, 80, 2.4, 6.4, false, 'big'],
   [4, 65.2, 47, 2.4, 6.4, false, 'big']
 ];
+// Office styles (selector «Estilo», setMapTheme in 07-vistas.js).
+// Each style dresses the same map: CSS restyles floors, walls, furniture, corridor and room signs (style.css,
+// «estilos de oficina»), and TDECO adds its own props. Props use map coordinates like setRect: [class, x %, y, width %,
+// height (null = the CSS aspect-ratio), anchored to the bottom of the desks room?]. Free spots that stay free with any
+// number of robots: the wall of Tu escritorio left of the calendar (W), the bottom corners of the desks room and the gaps
+// between desk columns at the bottom (robots stand under their desk, never there).
+const TD_WALL = [38.5, 6.5, 7, 15.5];
+const TDECO = {
+  moderna: [['td-art', ...TD_WALL]],
+  garaje: [
+    ['td-peg', ...TD_WALL],
+    ['td-box', 2.8, 92.2, 2.4, null, true],
+    ['td-box', 5.3, 92.2, 2.4, null, true],
+    ['td-box', 4.05, 88.4, 2.4, null, true],
+    ['td-chest', 62.3, 87.6, 4.2, 8.6, true],
+    ['td-drum', 32.6, 89.4, 1.9, 6.8, true],
+    ['td-drum d2', 48.6, 89.4, 1.9, 6.8, true]
+  ],
+  nave: [
+    ['td-radar', ...TD_WALL],
+    ['td-pipe', 2.6, 95.4, 64.4, 0.9, true],
+    ['td-holo', 62.2, 86.4, 4.4, 8.4, true],
+    ['td-crate', 2.8, 89, 3.4, 5.8, true],
+    ['td-light', 17.3, 92.6, 0.9, null, true],
+    ['td-light', 33.5, 92.6, 0.9, null, true],
+    ['td-light', 49.7, 92.6, 0.9, null, true]
+  ],
+  biblioteca: [
+    ['td-shelf tall', ...TD_WALL],
+    ['td-shelf', 2.6, 87.4, 4.4, 8.6, true],
+    ['td-shelf', 62.4, 87.4, 4.6, 8.6, true],
+    ['td-globe', 32.8, 89, 2.2, 7, true],
+    ['td-lamp', 17.1, 91.6, 1.4, null, true],
+    ['td-lamp', 49.5, 91.6, 1.4, null, true]
+  ],
+  cafeteria: [
+    ['td-menu', ...TD_WALL],
+    ['td-cake', 2.7, 88.6, 3.6, 7.6, true],
+    ['td-bar', 61.6, 90.6, 5.4, 5.2, true],
+    ['td-stool', 17.2, 91.8, 1.5, 4.2, true],
+    ['td-stool', 49.6, 91.8, 1.5, 4.2, true],
+    ['td-stool', 33.2, 91.8, 1.5, 4.2, true]
+  ],
+  bosque: [
+    ['td-view', ...TD_WALL],
+    ['td-tree', 2.4, 85.6, 4.2, null, true],
+    ['td-tree t2', 63, 86.4, 3.6, null, true],
+    ['td-log', 31.8, 93.4, 3.8, 2.6, true],
+    ['td-mush', 17.2, 93.6, 1.3, null, true],
+    ['td-mush m2', 18.5, 94.4, 0.9, null, true],
+    ['td-mush', 49.4, 93.6, 1.3, null, true],
+    ['td-fly', 20, 88, null, null, true],
+    ['td-fly f2', 45, 90, null, null, true],
+    ['td-fly f3', 58, 86, null, null, true],
+    ['td-fly f4', 12, 80, null, null, true]
+  ]
+};
 // colIdx: sala/rutina -> cuarto de la columna (estable mientras exista).
 const geo = { rows: BASE_ROWS, H: 100, rooms: [], roomOrder: [], roomEls: new Map(), sig: '', colIdx: new Map(), colSlots: [] };
 const extra = () => geo.H - 100;

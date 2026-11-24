@@ -11,17 +11,16 @@ $('#btn-view').addEventListener('click', () => {
   setView(!$('.map-wrap').classList.contains('iso'));
 });
 // Estilo de la oficina (lo guarda el daemon en la configuración de esta oficina). «Moderna» es el de siempre.
-const TDECO = {
-  garaje:
-    '<i class="td-box" style="left:3%;top:89%"></i><i class="td-box" style="left:5.8%;top:89%"></i><i class="td-box" style="left:4.4%;top:84.6%"></i><i class="td-box" style="left:71%;top:90%"></i><i class="td-board" style="left:31%;top:33.4%;width:8%;height:4.2%"></i>',
-  nave: '<i class="td-pipe" style="left:3%;top:96.2%;width:72%"></i><i class="td-light" style="left:3.2%;top:39.6%"></i><i class="td-light" style="left:74%;top:39.6%"></i><i class="td-light" style="left:3.2%;top:94%"></i><i class="td-light" style="left:74%;top:94%"></i>',
-  biblioteca:
-    '<i class="td-shelf" style="left:3%;top:88.4%;width:13%;height:7%"></i><i class="td-shelf" style="left:61%;top:88.4%;width:13%;height:7%"></i><i class="td-lamp" style="left:18%;top:90%"></i><i class="td-lamp" style="left:58%;top:90%"></i>',
-  bosque:
-    '<i class="td-tree" style="left:2.6%;top:84%"></i><i class="td-tree t2" style="left:68.5%;top:85%"></i><i class="td-log" style="left:8%;top:93.2%;width:7%;height:2.4%"></i><i class="td-mush" style="left:62.5%;top:93%"></i><i class="td-mush m2" style="left:64.2%;top:93.8%"></i><i class="td-sign" style="left:31%;top:33.3%;width:7%;height:4.4%"></i><i class="td-fly" style="left:20%;top:88%"></i><i class="td-fly f2" style="left:45%;top:90%"></i><i class="td-fly f3" style="left:58%;top:86%"></i><i class="td-fly f4" style="left:12%;top:80%"></i>',
-  cafeteria:
-    '<i class="td-bar" style="left:3%;top:90.6%;width:16%;height:4.6%"></i><i class="td-menu" style="left:31%;top:33.2%;width:7%;height:4.4%"></i>'
-};
+function placeTDeco(e = extra()) {
+  const box = $('#tdeco'),
+    t = $('.map-wrap').dataset.mt || 'moderna',
+    list = TDECO[t] || [];
+  if (box.dataset.t !== t) {
+    box.dataset.t = t;
+    box.innerHTML = list.map(([cls]) => `<i class="${cls}"></i>`).join('');
+  }
+  list.forEach(([, x, y, w, h, low], k) => setRect(box.children[k], x, y + (low ? e : 0), w, h));
+}
 // Decoración que crece con el trabajo: en cada nivel aparecen plantas nuevas (y las de siempre crecen y florecen),
 // un trofeo cada 10 tareas en tu escritorio y la pizarra de la sala de descanso con lo terminado hoy.
 // Una «tarea» es cada vez que un robot termina lo que le pediste (cada respuesta final de su turno).
@@ -131,7 +130,7 @@ function renderGrowth() {
     setTimeout(() => MAP.classList.remove('repotting', 'repot-new'), 4200);
   } else if (!MAP.classList.contains('repotting')) setGrowLevel(lvl);
   const n = Math.floor(s.total / 10),
-    shown = Math.min(n, 6);
+    shown = Math.min(n, 4); // the shelf ends at the filing cabinet: more than 4 go in «+N»
   const tr = $('#trophies');
   tr.innerHTML =
     Array.from({ length: shown }, (_, i) => `<i class="cup${i % 3 === 2 ? ' big' : ''}"></i>`).join('') +
@@ -158,41 +157,8 @@ function renderGrowth() {
   $('#tboard').title =
     `Plantas nivel ${lvl} de 4 · ${week} tareas esta semana de la cuota${next ? ` · el siguiente nivel (más plantas) llega a las ${next}` : ' · nivel máximo'}${until ? ` · se cambian las materas al renovarse la cuota (${until})` : ''}. Hoy: ${s.today}. En total: ${s.total} (los trofeos cuentan el total).`;
 }
-// Cuadro «Empleado de la semana» en tu escritorio: el robot que más tokens gastó desde que se renovó tu cuota
-// semanal (lo calcula el daemon; se reinicia con la cuota). Si está en la oficina lleva corona con fuego (🔥🔥 si
-// además es el que más gastó en la sesión actual de 5 h). Clic: abre al robot si sigue en la oficina.
-function renderFame() {
-  const box = $('#eotm'),
-    em = st.fame?.employee;
-  box.hidden = !em;
-  if (!em) return;
-  const live = st.robots.get(em.name)?.data;
-  const crown = live?.crown || 0;
-  const look = lookOf(em.name, live?.place || null, live || { look: em.look, crown: 0 });
-  const html = `<button type="button" class="eotm-zoom" data-fame-wall title="Muro de la fama: los últimos 4 empleados de la semana" aria-label="Ver los últimos 4 empleados de la semana">${icon('search')}</button><small>EMPLEADO DE LA SEMANA</small><span class="eotm-face">${robotHead(COLORS[(live?.color ?? em.color ?? 0) % COLORS.length], look)}</span><b>${esc(em.name)}</b><i>${fmtTok(em.tokens)}</i>`;
-  if (box._html !== html) {
-    box._html = html;
-    box.innerHTML = html;
-  }
-  const p = st.fame.period,
-    d = t => fmtWhen(t, { weekday: 'short', hour: 'numeric' });
-  box.title =
-    `👑 Empleado de la semana: ${em.name}${em.title ? ` («${em.title}»)` : ''} · ${em.tokens.toLocaleString('es')} tokens desde ${d(p.from)}.\n` +
-    `Se reinicia cuando se renueva tu cuota semanal: ${d(p.to)}${p.known ? '' : ' (aún sin leer /usage: se toma el lunes)'}.\n` +
-    (em.present
-      ? `Está en la oficina con la corona ${crown >= 2 ? 'de dos fuegos 🔥🔥: también es el que más gastó en esta sesión de 5 h' : 'de un fuego 🔥'}. Clic para verlo.`
-      : 'Ya no está en la oficina (está en el archivo).');
-  box.classList.toggle('live', !!em.present);
-}
-$('#eotm').addEventListener('click', e => {
-  if (e.target.closest('[data-fame-wall]')) {
-    e.stopPropagation();
-    return select('@fama');
-  }
-  const n = st.fame?.employee?.name;
-  if (n && st.robots.has(n)) select(n);
-});
-// 9 · Muro de la fama (lupa del cuadro): los últimos 4 empleados de la semana, en cuadros como el del escritorio.
+// 9 · Muro de la fama (menú «Más»): los últimos 4 empleados de la semana, cada uno en su cuadro.
+$('#btn-fama').addEventListener('click', () => select('@fama'));
 const famaUi = { weeks: null };
 function famaPanel() {
   const w = famaUi.weeks;
@@ -218,9 +184,9 @@ async function loadFama() {
 }
 
 function setMapTheme(t) {
-  t = TDECO[t] || t === 'moderna' ? t : 'moderna';
+  t = TDECO[t] ? t : 'moderna';
   $('.map-wrap').dataset.mt = t;
-  $('#tdeco').innerHTML = TDECO[t] || '';
+  placeTDeco();
   $('#map-theme').value = t;
 }
 $('#map-theme').addEventListener('change', async e => {

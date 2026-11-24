@@ -76,17 +76,16 @@ function layout(incoming) {
   setRect($('.deco.btable'), 5, 21, 10, 4);
   setRect($('.deco.bcoffee'), 32.4, 16, 2.8, 8);
   setRect($('.deco.pingpong'), 17, 20.5, 13.5, 4.5);
-  setRect($('#tboard'), 29, 5.2, 4.6, 8.4);
+  setRect($('#tboard'), 29, 7.4, 4.6, 8); // below the «N en pausa» count, above the pot
   setRect($('#room-open'), 2, 38, OFFICE_R - 2, 59 + e);
   setRect($('#room-coord'), 36.5, 3, 31, 30);
-  setRect($('#eotm'), 38.5, 6.5, 10.5, 15.5); // cuadro del empleado de la semana, colgado en la pared de tu escritorio
-  setRect($('#rt-cal'), 50.5, 6.8, 16, 14); // calendario de rutinas en la pared
+  setRect($('#rt-cal'), 47, 6.8, 14.6, 14); // calendario de rutinas en la pared (a su izquierda, el cuadro del estilo)
   setRect($('#inbox'), 38.5, 24, 6.5, 5.5);
   setRect($('#alarm'), 45.6, 25, 2.2, null);
   setRect($('#me'), 49, 21.5, 4.5, 10);
   setRect($('#trophies'), 54, 27); // repisa al pie de tu escritorio
-  setRect($('#archivador'), 59.5, 23, 2.8, 8); // archivador: robots despedidos con su resumen
-  setRect($('#qclock'), 63, 22, 3.9, 10); // reloj de la cuota semanal
+  setRect($('#archivador'), 63.6, 23, 2.8, 8); // archivador: robots despedidos con su resumen
+  setRect($('#qclock'), 62.8, 6.6, 3.9, 10); // reloj de la cuota semanal, colgado en la pared
   setRect($('.door'), 36, 97.2 + e, 8, 2.8);
   document.querySelectorAll('.win').forEach((w, k) => setRect(w, 15.5 + k * COL_DX, 37.1, 4.2, 1.8)); // en los huecos entre escritorios
   setRect($('.deco.plant.p1'), 2.9, 27.8, 1.7, 4.5);
@@ -96,6 +95,7 @@ function layout(incoming) {
   setRect($('#corridor'), CORR.x, 3, CORR.w, geo.H - 6);
   setRect($('.room.r-war'), SALA_COL.x, 3, SALA_COL.w, geo.H - 6);
   placeGrowth(e);
+  placeTDeco(e);
   ensureDesks(rows * COLS);
   // Mesas un poco más chicas que su lugar (13 × 10): mismo centro y mismo borde de abajo, así los robots no se mueven.
   deskEls.forEach((d, i) => {
