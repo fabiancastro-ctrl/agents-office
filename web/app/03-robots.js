@@ -83,7 +83,6 @@ function vacate(place, a) {
     desk.paper.hidden = true;
     desk.el.dataset.cl = 0;
     desk.el.title = '';
-    delete desk.el.dataset.ctx;
     desk.el.classList.remove('noted');
   }
   for (const el of a.subEls.values()) el.remove();
@@ -280,6 +279,9 @@ function paint(a) {
   const mi = modelInfo(d.model);
   if (mi.fam) a.el.dataset.m = mi.fam;
   else delete a.el.dataset.m;
+  // Chest LEDs show the context level (see .robot[data-lv] in style.css); unknown context keeps the decorative blink.
+  if (d.ctx) a.el.dataset.lv = d.ctx.pct >= 75 ? 3 : d.ctx.pct >= 50 ? 2 : 1;
+  else delete a.el.dataset.lv;
   a.el.setAttribute('aria-label', mi.name ? `Robot ${d.name} · ${mi.name}` : `Robot ${d.name}`);
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
@@ -368,10 +370,6 @@ function paint(a) {
     // Desorden del escritorio según qué tan lleno tiene el contexto: hojas, tazas y bolas de papel.
     const pct = d.ctx?.pct ?? 0;
     desk.el.dataset.cl = pct >= 75 ? 3 : pct >= 50 ? 2 : pct >= 25 ? 1 : 0;
-    if (d.ctx) {
-      desk.el.dataset.ctx = pct >= 75 ? 'hi' : pct >= 50 ? 'mid' : 'lo';
-      desk.el.style.setProperty('--ctx', Math.min(100, pct) + '%');
-    } else delete desk.el.dataset.ctx;
     desk.el.classList.toggle('noted', !!d.note);
     desk.el.title = d.ctx ? `${d.name} · contexto ${pct}% lleno (${fmtTok(d.ctx.tokens)} de ${fmtTok(d.ctx.window || 200000)} tokens)` : '';
     desk.paper.hidden = !pend;

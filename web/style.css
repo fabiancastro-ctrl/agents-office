@@ -968,6 +968,12 @@ html[data-theme=light] .sub-row{background:#ece9fb;color:#3b2f86}
 .lk-c button:hover{border-color:var(--amber)}
 .robot .led{animation:led 1.6s steps(2) infinite} .robot .led.l2{animation-delay:.5s} .robot .led.l3{animation-delay:1s}
 @keyframes led{50%{opacity:.35}}
+/* pecho como medidor de contexto (data-lv lo pone paint): 1 LED verde <50 %, 2 ámbar 50-74 %, 3 rojos desde 75 %.
+   Los apagados quedan oscuros (el gris es del robot desconectado). Sin data-lv parpadean de adorno como siempre. */
+.robot[data-lv] .led{animation:none;opacity:1;fill:#1d2531}
+.robot[data-lv="1"] .l1{fill:#6fd08c}
+.robot[data-lv="2"] .l1,.robot[data-lv="2"] .l2{fill:#f3b74f}
+.robot[data-lv="3"] .led{fill:#ef5a6a}
 
 /* ---------- estilos de oficina (selector «Estilo»; se guarda por oficina) ---------- */
 /* «Moderna» es la de siempre. Cada estilo cambia piso, paredes, salas y madera, y suma un par de detalles (#tdeco). */
@@ -1185,15 +1191,6 @@ html[data-theme=light] .fwd label{color:#3b475a}
 @keyframes sprout{from{transform:scale(.2);opacity:0}}
 .map-wrap.iso .growth .gp{transform-origin:50% 100%;transform:rotateZ(calc(-1 * var(--rz))) rotateX(calc(-1 * var(--rx)))}
 .tboard{pointer-events:auto;cursor:default}
-
-/* ---------- medidor de contexto: un relojito en la esquina del escritorio que se llena ---------- */
-.desk .ctxm{display:none;position:absolute;left:5%;bottom:10%;width:12px;aspect-ratio:1;border-radius:50%;z-index:2;--cc:#5fcbb9;
-  background:radial-gradient(circle,#1b2430 0 36%,transparent 38%),conic-gradient(var(--cc) var(--ctx,0%),rgba(20,14,8,.4) 0);
-  box-shadow:0 0 0 1.5px #e8edf4,0 1px 2px rgba(0,0,0,.5)}
-.desk .ctxm b{display:none}
-.desk[data-ctx] .ctxm{display:block}
-.desk[data-ctx=mid] .ctxm{--cc:#f3b74f}
-.desk[data-ctx=hi] .ctxm{--cc:#ef7f8a}
 
 /* ---------- robots que pide un robot ---------- */
 .spawn-box{display:grid;gap:8px}
