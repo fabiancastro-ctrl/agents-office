@@ -55,17 +55,10 @@ function kidsBlock(d) {
   return `<div class="rp-block kids" id="kids"><h4>${d.parent ? `Lo lanzó <button type="button" class="kid inline" data-pick="${esc(d.parent)}">${esc(d.parent)}</button>` : 'Robots que lanzó'}</h4>${d.kids?.length ? `<div class="kid-l">${d.kids.map(kid).join('')}</div>` : ''}</div>`;
 }
 
-// Robot window header: up to 3 main actions that depend on the state (decide a permission, relieve or dismiss).
+// Robot window header: main actions that depend on the state (relieve or dismiss). Permission decisions live in the
+// alert box, next to what is being asked.
 function headActions(d) {
   const out = [];
-  if (d.hold)
-    out.push(
-      `<button type="button" class="btn sm primary" data-act="hold-allow">Aprobar</button><button type="button" class="btn sm danger" data-act="hold-deny">Denegar</button>`
-    );
-  else if (d.needsPermission)
-    out.push(
-      `<button type="button" class="btn sm primary" data-act="perm-approve">Aprobar</button><button type="button" class="btn sm danger" data-act="perm-reject">Rechazar</button>`
-    );
   if (d.relevo && !d.relevoPending && canSummary(d))
     out.push(
       `<button type="button" class="btn sm primary" data-act="relevar" title="Mucho contexto: cada turno lo relee entero. Escribe su resumen, se va y entra otro robot con su mismo nombre que sigue solo con ese resumen.">${relevoLabel(d)}</button>`
@@ -144,9 +137,9 @@ function robotPanel(a) {
   else if (d.spawnReq) alert = spawnBox(d);
   else if (d.ask) alert = `<div class="alert ask-box" id="rp-alert"><b>Te pregunta</b>${askForm(d, 'p')}</div>`;
   else if (d.hold)
-    alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><span class="note">Decide con los botones de arriba (o las teclas A y D).</span></div>`;
+    alert = `<div class="alert" id="rp-alert"><b>Pide permiso (retenido por la oficina)</b><span class="sub-h">${esc(d.hold.tool)}</span><div class="row"><button class="btn primary sm" data-act="hold-allow">Aprobar</button><button class="btn danger sm" data-act="hold-deny">Denegar</button></div></div>`;
   else if (d.needsPermission)
-    alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir. Decide con los botones de arriba (o las teclas A y D).</span></div>`;
+    alert = `<div class="alert" id="rp-alert"><b>Pide permiso en su consola</b><span class="note">Aprobar elige la opción resaltada («Yes»). Rechazar cancela con Esc e interrumpe el turno. Mira la consola abajo antes de decidir.</span><div class="row"><button class="btn primary sm" data-act="perm-approve">Aprobar</button><button class="btn danger sm" data-act="perm-reject">Rechazar</button></div></div>`;
   return `
     <div class="ph"><div class="ph-av">${robotHead(COLORS[d.color % COLORS.length], lookOf(d.name, d.place, d))}</div><div class="ph-main"><h3>${esc(d.name)}${d.tools?.includes('artifact') ? ' <span class="tool-mark" title="Tiene las herramientas de Artifact">📄</span>' : ''}</h3>${titleEditor(d)}<div class="ph-row" id="ph-row">${noteEditor(d)}${prioPicker(d)}${lookEditor(d)}<button type="button" class="btn sm ghost" data-act="wake-me" title="Crea un despertador: cuando pase algo (un PR aprobado, un ticket que cambia, una hora), la oficina le escribe a este robot">⏰ Despiértame cuando…</button>${isSleepy(d) ? `<span class="rc-sleep">💤 ${fmtDur(sleepMs(d))} sin actividad</span>` : ''}</div><div class="sub-h ph-what" title="${esc(d.label)}">${esc(d.kind === 'skill' ? d.label : 'Tarea libre · ' + d.label)} <span class="origin">· ${esc(d.origin || 'Origen desconocido')}</span></div></div><div class="ph-side"><span class="pill p-${d.state}">${esc(stateLabel(d))}${d.state === 'input' && d.inputAt ? ` · <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b>` : ''}</span><div class="ph-acts" id="ph-acts">${headActions(d)}${robotMenu(d)}</div></div></div>
     ${alertZone([queueBar(d), alert, stalledBox(d), clashBox(d)])}
