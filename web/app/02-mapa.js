@@ -579,7 +579,7 @@ const salaDoor = place => ({ x: 82 + ((place.slot || 0) % 4) * 4.5, y: 31 });
 const shownHere = d => (st.view ? d.place.sala === st.view : !d.place.sala);
 function viewClass(a) {
   const show = shownHere(a.data) || (!!a.transit && !st.view); // en la oficina se ve mientras camina hacia o desde las salas
-  for (const el of [a.el, ...a.subEls.values(), a.extraEl].filter(Boolean)) {
+  for (const el of [a.el, ...a.subEls.values(), a.extraEl, a.packEl].filter(Boolean)) {
     el.classList.toggle('offview', !show);
     el.classList.toggle('sv', show && !!st.view);
   }

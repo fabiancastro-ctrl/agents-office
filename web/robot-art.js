@@ -54,9 +54,12 @@ function lookOf(name, place, d) {
     uniform: place?.type === 'room' ? (place.sala ? '#ef8f7a' : '#a99cf2') : '',
     outfit: outfitOf(d, place),
     season: seasonNow(),
-    crown: Number(d?.crown) || 0
+    crown: Number(d?.crown) || 0,
+    relevo: isRelevo(d)
   };
 }
+// A robot that came in through a context handoff (🔁) is launched with this origin (daemon/lib/relevo.mjs).
+const isRelevo = d => /^Relevo por contexto de /i.test(String(d?.origin || ''));
 // Uniforme según el trabajo, por prioridad: casco (cuartos), overol (lo lanzó una rutina: su origen dice «rutina «…»»),
 // inspector (reviews y auditorías), escritor (documentación), explorador (investigación) y delantal de herramientas
 // (implementación). Los dos últimos miran también el título y el inicio del encargo, que es lo único que tienen los
@@ -173,6 +176,10 @@ const OUTFIT_BODY = {
 const OUTFIT_BACK = {
   explorer: `<g class="o-back"><rect x="7.6" y="25" width="24.8" height="11" rx="3" fill="#a07c4a" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="9" y="27" width="4" height="5.4" rx="1" fill="#7a5a34"/><rect x="27" y="27" width="4" height="5.4" rx="1" fill="#7a5a34"/></g>`
 };
+// Mochila del relevo: bigger and blue, with a paper (the previous robot's summary) sticking out. The map shows it only
+// while the robot walks in (.robot.packed in style.css); on sitting down it stays as a loose bag next to the desk.
+const RELEVO_PACK_BACK = `<g class="bk-relevo"><rect x="5.6" y="22.8" width="28.8" height="16.4" rx="4" fill="#5b7bd6" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="7.4" y="31.6" width="6" height="5.6" rx="1.2" fill="#4663b8"/><rect x="26.6" y="31.6" width="6" height="5.6" rx="1.2" fill="#4663b8"/><rect x="25.4" y="19.8" width="5" height="6" rx=".8" fill="#f4efe2" stroke="#9aa3b0" stroke-width=".5" transform="rotate(8 28 23)"/></g>`;
+const RELEVO_PACK_STRAPS = `<g class="bk-relevo"><path d="M12.2 26.4l-.2 10M27.8 26.4l.2 10" stroke="#ffb454" stroke-width="1.5" stroke-linecap="round"/></g>`;
 // Lo que el uniforme lleva en la mano izquierda (siempre visible).
 const OUTFIT_HAND = {
   inspector: `<g class="o-hand"><line x1="5.6" y1="38.5" x2="4.4" y2="41.4" stroke="#6b5340" stroke-width="1.6" stroke-linecap="round"/><circle cx="3.6" cy="43.6" r="2.7" fill="rgba(189,247,238,.3)" stroke="#cfe3f7" stroke-width="1.1"/></g>`,
@@ -251,12 +258,12 @@ function robotSVG(color, look = { ant: 0, visor: 0, acc: 0, uniform: '' }) {
     hat = hatOf(look);
   return `<svg viewBox="0 0 40 48" aria-hidden="true">
     <g class="legs">${leg('leg-l', 13)}${leg('leg-r', 22)}</g>
-    ${OUTFIT_BACK[look.outfit] || ''}
+    ${OUTFIT_BACK[look.outfit] || ''}${look.relevo ? RELEVO_PACK_BACK : ''}
     ${arm('arm-l', 4, color, OUTFIT_HAND[look.outfit] || '')}
     <rect x="16.5" y="22.6" width="7" height="4.4" rx="1.2" fill="#3a4558"/>${HD_NECK}
     <rect x="10" y="26" width="20" height="14" rx="4" fill="${color}" ${OUT}/>${SHADE_BODY}${HD_BODY}${CHEST}
     ${u ? `<path d="M10.5 26.4h19v3h-19z" fill="${u}"/><path d="M23.5 29l3.4 6-4.4-1.2z" fill="${u}"/>` : ''}
-    ${OUTFIT_BODY[look.outfit] || ''}
+    ${OUTFIT_BODY[look.outfit] || ''}${look.relevo ? RELEVO_PACK_STRAPS : ''}
     ${BODY_ACC[look.acc] || ''}
     ${PROPS_BODY}
     ${arm('arm-r', 31, color, PROPS_HAND)}

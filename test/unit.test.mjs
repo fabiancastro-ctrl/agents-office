@@ -120,3 +120,13 @@ test('uniforme del robot según el encargo (web/robot-art.js)', async () => {
   assert.equal(o({ origin: 'Lanzado por ti', title: 'Hola' }, null), '');
   assert.equal(o({ skill: 'x' }, { type: 'room', sala: false }), 'hardhat');
 });
+
+test('el robot de relevo se reconoce por su origen (web/robot-art.js)', async () => {
+  const vm = await import('node:vm');
+  const ctx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(new URL('../web/robot-art.js', import.meta.url), 'utf8') + '\nthis.isRelevo = isRelevo;', ctx);
+  assert.equal(ctx.isRelevo({ origin: 'Relevo por contexto de api (320k): sigue con su resumen' }), true);
+  assert.equal(ctx.isRelevo({ origin: 'Relevo por contexto de api (320k) · esperó cupo en la puerta' }), true);
+  assert.equal(ctx.isRelevo({ origin: 'Lanzado por ti' }), false);
+  assert.equal(ctx.isRelevo(null), false);
+});

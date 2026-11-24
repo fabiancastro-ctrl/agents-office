@@ -28,11 +28,21 @@ function createRobot(d, fromSnapshot) {
   };
   st.robots.set(d.name, a);
   const fromBreak = takeFromBreak(d.name);
-  if (fromSnapshot) placeAt(a, seatOf(d.place));
-  else {
+  if (fromSnapshot) {
+    placeAt(a, seatOf(d.place));
+    a.packDrop = isRelevo(d);
+  } else {
     a.transit = true;
+    a.packOn = isRelevo(d);
     placeAt(a, st.view && d.place.sala === st.view ? salaEntry() : fromBreak || door());
     queue(a, () => walkTo(a, seatOf(d.place)));
+    if (a.packOn)
+      queue(a, async () => {
+        a.packOn = false;
+        a.packDrop = true;
+        a.packFresh = true;
+        paint(a);
+      });
   }
   return a;
 }
@@ -72,7 +82,7 @@ function deliveryHighFive(a, d) {
 }
 
 const artSig =d =>
-  JSON.stringify([d.color, d.look || null, d.crown || 0, d.skill || d.request?.skill || '', d.place?.type, d.place?.sala, outfitOf(d, d.place)]);
+  JSON.stringify([d.color, d.look || null, d.crown || 0, d.skill || d.request?.skill || '', d.place?.type, d.place?.sala, outfitOf(d, d.place), isRelevo(d)]);
 function upsert(d, fromSnapshot = false) {
   layout(d.place); // agrega una fila de escritorios o la sala de su rutina si este robot la necesita
   let a = st.robots.get(d.name);
@@ -126,6 +136,32 @@ function vacate(place, a) {
   a.subEls.clear();
   a.extraEl?.remove();
   a.extraEl = null;
+  a.packEl?.remove();
+  a.packEl = null;
+}
+
+// Handoff (🔁) robots arrive with the previous robot's summary in a backpack (.robot.packed shows it in the SVG) and
+// drop it next to their desk when they sit down; it stays there for as long as the robot does. After a reload nobody
+// is walking in, so the bag is already on the floor.
+function paintPack(a) {
+  const d = a.data;
+  if (!a.packDrop || !d.place) {
+    a.packEl?.remove();
+    a.packEl = null;
+    return;
+  }
+  if (!a.packEl) {
+    a.packEl = document.createElement('div');
+    a.packEl.className = 'rpack' + (a.packFresh ? ' fresh' : '');
+    a.packEl.title = `Mochila de relevo: el resumen de la sesión anterior de ${d.name}`;
+    MAP.appendChild(a.packEl);
+    a.packFresh = false;
+    viewClass(a);
+  }
+  const seat = seatOf(d.place);
+  a.packEl.style.left = seat.x - 5.6 + '%';
+  a.packEl.style.top = py(seat.y);
+  a.packEl.style.zIndex = Math.round(seat.y * 10) - 1;
 }
 
 // Qué animación toca según lo que hace el robot (la hoja de estilos muestra la utilería de cada una).
@@ -345,7 +381,8 @@ function paint(a) {
     cardUi.hl === d.name ? 'hl' : '',
     d.spawnReq ? 'spawn' : '',
     isSleepy(d) ? 'sleepy' : '',
-    d.consoleLost ? 'lost' : ''
+    d.consoleLost ? 'lost' : '',
+    a.packOn ? 'packed' : ''
   ]
     .filter(Boolean)
     .join(' ');
@@ -416,6 +453,7 @@ function paint(a) {
     desk.paper.dataset.count = pend > 1 ? pend : '';
   }
   paintSubs(a);
+  paintPack(a);
 }
 
 function paintSubs(a) {
