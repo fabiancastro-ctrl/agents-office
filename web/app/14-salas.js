@@ -199,7 +199,7 @@ function renderPanel() {
   const wasHidden = $('#dialog').hidden;
   const sameView = !wasHidden && PANEL.dataset.view === sel;
   $('#dialog').hidden = false;
-  $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war' || sel === '@oficina' || sel === '@cierre');
+  $('#dlg-card').classList.toggle('wide', sel === '@cron' || sel === '@usage' || sel === '@war' || sel === '@oficina' || sel === '@cierre' || sel === '@cuaderno');
   $('#dlg-card').classList.toggle('tall', !!a || !!sala || sel === '@arch');
   const html = a
     ? robotPanel(a)
@@ -227,7 +227,9 @@ function renderPanel() {
                           ? cierrePanel()
                           : sel === '@oficina'
                             ? oficinaPanel()
-                            : sel === '@pins'
+                            : sel === '@cuaderno'
+                              ? cuadernoPanel()
+                              : sel === '@pins'
                               ? pinsPanel()
                               : newPanel();
   if (sameView) {
@@ -286,6 +288,7 @@ function renderPanel() {
     loadFama();
   }
   if (sel === '@oficina') loadSalud();
+  if (sel === '@cuaderno') loadCuaderno();
   if (sel === '@cron') cronOpened();
   if (sel === '@arch' && st.focusRetake) {
     st.focusRetake = false;

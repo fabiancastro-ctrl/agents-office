@@ -27,6 +27,8 @@ function connect() {
       st.salas = m.salas || [];
       st.favorites = m.favorites || [];
       st.pins = m.pins || [];
+      st.memoria = m.memoria || { notas: 0, propuestas: 0, porRevisar: 0 };
+      renderCuadBadge();
       renderPinsBadge();
       setArchCount(m.archiveCount || 0);
       st.door = m.door || [];
@@ -130,7 +132,8 @@ function connect() {
       renderPinsBadge();
       markPins();
       if (st.selected === '@pins') schedulePanel();
-    } else if (m.type === 'fame') {
+    } else if (m.type === 'memoria') onMemoria(m.memoria);
+    else if (m.type === 'fame') {
       st.fame = m.fame;
       renderFame();
     } else if (m.type === 'door') {

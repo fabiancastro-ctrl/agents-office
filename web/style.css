@@ -2039,3 +2039,11 @@ html.hc .bcoffee .cacct{outline:1px solid currentColor}
 .cm-i.on{border-color:var(--teal)}
 .cm-i small{color:var(--muted)}
 .cm-i.back{justify-content:flex-start;color:var(--sky)}
+
+/* Cuaderno (memoria compartida) */
+.rp-notes{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:var(--fs-2)}
+.tagx.cu-due{background:var(--amber);color:#2a1d05;display:inline-flex;align-items:center;gap:3px}
+.cu-body{font-size:13px;margin-top:6px;max-width:90ch}
+.cu-body p{margin:4px 0}
+.cu-edit textarea{width:100%;font-family:var(--mono);font-size:12.5px}
+#cu-q{flex:1 1 220px;min-width:0}
