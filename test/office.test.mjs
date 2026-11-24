@@ -2266,6 +2266,38 @@ test('per-robot account: team requests ("cuenta"), handoffs and routines carry i
   }
 });
 
+test('per-robot account: the approval can override the account of each requested child', async () => {
+  const o = await startOffice({ maxRobots: 5, accounts: ['b'] });
+  try {
+    await o.api('POST', '/api/robots', { ...libre('jefe', 'Jefe en la cuenta b'), account: 'b' });
+    const req = await o.api('POST', '/api/robots/jefe/encargos', {
+      encargos: [
+        { nombre: 'uno', titulo: 'Uno', encargo: 'Hijo uno' },
+        { nombre: 'dos', titulo: 'Dos', encargo: 'Hijo dos' }
+      ]
+    });
+    assert.equal(req.status, 202);
+    const asked = (await o.robot('jefe')).spawnReq.items;
+    assert.deepEqual(
+      asked.map(i => i.account),
+      ['b', 'b'],
+      'the panel is prefilled with what each child would inherit'
+    );
+    // Fabian moves «uno» to the principal account and keeps «dos» on b
+    const items = asked.map(i => ({ ...i, account: i.name === 'uno' ? 'principal' : i.account }));
+    assert.equal((await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve', items })).status, 200);
+    await waitFor(() => o.windows().includes('dos'), { what: 'the child windows' });
+    const call = text => waitFor(() => o.claudeCalls().find(c => c.includes(text)), { what: `launch of ${text}` });
+    assert.doesNotMatch(await call('Hijo uno'), /CLAUDE_CONFIG_DIR/);
+    assert.ok((await call('Hijo dos')).startsWith(`CLAUDE_CONFIG_DIR=${o.accDir('b')} `));
+    // the panel renders one «Cuenta» select per item (only with 2+ accounts), with the weekly % in the options
+    const app = await (await fetch(`${o.url}/app.js`)).text();
+    assert.match(app, /data-sp-a=/);
+  } finally {
+    await o.stop();
+  }
+});
+
 test('accounts: one /usage window per account, the header reading is the fullest account and the pot says whose', async () => {
   const o = await startOffice({ maxRobots: 3, accounts: ['b'], usage: { principal: { s: 20, w: 40 }, b: { s: 50, w: 82 } } });
   try {

@@ -9,7 +9,7 @@ function spawnBox(d) {
   return `<form class="alert spawn-box" id="rp-alert" data-spawn="${esc(q.id)}"><b>Quiere lanzar ${n} robot${n === 1 ? '' : 's'} nuevo${n === 1 ? '' : 's'}</b>
     <span class="note">Cada uno con su propia consola. ${d.place.sala ? `Entran a su sala «${esc(st.salas.find(s => s.id === d.place.sala)?.name || 'sala')}»` : `${esc(d.name)} y ellos pasan a una sala de equipo`}: se ven juntos y comparten CONTEXT.md${q.context ? ' (con el contexto que mandó)' : ''} y el hilo. Revisa o corrige los encargos. Cada resultado le llega a ${esc(d.name)} en cuanto el hijo termina si está libre; si está ocupado, los que terminen mientras tanto le llegan juntos al acabar su turno (un solo turno suyo). ${free >= n ? '' : `Hay ${free} cupo${free === 1 ? '' : 's'} libre${free === 1 ? '' : 's'}: los demás esperan en la puerta hasta que se libere uno.`}</span>
     ${q.context ? `<details class="sp-ctx"><summary>Contexto que comparte con ellos</summary><div class="md-chat">${mdHtml(q.context)}</div></details>` : ''}
-    ${q.items.map((it, i) => `<fieldset class="sp-it"><label class="sp-on"><input type="checkbox" checked data-sp-on="${i}"> Lanzar</label><input class="sp-n" data-sp-n="${i}" maxlength="20" value="${esc(it.name || '')}" placeholder="nombre" title="Nombre del robot: minúsculas, números y guiones" pattern="[a-z0-9-]{1,20}"><input class="sp-t" data-sp-t="${i}" maxlength="60" value="${esc(it.title)}" placeholder="Título"><textarea class="sp-x" data-sp-x="${i}" rows="4">${esc(it.text)}</textarea></fieldset>`).join('')}
+    ${q.items.map((it, i) => `<fieldset class="sp-it"><label class="sp-on"><input type="checkbox" checked data-sp-on="${i}"> Lanzar</label><input class="sp-n" data-sp-n="${i}" maxlength="20" value="${esc(it.name || '')}" placeholder="nombre" title="Nombre del robot: minúsculas, números y guiones" pattern="[a-z0-9-]{1,20}"><input class="sp-t" data-sp-t="${i}" maxlength="60" value="${esc(it.title)}" placeholder="Título"><textarea class="sp-x" data-sp-x="${i}" rows="4">${esc(it.text)}</textarea>${accountField(`sp-a-${i}`, 'Cuenta', { value: it.account || '', attrs: `data-sp-a="${i}"`, weekly: true })}</fieldset>`).join('')}
     <div class="row"><button class="btn primary sm" data-act="spawn-ok">Lanzar</button><button type="button" class="btn danger sm" data-act="spawn-no">No, gracias</button></div></form>`;
 }
 onClick('[data-unqueue]', b => {
@@ -25,14 +25,15 @@ async function decideSpawn(d, allow) {
           text: f.querySelector(`[data-sp-x="${i}"]`).value,
           tools: it.tools || [],
           modelPick: it.modelPick || '',
-          account: it.account || '',
+          account: f.querySelector(`[data-sp-a="${i}"]`)?.value ?? (it.account || ''), // no select when there is one account
           on: f.querySelector(`[data-sp-on="${i}"]`).checked
         }))
         .filter(x => x.on && x.text.trim())
     : d.spawnReq.items;
   // Children without an explicit account inherit the parent's.
-  if (allow && items.length && !(await quotaOk(`${d.name} quiere lanzar ${items.length} robot${items.length === 1 ? '' : 's'}.`, items[0].account || d.account || 'principal')))
-    return;
+  if (allow && items.length)
+    for (const acc of new Set(items.map(x => x.account || d.account || 'principal')))
+      if (!(await quotaOk(`${d.name} quiere lanzar ${items.length} robot${items.length === 1 ? '' : 's'}.`, acc))) return;
   const r = await api('POST', `/api/robots/${d.name}/encargos/${d.spawnReq.id}`, {
     decision: allow && items.length ? 'approve' : 'reject',
     items

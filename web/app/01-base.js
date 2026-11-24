@@ -195,11 +195,16 @@ function limitsOf(c, id) {
   const acc = (c.accounts || []).find(a => a.id === id);
   return acc ? acc.limits || [] : id === 'principal' ? c.limits || [] : [];
 }
-function accountField(id, label) {
+// `value` preselects an option; `attrs` is extra markup for the <select> (e.g. a data- attribute); `weekly` adds each account's
+// weekly % to its label.
+function accountField(id, label, { value = '', attrs = '', weekly = false } = {}) {
   if (!hasAccounts()) return '';
+  const pct = a => (weekly ? ` · ${a.weekPct == null ? 'sin lectura' : `${a.weekPct} % semanal`}` : '');
+  const sel = v => (value === v ? ' selected' : '');
   const others = st.config.accounts
     .filter(a => !a.principal)
-    .map(a => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`)
+    .map(a => `<option value="${esc(a.id)}"${sel(a.id)}>${esc(a.nombre)}${pct(a)}</option>`)
     .join('');
-  return `<div class="field"><label for="${id}">${label}</label><select id="${id}"><option value="">Por defecto (cuenta activa: ${esc(accountLabel(st.config.activeAccount || 'principal'))})</option><option value="principal">Principal (siempre ~/.claude)</option>${others}<option value="auto">Automática (la de más cuota libre)</option></select></div>`;
+  const main = st.config.accounts.find(a => a.principal);
+  return `<div class="field"><label for="${id}">${label}</label><select id="${id}" ${attrs}><option value=""${sel('')}>Por defecto (cuenta activa: ${esc(accountLabel(st.config.activeAccount || 'principal'))})</option><option value="principal"${sel('principal')}>Principal (siempre ~/.claude)${main ? pct(main) : ''}</option>${others}<option value="auto"${sel('auto')}>Automática (la de más cuota libre)</option></select></div>`;
 }
