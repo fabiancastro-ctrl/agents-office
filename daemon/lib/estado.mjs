@@ -3,9 +3,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { APPROVAL, clients, inbox, MAX_ROBOTS_LIMIT, maxRobots, now, robots, RUNS, saveJson, SESSION, WORKSPACE } from './base.mjs';
-import { crownOf, quotaPeriods } from './uso.mjs';
+import { crownOf, headQuota, quotaPeriods } from './uso.mjs';
 import { officeName, readConfig } from './carpeta.mjs';
-import { accountName, accounts, activeAccount, hasMany, weekUsed } from './cuentas.mjs';
+import { accountName, accounts, activeAccount, hasMany, quotaReadings, weekUsed } from './cuentas.mjs';
 import { saveState } from './persistencia.mjs';
 import { robotReads } from './memoria.mjs';
 import { kidsOf } from './equipo.mjs';
@@ -212,7 +212,7 @@ function statsView() {
     return { day, n: days[day] || 0 };
   });
   // % usado de la cuota semanal (de /usage) para la cafetera; si se midió antes de la última renovación, ya volvió a 0.
-  const q = readConfig().quota || {},
+  const q = headQuota(),
     measured = Number(q.weekPctAt) || 0;
   const quotaPct = Number.isFinite(q.weekPct) && measured ? (measured < per.weekFrom ? 0 : q.weekPct) : null;
   return {
@@ -367,6 +367,7 @@ const limitView = r =>
       }
     : null;
 function configView() {
+  const readings = quotaReadings(readConfig().quotaAcc); // shared across offices
   return {
     createdAt,
     maxRobots,
@@ -378,7 +379,7 @@ function configView() {
       id: a.id,
       nombre: a.nombre,
       principal: !!a.principal,
-      weekPct: weekUsed(readConfig().quotaAcc?.[a.id]) // null = never read
+      weekPct: weekUsed(readings[a.id]) // null = never read
     })),
     activeAccount: activeAccount() || 'principal', // the account launches with «Por defecto» use
     limitPolicy: limitPolicy(),

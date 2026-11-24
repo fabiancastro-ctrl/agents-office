@@ -13,6 +13,7 @@ import {
   isExhausted,
   markExhausted,
   PRINCIPAL,
+  quotaReadings,
   readActive,
   weekUsed,
   writeActive
@@ -23,7 +24,7 @@ import {
 const weekExhausted = (key, t = Date.now()) => {
   const e = exhaustedMap(t)[key || PRINCIPAL];
   if (e?.kind === 'week') return true;
-  const used = weekUsed(readConfig().quotaAcc?.[key || PRINCIPAL], t);
+  const used = weekUsed(quotaReadings(readConfig().quotaAcc)[key || PRINCIPAL], t);
   return used !== null && used >= 100;
 };
 // Account ids (registry ids, 'principal' included) that cannot be used right now for any reason.
@@ -48,7 +49,7 @@ function syncActive(t = Date.now()) {
   if (!hasMany()) return;
   const out = weekExhausted(PRINCIPAL, t);
   const state = readActive();
-  const q = readConfig().quotaAcc?.[PRINCIPAL];
+  const q = quotaReadings(readConfig().quotaAcc)[PRINCIPAL];
   const passed = !!state.principalEnd && state.principalEnd <= t;
   const patch = {};
   if (out && !state.principalOut) patch.principalOut = true;

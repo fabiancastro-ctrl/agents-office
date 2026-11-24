@@ -6,9 +6,19 @@ import path from 'node:path';
 import { CLAUDE_BIN, clients, console_, now, robots, run, RUNS, SESSION, WORKSPACE } from './base.mjs';
 import { broadcast, configView, emit, fmtK } from './estado.mjs';
 import { readConfig, saveConfig } from './carpeta.mjs';
-import { accountName, accounts, accountTmuxEnv, normAccount, PRINCIPAL, weekUsed } from './cuentas.mjs';
+import {
+  accountName,
+  accounts,
+  accountTmuxEnv,
+  normAccount,
+  PRINCIPAL,
+  quotaFileStamp,
+  quotaReadings,
+  saveQuotaReading,
+  weekUsed
+} from './cuentas.mjs';
 import { log } from './persistencia.mjs';
-import { onUsageReading } from './limites.mjs';
+import { onUsageReading, syncActive } from './limites.mjs';
 import { lookFromName } from './equipo.mjs';
 import { archive } from './turno.mjs';
 import { ensureSession } from './tmux.mjs';
@@ -161,7 +171,7 @@ function robotSpend(r, weekFrom, hourAgo) {
 const WEEK_MS = 7 * 86400e3,
   SESSION_MS = 5 * 3600e3;
 function quotaPeriods(t = Date.now()) {
-  const q = readConfig().quota || {};
+  const q = headQuota();
   let weekEnd = Number(q.weekEnd) || 0;
   if (weekEnd) while (weekEnd <= t) weekEnd += WEEK_MS; // ya se renovó: la siguiente, 7 días después
   const monday = new Date(weekOf(t) + 'T00:00:00').getTime();
@@ -499,7 +509,7 @@ function parseClaudeStatus(text, account = '') {
     // employee of the week read) is a copy of the FULLEST account's reading. With one account it is that account's.
     const key = account || PRINCIPAL,
       cfg = readConfig(),
-      qa = { ...(cfg.quotaAcc || {}) };
+      qa = quotaReadings(cfg.quotaAcc); // this office's readings merged with what the other offices measured
     const q = { ...(qa[key] || (account ? null : cfg.quota) || {}), ...ends };
     // 3 · Historial: el % más alto leído en cada semana de la cuota (clave = día en que termina), últimas 16 semanas.
     if (ends.weekEnd && Number.isFinite(ends.weekPct)) {
@@ -511,6 +521,12 @@ function parseClaudeStatus(text, account = '') {
     qa[key] = q;
     const head = fullestQuota(qa);
     saveConfig({ quotaAcc: qa, quota: { ...head.q, account: head.id } });
+    try {
+      saveQuotaReading(key, q); // shared: every office of the building sees it
+      quotaStamp = quotaFileStamp(); // our own write is not news for the poll below
+    } catch {
+      /* the local copy is already saved */
+    }
     broadcast({ type: 'config', config: configView() });
     warnAccount(key, q);
     onUsageReading(key, { weekPct: ends.weekPct, sessionPct }); // forgets stale «sin cuota» notices, moves the active account
@@ -532,6 +548,20 @@ function parseClaudeStatus(text, account = '') {
 setInterval(() => {
   if (clients.size && WORKSPACE) claudeStatus(true).catch(() => {});
 }, Number(process.env.OFFICE_USAGE_REFRESH_MS) || 3600e3);
+// Another office measured an account: cuota.json changed. Poll its mtime (cheap) and, when it moved, refresh the page
+// and re-evaluate the active account (exhausted / renewed) with the merged readings.
+let quotaStamp = quotaFileStamp();
+setInterval(() => {
+  const s = quotaFileStamp();
+  if (s === quotaStamp) return;
+  quotaStamp = s;
+  try {
+    syncActive();
+    broadcast({ type: 'config', config: configView() });
+  } catch {
+    /* registry or config unreadable for a moment */
+  }
+}, Number(process.env.OFFICE_QUOTA_POLL_MS) || 30e3);
 // Notice (once per account and week) when an account passes 90 % of its weekly quota: suggests the least used other one.
 const ACCOUNT_WARN_PCT = 90,
   warned = new Set();
@@ -541,7 +571,7 @@ function warnAccount(key, q) {
   const mark = `${key}:${q.weekEnd || ''}`;
   if (warned.has(mark)) return;
   warned.add(mark);
-  const qa = readConfig().quotaAcc || {};
+  const qa = quotaReadings(readConfig().quotaAcc);
   const others = accounts()
     .filter(a => a.id !== key)
     .map(a => ({ a, used: weekUsed(qa[a.id]) }))
@@ -561,6 +591,12 @@ function fullestQuota(qa) {
     if (q && Number.isFinite(q.weekPct) && (!best || q.weekPct > best.q.weekPct)) best = { id: a.id, q };
   }
   return best || { id: PRINCIPAL, q: qa[PRINCIPAL] || {} };
+}
+// What the header chip, the coffee pot and the plants read: the fullest account's merged reading, plus `account`.
+// Falls back to this office's own config.quota while nothing is known.
+function headQuota() {
+  const head = fullestQuota(quotaReadings(readConfig().quotaAcc));
+  return Number.isFinite(head.q?.weekPct) || head.q?.weekEnd ? { ...head.q, account: head.id } : readConfig().quota || {};
 }
 // Weekly % of a /usage reading (the «all models» limit; the highest limit if that one is missing).
 const weekPctOf = s => {
@@ -610,4 +646,4 @@ async function claudeStatus(refresh) {
   return { limits: top.limits, detail: top.detail, at: top.at, account: { id: top.id, nombre: top.nombre }, accounts: list };
 }
 
-export { claudeStatus, crownOf, fame, fameWall, loadSessions, officeUsage, quotaPeriods, registerSession, updateTeamSpend };
+export { claudeStatus, crownOf, fame, fameWall, headQuota, loadSessions, officeUsage, quotaPeriods, registerSession, updateTeamSpend };

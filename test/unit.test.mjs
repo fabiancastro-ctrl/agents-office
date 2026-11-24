@@ -333,3 +333,34 @@ test('notebook: INDICE.md has one line per approved note', async () => {
   ]);
   assert.match(txt, /- Uno — x — notas\/a\.md\n- Dos — sin tema — notas\/b\.md\n$/);
 });
+
+test('shared quota: the newest reading wins, histories merge by max, a missing or corrupt file is empty', async () => {
+  const cu = await import('../daemon/lib/cuentas.mjs');
+  const file = path.join(process.env.AGENT_OFFICE_HOME, 'cuota.json');
+  fs.mkdirSync(process.env.AGENT_OFFICE_HOME, { recursive: true });
+  fs.rmSync(file, { force: true });
+  assert.deepEqual(cu.quotaReadings(), {}, 'missing file');
+  assert.deepEqual(cu.quotaReadings({ b: { weekPct: 3, weekPctAt: 1 } }), { b: { weekPct: 3, weekPctAt: 1 } }, 'local only');
+  fs.writeFileSync(file, '{not json');
+  assert.deepEqual(cu.quotaReadings(), {}, 'corrupt file');
+  cu.saveQuotaReading('b', { weekPct: 10, weekPctAt: 100, weekEnd: 5, history: { '2026-11-23': 10, '2026-11-30': 5 } });
+  assert.equal(cu.quotaReadings().b.weekPct, 10, 'a corrupt file is replaced by a clean one');
+  // An older reading never overwrites a newer one, but its history still merges
+  cu.saveQuotaReading('b', { weekPct: 99, weekPctAt: 50, weekEnd: 5, history: { '2026-11-23': 40 } });
+  const b = JSON.parse(fs.readFileSync(file, 'utf8')).b;
+  assert.equal(b.weekPct, 10);
+  assert.deepEqual(b.history, { '2026-11-23': 40, '2026-11-30': 5 });
+  // A newer local reading wins over the global one; a newer global wins over a stale local one
+  assert.equal(cu.quotaReadings({ b: { weekPct: 20, weekPctAt: 200, history: { '2026-11-30': 8 } } }).b.weekPct, 20);
+  assert.equal(cu.quotaReadings({ b: { weekPct: 20, weekPctAt: 200, history: { '2026-11-30': 8 } } }).b.history['2026-11-30'], 8);
+  assert.equal(cu.quotaReadings({ b: { weekPct: 20, weekPctAt: 10 } }).b.weekPct, 10);
+  // Without weekPctAt the newer sessionEnd decides
+  cu.saveQuotaReading('c', { sessionEnd: 10, weekPct: 1 });
+  cu.saveQuotaReading('c', { sessionEnd: 5, weekPct: 2 });
+  assert.equal(cu.quotaReadings().c.weekPct, 1);
+  // History keeps the last 16 weeks
+  const many = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`2026-01-${String(i + 1).padStart(2, '0')}`, i]));
+  cu.saveQuotaReading('d', { weekPct: 1, weekPctAt: 1, history: many });
+  assert.equal(Object.keys(cu.quotaReadings().d.history).length, 16);
+  assert.ok(cu.quotaFileStamp() > 0);
+});

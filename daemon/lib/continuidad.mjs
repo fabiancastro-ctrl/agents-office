@@ -27,6 +27,7 @@ import {
   pickAccount,
   PRINCIPAL,
   principalDir,
+  quotaReadings,
   saveAccounts,
   setupAccountDir,
   weekUsed
@@ -70,7 +71,7 @@ setLimitHook(onRateLimit);
 
 // Another account with quota, never an exhausted one nor the robot's own.
 const nextAccountFor = r =>
-  pickAccount(readConfig().quotaAcc, Date.now(), { skip: [...new Set([...exhaustedIds(), keyOf(r)])], strict: true });
+  pickAccount(quotaReadings(readConfig().quotaAcc), Date.now(), { skip: [...new Set([...exhaustedIds(), keyOf(r)])], strict: true });
 
 async function decide(r) {
   const policy = limitPolicy();
@@ -220,7 +221,7 @@ async function openLogin(acc) {
   authCache.delete(acc.id);
 }
 async function accountRow(acc, open, fresh) {
-  const q = readConfig().quotaAcc?.[acc.id];
+  const q = quotaReadings(readConfig().quotaAcc)[acc.id];
   const ex = exhaustedIds().includes(acc.id);
   return {
     id: acc.id,

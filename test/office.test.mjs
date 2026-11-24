@@ -2789,3 +2789,21 @@ test('cuaderno: a robot proposes by CLI, Fabian approves, the search finds it an
     await o.stop();
   }
 });
+
+test('accounts: a reading saved by one office shows up in another office of the same building', async () => {
+  const a = await startOffice({ accounts: ['b'], usage: { b: { s: 1, w: 37 } } });
+  const at = Date.now(),
+    weekEnd = at + 3 * 86400e3;
+  const b = await startOffice({ accounts: ['b'], env: { AGENT_OFFICE_HOME: a.home, OFFICE_QUOTA_POLL_MS: '200' } });
+  try {
+    const weekPct = async o => (await o.snapshot()).config.accounts.find(x => x.id === 'b').weekPct;
+    assert.equal(await weekPct(b), null, 'office B has never read account b');
+    // Office A measured it: it lands in the shared file (what saveQuotaReading writes)
+    fs.writeFileSync(path.join(a.home, 'cuota.json'), JSON.stringify({ b: { weekPct: 42, weekPctAt: at, weekEnd } }));
+    await waitFor(async () => (await weekPct(b)) === 42, { what: 'the shared reading in office B' });
+    assert.equal((await b.snapshot()).config.stats.quotaPct, 42);
+  } finally {
+    await b.stop();
+    await a.stop();
+  }
+});

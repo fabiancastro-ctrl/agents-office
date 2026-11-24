@@ -21,6 +21,7 @@ import {
 import { broadcast, configView, emit, MAP_THEMES } from './estado.mjs';
 import { officeName, readConfig, saveConfig, setOfficeName, OFFICE_NAME_MAX } from './carpeta.mjs';
 import { saveState } from './persistencia.mjs';
+import { headQuota } from './uso.mjs';
 import { favorites, pins, saveFavorites, savePins } from './turno.mjs';
 import { emitRoutines, routines, saveRoutines } from './rutinas.mjs';
 import { salas, salasArchive, SALAS_DIR, toTrash } from './salas.mjs';
@@ -189,7 +190,7 @@ async function healthView() {
       : `${robots.size} robot${robots.size === 1 ? '' : 's'}, todos con su consola`,
     'Abre cada robot y usa «Reanudar» (retoma su misma sesión) o dalo de baja.'
   );
-  const q = readConfig().quota || {},
+  const q = headQuota(),
     qAt = Number(q.weekPctAt) || 0;
   ok(
     'Lectura de la cuota',

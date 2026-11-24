@@ -161,6 +161,64 @@ function clearExhausted(key, kind) {
   writeActive({ exhausted: ex });
   return true;
 }
+/* ---------- quota readings (shared by every office of the building) ---------- */
+// <AGENT_OFFICE_HOME>/cuota.json: { <account id|'principal'>: { sessionEnd, weekEnd, weekPct, weekPctAt, history } }.
+// The same shape as config.quotaAcc[id]; whichever office reads /usage for an account writes it here, so every office
+// sees the quota of the account in use.
+const QUOTA_FILE = path.join(HOME, 'cuota.json');
+const HISTORY_WEEKS = 16;
+function readQuotaFile() {
+  try {
+    const j = JSON.parse(fs.readFileSync(QUOTA_FILE, 'utf8'));
+    return j && typeof j === 'object' && !Array.isArray(j) ? j : {};
+  } catch {
+    return {}; // missing or corrupt: treated as empty
+  }
+}
+// Modification time of cuota.json (0 when absent): what the daemon polls to follow another office's readings.
+function quotaFileStamp() {
+  try {
+    return fs.statSync(QUOTA_FILE).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+// Max per week key, last HISTORY_WEEKS weeks.
+function mergeHistory(a, b) {
+  const h = {};
+  for (const src of [a, b])
+    for (const [k, v] of Object.entries(src && typeof src === 'object' ? src : {})) if (Number.isFinite(v)) h[k] = Math.max(h[k] ?? 0, v);
+  return Object.fromEntries(Object.entries(h).sort().slice(-HISTORY_WEEKS));
+}
+// Two readings of one account: the newer weekPctAt wins (the newer sessionEnd when neither has one); histories merge.
+function mergeReading(a, b) {
+  const ok = r => r && typeof r === 'object';
+  if (!ok(a) && !ok(b)) return undefined;
+  if (!ok(a)) a = {};
+  if (!ok(b)) b = {};
+  const at = r => Number(r.weekPctAt) || 0;
+  const se = r => Number(r.sessionEnd) || 0;
+  const bNewer = at(a) || at(b) ? at(b) >= at(a) : se(b) >= se(a);
+  const out = { ...(bNewer ? { ...a, ...b } : { ...b, ...a }) };
+  const history = mergeHistory(a.history, b.history);
+  if (Object.keys(history).length) out.history = history;
+  return out;
+}
+function mergeReadings(a = {}, b = {}) {
+  const out = {};
+  for (const id of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) out[id] = mergeReading(a?.[id], b?.[id]);
+  return out;
+}
+// Per-account readings: the global file merged with this office's own (config.quotaAcc), newest reading wins.
+const quotaReadings = (local = {}) => mergeReadings(readQuotaFile(), local);
+function saveQuotaReading(id, q) {
+  fs.mkdirSync(HOME, { recursive: true });
+  const all = readQuotaFile();
+  all[id || PRINCIPAL] = mergeReading(all[id || PRINCIPAL], q);
+  const tmp = `${QUOTA_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(all, null, 2) + '\n');
+  fs.renameSync(tmp, QUOTA_FILE);
+}
 // Extra tmux args that point a robot at its account folder. The principal runs exactly as before (no variable).
 const accountTmuxEnv = id => {
   const a = normAccount(id) ? accountOf(id) : null;
@@ -301,7 +359,10 @@ export {
   markExhausted,
   normAccountInput,
   pickAccount,
+  quotaFileStamp,
+  quotaReadings,
   readActive,
+  saveQuotaReading,
   writeActive,
   accountOf,
   accounts,

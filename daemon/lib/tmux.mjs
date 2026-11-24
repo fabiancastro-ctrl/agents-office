@@ -32,7 +32,8 @@ import {
   normAccount,
   normAccountPick,
   pickAccount,
-  PRINCIPAL
+  PRINCIPAL,
+  quotaReadings
 } from './cuentas.mjs';
 import { exhaustedIds } from './limites.mjs';
 import { readConfig } from './carpeta.mjs';
@@ -178,12 +179,12 @@ async function launchReserved({
   const auto = normAccountPick(account) === AUTO;
   const byDefault = !auto && !String(account ?? '').trim();
   let note = '';
-  if (auto) account = autoAccount(readConfig().quotaAcc, Date.now(), { skip: exhaustedIds() });
+  if (auto) account = autoAccount(quotaReadings(readConfig().quotaAcc), Date.now(), { skip: exhaustedIds() });
   else account = byDefault ? activeAccount() : normAccount(account);
   // A routine on an account that is out of quota follows the same policy as a robot that runs out of it.
   if (routine && exhaustedIds().includes(account || PRINCIPAL)) {
     const from = accountName(account) || 'Principal';
-    const next = limitPolicy() === 'switch' ? pickAccount(readConfig().quotaAcc, Date.now(), { skip: exhaustedIds(), strict: true }) : null;
+    const next = limitPolicy() === 'switch' ? pickAccount(quotaReadings(readConfig().quotaAcc), Date.now(), { skip: exhaustedIds(), strict: true }) : null;
     if (!next) throw new Error(`La cuenta ${from} se quedó sin cuota: la rutina espera a que se renueve.`);
     account = next.id;
     note = `La cuenta ${from} estaba sin cuota: lanzado en ${accountName(account) || 'Principal'}`;
