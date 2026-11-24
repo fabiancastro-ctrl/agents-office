@@ -2633,3 +2633,79 @@ test('page: the Cuentas section of Ajustes, the «Sin cuota» state (amber) and 
     await o.stop();
   }
 });
+
+const WEEKLY = "You've hit your weekly limit · resets 6pm (America/Bogota)";
+
+test('active account: chosen by API, «Por defecto» launches use it, and it follows the weekly limit and the renewal', async () => {
+  const o = await startOffice({ maxRobots: 6, accounts: ['b'], usage: { principal: { s: 10, w: 40 }, b: { s: 10, w: 20 } } });
+  try {
+    assert.equal((await o.snapshot()).config.activeAccount, 'principal');
+    assert.equal((await o.api('POST', '/api/cuenta-activa', { id: 'zz' })).status, 404);
+    assert.equal((await o.api('POST', '/api/cuenta-activa', { id: 'b' })).body.active, 'b');
+    assert.equal((await o.snapshot()).config.activeAccount, 'b');
+    const call = text => waitFor(() => o.claudeCalls().find(c => c.includes(text)), { what: `launch of ${text}` });
+    await o.api('POST', '/api/robots', libre('d1', 'Tarea por defecto'));
+    await o.api('POST', '/api/robots', { ...libre('d2', 'Tarea principal explicita'), account: 'principal' });
+    assert.ok(
+      (await call('Tarea por defecto')).startsWith(`CLAUDE_CONFIG_DIR=${o.accDir('b')} `),
+      '«Por defecto» follows the active account'
+    );
+    assert.doesNotMatch(await call('Tarea principal explicita'), /CLAUDE_CONFIG_DIR/, 'an explicit principal does not');
+    assert.equal((await o.robot('d1')).account, 'b');
+    assert.equal((await o.api('POST', '/api/cuenta-activa', { id: 'principal' })).body.active, 'principal');
+    // The principal reaches 100 % in /usage: the active account moves on, and comes back when it reads below 100 %
+    o.setUsage('principal', { s: 10, w: 100 });
+    await o.api('GET', '/api/claude-status?refresh=1');
+    await waitFor(async () => (await o.snapshot()).config.activeAccount === 'b', { what: 'the automatic move to b' });
+    const full = (await o.snapshot()).config.accounts.find(a => a.id === 'principal');
+    assert.equal(full.weekPct, 100);
+    o.setUsage('principal', { s: 10, w: 40 });
+    await o.api('GET', '/api/claude-status?refresh=1');
+    await waitFor(async () => (await o.snapshot()).config.activeAccount === 'principal', { what: 'the return to the principal' });
+    // A hand-picked account also goes back to the principal when it renews, after the principal ran out
+    o.setUsage('principal', { s: 10, w: 100 });
+    await o.api('GET', '/api/claude-status?refresh=1');
+    await waitFor(async () => (await o.snapshot()).config.activeAccount === 'b', { what: 'the second move' });
+    o.setUsage('principal', { s: 10, w: 5 });
+    await o.api('GET', '/api/claude-status?refresh=1');
+    await waitFor(async () => (await o.snapshot()).config.activeAccount === 'principal', { what: 'the second return' });
+  } finally {
+    await o.stop();
+  }
+});
+
+test('active account: a «weekly» limit in any robot of that account moves the active one on', async () => {
+  const o = await startOffice({ maxRobots: 3, accounts: ['b'] });
+  try {
+    await o.api('POST', '/api/config', { limitPolicy: 'wait' });
+    const { tr } = await robotWithTranscript(o, 'sem');
+    fs.appendFileSync(tr, limitLine(WEEKLY));
+    await waitFor(async () => (await o.snapshot()).config.activeAccount === 'b', { what: 'the active account moves on' });
+    const r = await o.robot('sem');
+    assert.deepEqual([r.limit.kind, r.limit.waiting], ['week', true]);
+    assert.ok(r.limit.until > Date.now(), 'the reset time was read');
+  } finally {
+    await o.stop();
+  }
+});
+
+test('page: the coffee pot opens the active-account menu and shows the active initial', async () => {
+  const o = await startOffice({ accounts: ['b'] });
+  try {
+    assert.match(await (await fetch(o.url)).text(), /id="bcoffee" role="button" tabindex="0"/);
+    const js = await (await fetch(`${o.url}/app.js`)).text();
+    for (const s of ['Volver a la principal', 'Cuenta activa', 'data-cm=', '/api/cuenta-activa', 'class="cacct"'])
+      assert.ok(js.includes(s), `app.js lacks «${s}»`);
+    const cfg = (await o.snapshot()).config;
+    assert.equal(cfg.activeAccount, 'principal');
+    assert.deepEqual(
+      cfg.accounts.map(a => [a.id, a.weekPct]),
+      [
+        ['principal', null],
+        ['b', null]
+      ]
+    );
+  } finally {
+    await o.stop();
+  }
+});

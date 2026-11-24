@@ -71,8 +71,19 @@ function renderCoffee() {
     s = st.config?.stats || {};
   const pct = s.quotaPct;
   el.classList.toggle('unknown', pct == null);
+  // With several accounts the pot also says which one the new launches use («cuenta activa»); a click opens the menu.
+  const act = hasAccounts() ? st.config.activeAccount || 'principal' : '';
+  let tag = el.querySelector('.cacct');
+  if (act && !tag) el.insertAdjacentHTML('beforeend', '<b class="cacct" aria-hidden="true"></b>');
+  tag = el.querySelector('.cacct');
+  if (tag) {
+    tag.hidden = !act;
+    tag.textContent = act ? accountLabel(act).slice(0, 1).toUpperCase() : '';
+  }
+  el.setAttribute('aria-label', act ? `Cafetera: cuenta activa ${accountLabel(act)}. Abre el menú de cuentas.` : 'Cafetera');
+  const actTxt = act ? ` Cuenta activa: ${accountLabel(act)} (clic para cambiarla).` : '';
   if (pct == null) {
-    el.title = 'Cafetera: abre «Uso Claude» una vez y la jarra mostrará cuánto te queda de la cuota semanal.';
+    el.title = `Cafetera: abre «Uso Claude» una vez y la jarra mostrará cuánto te queda de la cuota semanal.${actTxt}`;
     return;
   }
   const left = Math.max(0, 100 - pct);
@@ -80,7 +91,7 @@ function renderCoffee() {
   el.classList.toggle('low', left <= 30 && left > 10);
   el.classList.toggle('empty', left <= 10);
   const at = s.quotaAt ? fmtTime(s.quotaAt) : '';
-  el.title = `Cafetera: queda ${left} % de tu cuota semanal${s.quotaAccount ? ` (cuenta más llena: ${s.quotaAccount})` : ''} (usado ${pct} %${at ? `, medido a las ${at}` : ''}). Se vuelve a llenar cuando se renueva la cuota.`;
+  el.title = `Cafetera: queda ${left} % de tu cuota semanal${s.quotaAccount ? ` (cuenta más llena: ${s.quotaAccount})` : ''} (usado ${pct} %${at ? `, medido a las ${at}` : ''}). Se vuelve a llenar cuando se renueva la cuota.${actTxt}`;
 }
 function renderGrowth() {
   renderClock();

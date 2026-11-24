@@ -2024,3 +2024,18 @@ html.hc .sala-note.cur{outline-width:3px}
 .rc.limited{border-left-color:var(--amber)}
 .alert.limit-box{background:color-mix(in srgb,var(--amber) 14%,var(--panel));border-color:var(--amber)}
 .alert.limit-box b{color:var(--ink)}
+/* Coffee pot: initial of the active account and its menu */
+#bcoffee{pointer-events:auto;cursor:pointer}
+#bcoffee:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+.bcoffee .cacct{position:absolute;right:-9px;top:-9px;min-width:14px;padding:0 3px;border-radius:7px;background:var(--sky);color:#0d1a2a;font:700 9px/14px var(--mono);text-align:center}
+.bcoffee .cacct[hidden]{display:none}
+html.hc .bcoffee .cacct{outline:1px solid currentColor}
+.coffee-menu{position:fixed;z-index:80;min-width:210px;max-width:calc(100vw - 16px);display:grid;gap:2px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+.coffee-menu[hidden]{display:none}
+.coffee-menu h5{margin:0 0 3px;font-size:var(--fs-1);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.coffee-menu p{margin:4px 2px 0;max-width:230px;font-size:var(--fs-1);color:var(--muted)}
+.cm-i{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:6px 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--ink);font-size:var(--fs-2);cursor:pointer;text-align:left}
+.cm-i:hover,.cm-i:focus-visible{background:var(--panel-2);border-color:var(--line)}
+.cm-i.on{border-color:var(--teal)}
+.cm-i small{color:var(--muted)}
+.cm-i.back{justify-content:flex-start;color:var(--sky)}

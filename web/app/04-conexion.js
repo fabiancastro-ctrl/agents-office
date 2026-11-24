@@ -62,7 +62,8 @@ function connect() {
       setMapTheme(m.config.mapTheme);
       renderGrowth();
       renderMeta();
-      cuentasConfigChanged(); // 29-cuentas.js: the accounts panel and the coffee-pot menu follow the registry
+      cuentasConfigChanged(); // 29-cuentas.js: the accounts panel follows the registry
+      cafeteraConfigChanged(); // 31-cafetera.js: so does the coffee-pot menu
       if (st.selected === '@new') schedulePanel();
     } else if (m.type === 'salas') {
       st.salas = m.salas;
