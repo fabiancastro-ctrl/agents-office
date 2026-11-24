@@ -122,6 +122,9 @@ body.t-day .cloud{background:rgba(255,255,255,.55)}
 .st.on{color:var(--teal)} .st.on::before{background:var(--teal);box-shadow:0 0 6px var(--teal)}
 .st.orp{color:var(--amber)} .st.orp::before{background:var(--amber)}
 .plq .needb{font-family:var(--mono);font-size:11px;color:var(--rose);font-weight:600}
+/* Icon set: 16 px grid, one stroke, currentColor, sized in em */
+.ic-sprite{position:absolute;width:0;height:0;overflow:hidden}
+.ic{width:1.05em;height:1.05em;flex:none;vertical-align:-.16em;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:square;stroke-linejoin:miter;overflow:visible}
 /* live miniature: one mini face per robot with a state glyph (no grey: idle is violet) */
 .plq .mini{display:flex;flex-wrap:wrap;gap:3px 4px;margin-top:3px}
 .plq .mini small{font:600 9px/18px var(--mono);color:var(--ink)}
@@ -388,6 +391,12 @@ dialog p{margin:0 0 14px;color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
+<!-- Icon subset (same 16 px set as web/index.html), used by icon() in the script below. -->
+<svg class="ic-sprite" width="0" height="0" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2l7 12H1z M8 6.500v4 M8 12.500h.5"/></symbol>
+<symbol id="i-hand" viewBox="0 0 16 16"><path d="M4.500 8.500V4 M7 7.500V2.500 M9.500 7.500V3 M12 8.500V5 M4.500 8.500v1A3.500 3.500 0 0 0 8 13h1a3 3 0 0 0 3-3V8.500"/></symbol>
+<symbol id="i-box" viewBox="0 0 16 16"><path d="M2 4.500L8 2l6 2.500v7L8 14l-6-2.500z M2 4.500l6 2.500 6-2.500 M8 7v7"/></symbol>
+</defs></svg>
 <div class="stars" aria-hidden="true"></div>
 <div class="orb" aria-hidden="true"></div>
 <div class="cloud" style="top:110px;width:120px;animation-duration:140s" aria-hidden="true"></div>
@@ -490,7 +499,10 @@ function sky() {
 }
 sky(); setInterval(sky, 60e3);
 
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 5000); }
+const icon = (name, label) => label
+  ? `<svg class="ic" role="img" aria-label="${esc(label)}"><use href="#i-${name}"/></svg>`
+  : `<svg class="ic" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+function toast(msg, ic) { const t = $('toast'); if (ic) t.innerHTML = `${icon(ic)} ${esc(msg)}`; else t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 5000); }
 
 /* ---------- pisos ---------- */
 const robotArt = (r) => { const place = r.room ? {type: 'room', sala: r.room === 'sala'} : null; return robotSVG(ROBOT_COLORS[(r.color || 0) % ROBOT_COLORS.length], lookOf(r.name, place, r)); };
@@ -521,8 +533,8 @@ function windows(o) {
   return Array.from({length: n}, (_, i) => {
     const r = list[i];
     if (!r) return `<span class="win free" data-tip="|puesto libre">${ROOM[(i + idxSeed(o.name)) % ROOM.length]}</span>`;
-    const tag = r.state === 'input' ? '<i class="tag ask">?</i>' : r.state === 'done' ? (r.critical ? `<i class="tag crit">⚠${r.critical}</i>` : '<i class="tag done">LISTO</i>') : '';
-    return `<span class="win r s-${esc(r.state)}" data-tip="${esc(r.name)}|${esc(STATE[r.state] || r.state)}${robotTitle(r) ? " · 📌 " + esc(robotTitle(r)) : ""}">${tag}${robotArt(r)}</span>`;
+    const tag = r.state === 'input' ? '<i class="tag ask">?</i>' : r.state === 'done' ? (r.critical ? `<i class="tag crit">${icon('warn')}${r.critical}</i>` : '<i class="tag done">LISTO</i>') : '';
+    return `<span class="win r s-${esc(r.state)}" data-tip="${esc(r.name)}|${esc(STATE[r.state] || r.state)}${robotTitle(r) ? " · " + esc(robotTitle(r)) : ""}">${tag}${robotArt(r)}</span>`;
   }).join('');
 }
 // El título que le pusiste o el sugerido a partir de su encargo (misma regla que la oficina, en robot-art.js).
@@ -549,7 +561,7 @@ function miniStrip(o) {
 function floorInner(o, idx) {
   const orph = !o.running && o.orphans > 0;
   const st = o.running ? '<span class="st on">corriendo</span>' : orph ? `<span class="st orp">${o.orphans} sin supervisión</span>` : '<span class="st">detenida</span>';
-  return `<div class="plq"><span class="no">PISO ${idx + 1} · :${o.port}</span><b>${esc(o.title)}</b>${st}${o.running && o.need ? `<span class="needb">✋ ${o.need} te necesita${o.need === 1 ? '' : 'n'}</span>` : ''}${miniStrip(o)}</div>
+  return `<div class="plq"><span class="no">PISO ${idx + 1} · :${o.port}</span><b>${esc(o.title)}</b>${st}${o.running && o.need ? `<span class="needb">${icon('hand')} ${o.need} te necesita${o.need === 1 ? '' : 'n'}</span>` : ''}${miniStrip(o)}</div>
     <div class="wins">${windows(o)}</div>`;
 }
 function render() {
@@ -761,7 +773,7 @@ function renderPanel() {
       <div class="n inbox ${o.inbox ? 'on' : ''}"><b>${o.inbox}</b><span>bandeja</span></div>
     </div>
     <div class="meta"><span title="${esc(o.workspace)}">carpeta · ${esc(home(o.workspace))}</span><span>tmux · ${esc(o.session)}</span><span title="${esc(o.data)}">datos · ${esc(home(o.data))}${o.adopted ? ' (adoptados)' : ''}</span></div>
-    ${orph ? `<div class="warn"><b>⚠ ${o.orphans} robot${o.orphans === 1 ? '' : 's'} sin supervisión.</b> La oficina está detenida pero ${o.orphans === 1 ? 'sigue vivo' : 'siguen vivos'} en tmux${o.orphansBusy ? `, ${o.orphansBusy} trabajando y gastando cuota sin que lo veas` : ''}.</div>` : ''}
+    ${orph ? `<div class="warn"><b>${icon('warn')} ${o.orphans} robot${o.orphans === 1 ? '' : 's'} sin supervisión.</b> La oficina está detenida pero ${o.orphans === 1 ? 'sigue vivo' : 'siguen vivos'} en tmux${o.orphansBusy ? `, ${o.orphansBusy} trabajando y gastando cuota sin que lo veas` : ''}.</div>` : ''}
     ${errs[o.name] ? `<div class="err">${esc(errs[o.name])}</div>` : ''}
     <div class="acts">${o.running
       ? `<a class="btn primary" href="${esc(o.url)}" target="_blank" rel="noopener">Abrir oficina</a><button class="btn" data-act="stop" title="Apaga la oficina; sus robots siguen en tmux y se reconectan al iniciarla">Detener</button><button class="btn danger" data-act="stop" data-despedir="1" title="Da de baja a todos sus robots (sus documentos pasan a la bandeja) y apaga la oficina">Cerrar y despedir</button>`
@@ -922,7 +934,7 @@ async function bikeDelivery(n) {
     await pk.animate([{transform: 'translate(0,0)'}, {transform: `translate(${mail.left + mail.width / 2 - stopX - 46}px, ${mail.top + 8 - y + 26 - 40}px)`, offset: .6}, {transform: `translate(${mail.left + mail.width / 2 - stopX - 46}px, ${mail.top + 8 - y + 26}px) scale(.5)`, opacity: 0}], {duration: 800, easing: 'ease-in', fill: 'forwards'}).finished;
     pk.remove();
     document.querySelector('.mail .box').animate([{scale: 1}, {scale: 1.25}, {scale: 1}], {duration: 400});
-    if (n > 1) toast(`📦 Llegaron ${n} documentos a las bandejas`);
+    if (n > 1) toast(`Llegaron ${n} documentos a las bandejas`, 'box');
     await ride(stopX, innerWidth + 40, Math.max(1200, (innerWidth - stopX) * 3.2));
     el.remove();
   } finally { biking = false; }
