@@ -59,7 +59,19 @@ function stateGestures(a, was, d) {
   else if (long && (d.state === 'done' || d.state === 'input')) gesture(a, 'g-stretch'); // a long turn is over
 }
 
-const artSig = d =>
+// A child that delivers its result to its parent inside a room trades a short high five with it, once per delivery
+// (the daemon stamps deliveredAt; only a fresh stamp counts, so reloads and old deliveries stay quiet). If they sit
+// far apart each one just raises a hand at the same time.
+const FIVE_MS = 1100;
+function deliveryHighFive(a, d) {
+  if (!d.deliveredAt || a.data.deliveredAt === d.deliveredAt || !d.parent || !d.place?.sala) return;
+  if (Date.now() - Date.parse(d.deliveredAt) > 10e3) return;
+  gesture(a, 'g-five', FIVE_MS);
+  const p = st.robots.get(d.parent);
+  if (p) gesture(p, 'g-five', FIVE_MS, true);
+}
+
+const artSig =d =>
   JSON.stringify([d.color, d.look || null, d.crown || 0, d.skill || d.request?.skill || '', d.place?.type, d.place?.sala, outfitOf(d, d.place)]);
 function upsert(d, fromSnapshot = false) {
   layout(d.place); // agrega una fila de escritorios o la sala de su rutina si este robot la necesita
@@ -79,6 +91,7 @@ function upsert(d, fromSnapshot = false) {
   }
   if (d.log) a.log = d.log;
   if (a.data && st.ready) stateGestures(a, a.data.state, d); // a.data is still the previous view here
+  if (a.data && st.ready) deliveryHighFive(a, d);
   a.data ={ ...d, log: undefined };
   layout(); // ya con su lugar nuevo: corrige «N robots» de su sala (si nada cambió de tamaño, no recoloca nada)
   const sig = artSig(d);

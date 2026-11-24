@@ -295,6 +295,7 @@ function reportToParent(r, lastMessage) {
   const p = r.parent && robots.get(r.parent);
   if (r.reported || !p || !String(lastMessage ?? '').trim()) return;
   r.reported = true;
+  r.deliveredAt = new Date().toISOString(); // the map shows a one-time high five when this changes
   const b = pendingResults.get(p.name) || { items: [], first: Date.now() };
   b.items.push({ name: r.name, title: r.title || '', text: String(lastMessage).slice(0, 20000) });
   pendingResults.set(p.name, b);

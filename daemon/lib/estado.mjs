@@ -111,6 +111,7 @@ function view(r, withLog = false) {
     look: r.look || null,
     parent: r.parent || null,
     reported: !!r.reported,
+    deliveredAt: r.deliveredAt || null,
     spawnReq: r.spawnReq || null,
     kids: kidsOf(r.name),
     note: r.note || '',

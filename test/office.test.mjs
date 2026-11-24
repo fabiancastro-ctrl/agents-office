@@ -364,7 +364,10 @@ test('equipo: el gasto de la sala suma a todos (también a los que se fueron) y 
     // Uno entrega, el otro sigue: «Despedir equipo» saca solo al que entregó.
     await turn(o, k1, 'encargo', 'Hecho UNO');
     await waitFor(async () => (await o.robot(k1)).reported, { what: 'que entregue' });
-    const d = await o.api('POST', `/api/salas/${ok.body.sala}/despedir-equipo`);
+    const delivered = (await o.robot(k1)).deliveredAt;
+    assert.ok(delivered && !Number.isNaN(Date.parse(delivered)), 'la vista del hijo trae deliveredAt al entregar');
+    assert.equal((await o.robot(k2)).deliveredAt, null, 'el que no entregó no lo tiene');
+    const d =await o.api('POST', `/api/salas/${ok.body.sala}/despedir-equipo`);
     assert.deepEqual(d.body.despedidos, [k1]);
     assert.equal(d.body.quedan, 2, 'quedan el padre y el que sigue trabajando');
     assert.ok(!(await o.robot(k1)) && (await o.robot(k2)) && (await o.robot('jefe')));
