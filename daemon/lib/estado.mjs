@@ -183,9 +183,20 @@ const localDay = () => new Date().toLocaleDateString('sv'); // AAAA-MM-DD en hor
 // Las plantas crecen con las tareas de la semana de la cuota (no con el total histórico, que las dejaba siempre al
 // máximo). Al renovarse la cuota la cuenta vuelve a 0, se anota repotAt y la página cambia las materas con una animación.
 // La primera vez (sin semana guardada) arranca con las de hoy, que seguro son de esta semana.
+// With two accounts the quota reading can switch between them, and each renews at its own hour: the week start then
+// moves by a few hours back and forth. Only a jump of days is a real renewal; anything else keeps the current week.
+// The count never drops below the tasks of the days after the week started (it heals counts lost to those switches).
+const RENEW_MIN_MS = 3 * 86400e3;
 function rollWeek() {
   const from = quotaPeriods().weekFrom;
-  if (stats.week && stats.week.from === from) return false;
+  if (stats.week && from - stats.week.from < RENEW_MIN_MS) {
+    const fromDay = new Date(stats.week.from).toLocaleDateString('sv');
+    const floor = Object.entries(dayCounts())
+      .filter(([d]) => d > fromDay)
+      .reduce((a, [, n]) => a + n, 0);
+    if (stats.week.count < floor) stats.week.count = floor;
+    return false;
+  }
   const first = !stats.week;
   stats.week = { from, count: first ? (stats.day === localDay() ? stats.today : 0) : 0, n: first ? 0 : (stats.week.n || 0) + 1 };
   if (!first) stats.repotAt = now();
