@@ -266,8 +266,21 @@ setInterval(() => {
   for (const a of st.robots.values()) if (a.data.state === 'input' || isStuck(a.data)) paint(a);
 }, 30000);
 
+// Model family and a readable name from the transcript's model id («claude-opus-5-5» → Opus 5.5).
+function modelInfo(model) {
+  const m = String(model || '').toLowerCase(),
+    fam = /opus/.test(m) ? 'opus' : /sonnet/.test(m) ? 'sonnet' : /haiku/.test(m) ? 'haiku' : '';
+  if (!fam) return { fam: '', name: '' };
+  const ver = (m.match(new RegExp(`${fam}-(\\d{1,2}(?:-\\d{1,2})?)(?!\\d)`)) || m.match(/(\d(?:-\d)?)-(?:opus|sonnet|haiku)/) || [])[1];
+  return { fam, name: fam[0].toUpperCase() + fam.slice(1) + (ver ? ' ' + ver.replace('-', '.') : '') };
+}
+
 function paint(a) {
   const d = a.data;
+  const mi = modelInfo(d.model);
+  if (mi.fam) a.el.dataset.m = mi.fam;
+  else delete a.el.dataset.m;
+  a.el.setAttribute('aria-label', mi.name ? `Robot ${d.name} · ${mi.name}` : `Robot ${d.name}`);
   const shownState = d.state === 'walking' ? 'working' : d.state;
   const keep = ['moving', 'dance', 'impatient'].filter(c => a.el.classList.contains(c));
   const tool = shownTool(a),

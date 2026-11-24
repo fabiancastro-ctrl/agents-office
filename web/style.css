@@ -226,6 +226,8 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 
 .robot{position:absolute;width:51px;transform:translate(-50%,-100%);cursor:pointer;z-index:500}
 .robot svg{display:block;width:51px;height:62px;overflow:visible}
+/* tamaño según el modelo (data-m lo pone paint): Opus un poco más grande, Haiku más pequeño, Sonnet y desconocido igual */
+.robot[data-m=opus] > svg{scale:1.12} .robot[data-m=haiku] > svg{scale:.88}
 .robot .nm{position:absolute;top:100%;left:50%;transform:translateX(-50%);font-size:11px;font-family:var(--mono);background:rgba(17,23,34,.85);padding:0 4px;border-radius:3px;white-space:nowrap;margin-top:1px}
 .robot.sel .nm{background:var(--amber);color:#2a1d05}
 .robot .kill-x{position:absolute;top:-4px;right:-12px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;border:1px solid rgba(239,127,138,.6);background:rgba(17,23,34,.92);color:var(--rose);font:600 11px/14px var(--mono);cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s;white-space:nowrap;z-index:2}

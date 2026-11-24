@@ -775,6 +775,7 @@ test('comandos de la consola, orden por hora real y contexto tras compactar', as
     let r = await o.robot('uno');
     assert.equal(r.ctx.window, 1000000, 'Opus 5 trabaja con 1 M de contexto');
     assert.equal(r.ctx.pct, 10);
+    assert.equal(r.model, 'claude-opus-5-5', 'the view carries the model so the map can size the robot');
     line({ type: 'system', subtype: 'compact_boundary', compactMetadata: { preTokens: 100000, postTokens: 12000 } });
     await waitFor(async () => (await o.robot('uno')).ctx.tokens === 12000, { what: 'el contexto tras compactar' });
   } finally {
