@@ -20,10 +20,21 @@ import {
   trunc,
   WORKSPACE
 } from './base.mjs';
-import { emit } from './estado.mjs';
+import { emit, limitPolicy } from './estado.mjs';
 import { freeDesk, log, roomSeat, setState } from './persistencia.mjs';
 import { cleanTitle, normModel, normTools, robotFlags, robotHints } from './turno.mjs';
-import { accountName, accountTmuxEnv, AUTO, autoAccount, normAccount, normAccountPick } from './cuentas.mjs';
+import {
+  accountName,
+  accountTmuxEnv,
+  activeAccount,
+  AUTO,
+  autoAccount,
+  normAccount,
+  normAccountPick,
+  pickAccount,
+  PRINCIPAL
+} from './cuentas.mjs';
+import { exhaustedIds } from './limites.mjs';
 import { readConfig } from './carpeta.mjs';
 import { attachmentNote } from './adjuntos.mjs';
 import { routines } from './rutinas.mjs';
@@ -162,9 +173,21 @@ async function launchReserved({
   account,
   modelPick
 }) {
-  // «Automática» is resolved now, from the last /usage readings; everything downstream sees a real account.
+  // «Automática» is resolved now, from the last /usage readings (never an exhausted account); «Por defecto» (empty)
+  // is the active account; everything downstream sees a real account.
   const auto = normAccountPick(account) === AUTO;
-  account = auto ? autoAccount(readConfig().quotaAcc) : normAccount(account);
+  const byDefault = !auto && !String(account ?? '').trim();
+  let note = '';
+  if (auto) account = autoAccount(readConfig().quotaAcc, Date.now(), { skip: exhaustedIds() });
+  else account = byDefault ? activeAccount() : normAccount(account);
+  // A routine on an account that is out of quota follows the same policy as a robot that runs out of it.
+  if (routine && exhaustedIds().includes(account || PRINCIPAL)) {
+    const from = accountName(account) || 'Principal';
+    const next = limitPolicy() === 'switch' ? pickAccount(readConfig().quotaAcc, Date.now(), { skip: exhaustedIds(), strict: true }) : null;
+    if (!next) throw new Error(`La cuenta ${from} se quedó sin cuota: la rutina espera a que se renueve.`);
+    account = next.id;
+    note = `La cuenta ${from} estaba sin cuota: lanzado en ${accountName(account) || 'Principal'}`;
+  }
   let prompt, label;
   if (kind === 'skill') {
     skill = String(skill || '')
@@ -276,6 +299,7 @@ async function launchReserved({
   }
   log(r, 'sys', `Encargo: ${label}`);
   if (auto) log(r, 'sys', `Cuenta elegida automáticamente (la de más cuota libre): ${accountName(account)}`);
+  if (note) log(r, 'sys', note);
   log(r, 'sys', r.origin);
   console_(name, 'lanzado', `${label} · tmux attach -t ${SESSION}:${name}`);
   emit(r);

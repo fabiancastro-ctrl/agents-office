@@ -36,6 +36,8 @@ import { mantenimientoApi } from './mantenimiento.mjs';
 import { openChange, robotChanges } from './cambios.mjs';
 import { ackClash } from './choques.mjs';
 import { allowRule, ruleFor, settingsFile } from './permisos.mjs';
+import { cuentasApi, limitAction } from './continuidad.mjs';
+import { LIMIT_POLICIES } from './estado.mjs';
 
 /* ---------- http ---------- */
 
@@ -131,6 +133,15 @@ route('POST', 'exportar', async (r, req, res) => {
 route('POST', 'revivir', async (r, req, res) => {
   try {
     await revive(r);
+    return send(res, 200, { ok: true });
+  } catch (e) {
+    return send(res, 409, { error: e.message });
+  }
+});
+// A robot out of quota that asked what to do: { action: 'cambiar', account? } follows on another account, { action: 'esperar' } waits.
+route('POST', 'limite', async (r, req, res) => {
+  try {
+    await limitAction(r, await readBody(req));
     return send(res, 200, { ok: true });
   } catch (e) {
     return send(res, 409, { error: e.message });
@@ -386,6 +397,10 @@ const server = http.createServer(async (req, res) => {
         saveConfig({ mapTheme: body.mapTheme }); // estilo del mapa: es de la oficina, no del navegador
       }
       if (body.hoursOn !== undefined) saveConfig({ hoursOn: !!body.hoursOn }); // 6 · registrar las horas de trabajo
+      if (body.limitPolicy !== undefined) {
+        if (!LIMIT_POLICIES.includes(body.limitPolicy)) return send(res, 400, { error: 'Política desconocida.' });
+        saveConfig({ limitPolicy: body.limitPolicy }); // what a robot does when its account runs out of quota
+      }
       if (body.maxRobots !== undefined) {
         const n = Number(body.maxRobots);
         if (!Number.isInteger(n) || n < 1 || n > MAX_ROBOTS_LIMIT)
@@ -416,6 +431,7 @@ const server = http.createServer(async (req, res) => {
       }
       return send(res, 200, { repos });
     }
+    if (await cuentasApi(req, res, url, parts)) return;
     if (await rutinasApi(req, res, url, parts)) return;
     if (await mantenimientoApi(req, res, url)) return;
     if (await salasApi(req, res, url, parts)) return;

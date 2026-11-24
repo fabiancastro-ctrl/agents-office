@@ -65,14 +65,31 @@ const STATE_LABEL = {
 // Un robot de tarea libre que terminó sigue vivo esperando tu siguiente orden; uno de skill espera que lo despidas.
 // En espera: terminó su turno pero dejó algo corriendo de fondo (una shell que vigila un CI, un Monitor, un despertador
 // de /loop o un cron). No está LISTO: cuando eso termine, sigue solo.
-const onHold = d => d.state === 'done' && !d.spawnReq && !d.consoleLost && d.bg?.length > 0;
+// A robot out of quota that waits for the renewal is also «en espera» (amber, never grey).
+const onHold = d => !d.spawnReq && !d.consoleLost && (!!d.limit?.waiting || (d.state === 'done' && d.bg?.length > 0));
 const BG_KIND = { shell: 'shell de fondo', monitor: 'monitor', despertador: 'despertador', cron: 'tarea programada' };
 const holdText = d => {
+  if (d.limit?.waiting) return limitText(d);
   const e = d.bg[0];
   return `${e.what} (${BG_KIND[e.kind] || e.kind}${d.bg.length > 1 ? ` y ${d.bg.length - 1} más` : ''})`;
 };
+// «Sin cuota» (the account ran out): d.limit comes from the daemon while the robot has not moved on or resumed.
+const limitText = d => {
+  const l = d.limit;
+  const what = l.kind === 'week' ? 'límite semanal' : 'límite de 5 horas';
+  const back = l.until ? `vuelve ${fmtWhen(l.until, { weekday: 'short' })}` : l.resetsText ? `se renueva ${l.resetsText}` : 'hasta que se renueve';
+  return `Sin cuota en ${l.account} (${what}): ${l.waiting ? `en espera, ${back}` : l.pending ? 'elige qué hacer' : back}`;
+};
 const stateLabel = d =>
-  onHold(d) ? 'en espera' : d.state === 'done' ? (d.kind === 'libre' ? 'esperando orden' : 'terminó') : STATE_LABEL[d.state] || d.state;
+  d.limit
+    ? 'Sin cuota'
+    : onHold(d)
+      ? 'en espera'
+      : d.state === 'done'
+        ? d.kind === 'libre'
+          ? 'esperando orden'
+          : 'terminó'
+        : STATE_LABEL[d.state] || d.state;
 // Resúmenes de una línea (burbuja, tarjeta): sin símbolos de Markdown. La conversación completa sí se formatea.
 // Claude Code envuelve lo que pegas en su consola en <pasted_content id="…">…</pasted_content id="…">. No es HTML
 // válido: el Markdown mostraba el cierre como texto y se comía el formato del primer párrafo. Se quita la envoltura.
@@ -174,5 +191,5 @@ function accountField(id, label) {
     .filter(a => !a.principal)
     .map(a => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`)
     .join('');
-  return `<div class="field"><label for="${id}">${label}</label><select id="${id}"><option value="">Principal (la de siempre)</option>${others}<option value="auto">Automática (la de más cuota libre)</option></select></div>`;
+  return `<div class="field"><label for="${id}">${label}</label><select id="${id}"><option value="">Por defecto (cuenta activa: ${esc(accountLabel(st.config.activeAccount || 'principal'))})</option><option value="principal">Principal (siempre ~/.claude)</option>${others}<option value="auto">Automática (la de más cuota libre)</option></select></div>`;
 }

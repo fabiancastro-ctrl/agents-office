@@ -5,7 +5,7 @@ import path from 'node:path';
 import { APPROVAL, clients, inbox, MAX_ROBOTS_LIMIT, maxRobots, now, robots, RUNS, saveJson, SESSION, WORKSPACE } from './base.mjs';
 import { crownOf, quotaPeriods } from './uso.mjs';
 import { officeName, readConfig } from './carpeta.mjs';
-import { accountName, accounts, hasMany } from './cuentas.mjs';
+import { accountName, accounts, activeAccount, hasMany, weekUsed } from './cuentas.mjs';
 import { saveState } from './persistencia.mjs';
 import { kidsOf } from './equipo.mjs';
 import { archive, criticalOf, requestOf } from './turno.mjs';
@@ -126,6 +126,7 @@ function view(r, withLog = false) {
     tools: r.tools || [],
     modelPick: r.modelPick || '',
     account: r.account || '',
+    limit: limitView(r),
     startedAt: r.startedAt,
     timeline: (r.timeline || []).slice(-1),
     lastEventAt: r.lastEventAt || null,
@@ -344,6 +345,25 @@ try {
 } catch {
   createdAt = null;
 }
+// What happens to a robot that runs out of quota: 'switch' (move to another account on its own), 'ask' or 'wait'.
+const LIMIT_POLICIES = ['switch', 'ask', 'wait'];
+const limitPolicy = () => {
+  const p = readConfig().limitPolicy;
+  return LIMIT_POLICIES.includes(p) ? p : hasMany() ? 'switch' : 'wait';
+};
+// What the page needs to draw «Sin cuota» on a robot.
+const limitView = r =>
+  r.limit
+    ? {
+        kind: r.limit.kind,
+        resetsText: r.limit.resetsText || '',
+        until: r.limit.until || null,
+        waiting: !!r.limit.waiting,
+        pending: !!r.limit.pending,
+        options: (r.limit.options || []).map(o => ({ id: o.id, nombre: o.nombre })),
+        account: accountName(r.account === 'principal' ? '' : r.account) || 'Principal'
+      }
+    : null;
 function configView() {
   return {
     createdAt,
@@ -352,10 +372,33 @@ function configView() {
     approval: APPROVAL,
     name: officeName,
     session: SESSION,
-    accounts: accounts().map(a => ({ id: a.id, nombre: a.nombre, principal: !!a.principal })),
+    accounts: accounts().map(a => ({
+      id: a.id,
+      nombre: a.nombre,
+      principal: !!a.principal,
+      weekPct: weekUsed(readConfig().quotaAcc?.[a.id]) // null = never read
+    })),
+    activeAccount: activeAccount() || 'principal', // the account launches with «Por defecto» use
+    limitPolicy: limitPolicy(),
     stats: statsView(),
     mapTheme: MAP_THEMES.includes(readConfig().mapTheme) ? readConfig().mapTheme : 'moderna'
   };
 }
 
-export { addWait, broadcast, bumpStats, configView, ctxOf, emit, fmtK, isCold, knownDoc, MAP_THEMES, TEXT_DOC, usage, view };
+export {
+  addWait,
+  broadcast,
+  bumpStats,
+  configView,
+  ctxOf,
+  emit,
+  fmtK,
+  isCold,
+  knownDoc,
+  LIMIT_POLICIES,
+  limitPolicy,
+  MAP_THEMES,
+  TEXT_DOC,
+  usage,
+  view
+};

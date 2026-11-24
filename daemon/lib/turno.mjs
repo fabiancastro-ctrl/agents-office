@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { inbox, now, replaceList, robots, ROOT, RUNS, saveJson, trunc, WORKSPACE } from './base.mjs';
-import { normAccountPick } from './cuentas.mjs';
+import { normAccountInput } from './cuentas.mjs';
 import { broadcast, bumpStats, emit, view } from './estado.mjs';
 import { log, saveState, setState } from './persistencia.mjs';
 import { maybeFlush, pendingResults, reportToParent } from './equipo.mjs';
@@ -349,7 +349,7 @@ async function frecuentesApi(req, res, url, parts) {
       text: kind === 'libre' ? String(b.text || '') : '',
       permissionMode: b.permissionMode || '',
       modelPick: normModel(b.modelPick),
-      account: normAccountPick(b.account),
+      account: normAccountInput(b.account),
       title: cleanTitle(b.title)
     };
     if (kind === 'skill' ? !f.skill : !f.text.trim()) return send(res, 400, { error: 'Llena el encargo antes de guardarlo.' });

@@ -382,6 +382,7 @@ function paint(a) {
     d.spawnReq ? 'spawn' : '',
     isSleepy(d) ? 'sleepy' : '',
     d.consoleLost ? 'lost' : '',
+    d.limit ? 'limited' : '',
     a.packOn ? 'packed' : ''
   ]
     .filter(Boolean)
@@ -404,7 +405,9 @@ function paint(a) {
   a.wasLost = !!d.consoleLost;
   a.sign.innerHTML = d.consoleLost
     ? `${icon('burst')} se cayó`
-    : d.spawnReq
+    : d.limit
+      ? `${icon('hourglass')} Sin cuota`
+      : d.spawnReq
       ? `${icon('bot')} ×${d.spawnReq.items.length} ¿los lanzo?`
       : onHold(d)
         ? `${icon('hourglass')}${d.bg.length > 1 ? ' ' + d.bg.length : ''}`
@@ -419,7 +422,9 @@ function paint(a) {
             : '';
   const text = d.consoleLost
     ? 'Se cayó mi consola: reanúdame'
-    : d.relevoPending
+    : d.limit
+      ? limitText(d)
+      : d.relevoPending
       ? 'Escribo mi relevo y me sigue otro yo'
       : d.summaryPending
         ? 'Escribo mi resumen y me voy'

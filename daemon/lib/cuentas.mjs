@@ -3,7 +3,7 @@
 // (`office cuenta add|ls|rm`). Una cuenta es una carpeta de configuración de Claude Code (CLAUDE_CONFIG_DIR);
 // la principal es la de siempre (~/.claude) y está implícita. El registro vive en el edificio, así que lo comparten
 // todas las oficinas: <AGENT_OFFICE_HOME>/cuentas.json.
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -82,8 +82,11 @@ const normAccount = v => {
 // What the user can choose: normAccount plus 'auto' (resolved at launch by the quota).
 const normAccountPick = v => (idOf(v) === AUTO && hasMany() ? AUTO : normAccount(v));
 const accountOf = id => accounts().find(a => a.id === (normAccount(id) || PRINCIPAL));
+// What a form or a request can carry until launch: like normAccountPick, but an explicit "principal" survives (it is
+// not the same as «Por defecto», which follows the active account). '' means «Por defecto».
+const normAccountInput = v => (idOf(v) === PRINCIPAL ? PRINCIPAL : normAccountPick(v));
 // For a child or an item that may carry its own choice: an explicit "principal" stays principal; an empty or unknown one inherits `fallback`.
-const inheritAccount = (v, fallback = '') => (idOf(v) === PRINCIPAL ? '' : normAccountPick(v) || fallback || '');
+const inheritAccount = (v, fallback = '') => (idOf(v) === PRINCIPAL ? PRINCIPAL : normAccountPick(v) || fallback || '');
 const accountName = id => accountOf(id)?.nombre || '';
 // Weekly % used of one saved reading ({ weekPct, weekPctAt, weekEnd } from config.quotaAcc), or null when never read.
 // A reading taken before the last renewal of the week no longer counts: the quota is back to 0.
@@ -97,15 +100,66 @@ function weekUsed(q, t = Date.now()) {
   }
   return q.weekPct;
 }
-// «Automática»: the account with the most free weekly quota according to the last readings; '' (principal) when
-// there are none. Ties go to the first registered, the principal.
-function autoAccount(readings, t = Date.now()) {
-  let best = null;
-  for (const a of accounts()) {
-    const used = weekUsed(readings?.[a.id], t);
-    if (used !== null && (!best || used < best.used)) best = { id: a.principal ? '' : a.id, used };
+// «Automática» never picks an account above this weekly % while another one is below it.
+const AUTO_MAX_PCT = 95;
+// The account with the most free weekly quota according to the last readings: { id ('' = principal), used } or null.
+// Ties go to the first registered, the principal. `skip` = account ids to leave out (exhausted, the current one).
+// Accounts above AUTO_MAX_PCT only win when nothing else is left, unless `strict` (then an account never read counts
+// as available and "nothing" is null).
+function pickAccount(readings, t = Date.now(), { skip = [], strict = false } = {}) {
+  const cands = accounts()
+    .filter(a => !skip.includes(a.id))
+    .map(a => ({ id: a.principal ? '' : a.id, used: weekUsed(readings?.[a.id], t) }));
+  const least = list => list.reduce((b, c) => (!b || c.used < b.used ? c : b), null);
+  const known = cands.filter(c => c.used !== null);
+  const under = least(known.filter(c => c.used < AUTO_MAX_PCT));
+  if (under) return under;
+  if (strict) return cands.find(c => c.used === null) || null;
+  return least(known);
+}
+// «Automática»: pickAccount, or '' (principal) when there is nothing to go by.
+const autoAccount = (readings, t = Date.now(), opts) => pickAccount(readings, t, opts)?.id ?? '';
+
+/* ---------- active account and exhausted accounts (shared by every office of the building) ---------- */
+// <AGENT_OFFICE_HOME>/cuenta-activa.json: { id, principalOut, principalEnd, exhausted: { <account id|'principal'>: { kind, until, at, text } } }.
+// «Active» = the account that launches with «Por defecto» use. Exhausted = out of quota until `until` (ms) or, when
+// unknown, until the next /usage reading shows it below 100 %.
+const ACTIVE_FILE = path.join(HOME, 'cuenta-activa.json');
+function readActive() {
+  try {
+    const j = JSON.parse(fs.readFileSync(ACTIVE_FILE, 'utf8'));
+    return j && typeof j === 'object' ? j : {};
+  } catch {
+    return {};
   }
-  return best ? best.id : '';
+}
+function writeActive(patch) {
+  fs.mkdirSync(HOME, { recursive: true });
+  const tmp = `${ACTIVE_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ ...readActive(), ...patch }, null, 2) + '\n');
+  fs.renameSync(tmp, ACTIVE_FILE);
+}
+// '' = principal. A removed account falls back to the principal.
+function activeAccount() {
+  const id = idOf(readActive().id);
+  return id && id !== PRINCIPAL && accounts().some(a => a.id === id) ? id : '';
+}
+function exhaustedMap(t = Date.now()) {
+  const out = {};
+  for (const [k, v] of Object.entries(readActive().exhausted || {})) if (!v.until || v.until > t) out[k] = v;
+  return out;
+}
+const isExhausted = (key, t = Date.now()) => !!exhaustedMap(t)[key || PRINCIPAL];
+function markExhausted(key, info) {
+  writeActive({ exhausted: { ...(readActive().exhausted || {}), [key || PRINCIPAL]: info } });
+}
+function clearExhausted(key, kind) {
+  const ex = { ...(readActive().exhausted || {}) };
+  const k = key || PRINCIPAL;
+  if (!ex[k] || (kind && ex[k].kind !== kind)) return false;
+  delete ex[k];
+  writeActive({ exhausted: ex });
+  return true;
 }
 // Extra tmux args that point a robot at its account folder. The principal runs exactly as before (no variable).
 const accountTmuxEnv = id => {
@@ -189,11 +243,33 @@ function linksOf(acc, pdir = principalDir()) {
 /* ---------- login state (no quota spent) ---------- */
 // `claude auth status` prints JSON and never calls the model. Without ANTHROPIC_API_KEY, because with it set Claude
 // reports the API key instead of the subscription.
-function authStatus(acc, bin = process.env.OFFICE_CLAUDE_BIN || 'claude') {
+const authEnv = acc => {
   const env = { ...process.env };
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDE_CONFIG_DIR;
   if (!acc.principal) env.CLAUDE_CONFIG_DIR = acc.dir;
+  return env;
+};
+const authFields = j => ({
+  loggedIn: !!j.loggedIn,
+  authMethod: j.authMethod || '',
+  orgName: j.orgName || '',
+  subscriptionType: j.subscriptionType || ''
+});
+// Same as authStatus without blocking the daemon (the office calls it while serving the page).
+function authStatusAsync(acc, bin = process.env.OFFICE_CLAUDE_BIN || 'claude') {
+  return new Promise(resolve => {
+    execFile(bin, ['auth', 'status'], { env: authEnv(acc), encoding: 'utf8', timeout: 20000 }, (err, stdout) => {
+      try {
+        resolve(authFields(JSON.parse(String(stdout || ''))));
+      } catch {
+        resolve({ loggedIn: false, error: 'no se pudo consultar' });
+      }
+    });
+  });
+}
+function authStatus(acc, bin = process.env.OFFICE_CLAUDE_BIN || 'claude') {
+  const env = authEnv(acc);
   try {
     const out = execFileSync(bin, ['auth', 'status'], { env, encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'] });
     const j = JSON.parse(out);
@@ -216,6 +292,17 @@ function authStatus(acc, bin = process.env.OFFICE_CLAUDE_BIN || 'claude') {
 
 export {
   accountName,
+  activeAccount,
+  AUTO_MAX_PCT,
+  authStatusAsync,
+  clearExhausted,
+  exhaustedMap,
+  isExhausted,
+  markExhausted,
+  normAccountInput,
+  pickAccount,
+  readActive,
+  writeActive,
   accountOf,
   accounts,
   accountTmuxEnv,

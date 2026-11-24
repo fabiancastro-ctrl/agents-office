@@ -81,8 +81,19 @@ function shellLog(r, text) {
   }
   return false;
 }
+// continuidad.mjs registers what to do when Claude reports that the account ran out of quota (it needs tmux, which
+// would make a circular import here).
+let limitHook = () => {};
+const setLimitHook = f => {
+  limitHook = f;
+};
 function onTranscript(r, e) {
   if (e.isSidechain) return;
+  // «You've hit your 5-hour limit · resets 6:20pm»: an assistant line flagged as an API error, not something it said.
+  if (e.type === 'assistant' && e.isApiErrorMessage === true && e.error === 'rate_limit') {
+    limitHook(r, e);
+    return;
+  }
   if (e.type === 'system' && e.subtype === 'local_command') {
     if (shellLog(r, String(e.content ?? ''))) {
       r.lastEventAt = now();
@@ -158,4 +169,4 @@ setInterval(() => {
   for (const r of robots.values()) pumpTranscript(r);
 }, 1000);
 
-export { pumpTranscript };
+export { pumpTranscript, setLimitHook };

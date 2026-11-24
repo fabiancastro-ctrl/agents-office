@@ -73,19 +73,23 @@ export async function startOffice(opts = {}) {
   const fake = path.join(base, 'claude-falso.sh');
   // opts.usage = { <account id | 'principal'>: { s: session %, w: week % } }: the window opened WITHOUT arguments (the _status
   // ones) answers /usage with that account's numbers, picked by its CLAUDE_CONFIG_DIR.
-  const usageScript = opts.usage
-    ? `if [ $# -eq 0 ]; then\ncase "$CLAUDE_CONFIG_DIR" in\n${Object.entries(opts.usage)
-        .filter(([id]) => id !== 'principal')
-        .map(([id, u]) => `*/cuentas/${id}) S=${u.s}; W=${u.w};;`)
-        .join(
-          '\n'
-        )}\n*) S=${opts.usage.principal?.s ?? 0}; W=${opts.usage.principal?.w ?? 0};;\nesac\nwhile read l; do case "$l" in */usage*) printf 'Current session\\n%s%% used\\nResets 3am\\nCurrent week (all models)\\n%s%% used\\nResets Nov 30 at 6pm\\n' $S $W;; esac; done\nfi\n`
-    : '';
+  // The numbers can change later with o.setUsage(id, { s, w }): a file per account that wins over opts.usage at every /usage.
+  const usageDir = path.join(base, 'usage');
+  fs.mkdirSync(usageDir);
+  const usageScript = `if [ $# -eq 0 ]; then\ncase "$CLAUDE_CONFIG_DIR" in\n${Object.entries(opts.usage || {})
+    .filter(([id]) => id !== 'principal')
+    .map(([id, u]) => `*/cuentas/${id}) S=${u.s}; W=${u.w};;`)
+    .join(
+      '\n'
+    )}\n*) S=${opts.usage?.principal?.s ?? 0}; W=${opts.usage?.principal?.w ?? 0};;\nesac\nN=principal; [ -n "$CLAUDE_CONFIG_DIR" ] && N=$(basename "$CLAUDE_CONFIG_DIR")\nwhile read l; do case "$l" in */usage*) [ -f '${usageDir}'/$N ] && read S W < '${usageDir}'/$N; printf 'Current session\\n%s%% used\\nResets 3am\\nCurrent week (all models)\\n%s%% used\\nResets Nov 30 at 6pm\\n' $S $W;; esac; done\nfi\n`;
+  // Session of the fake: «claude auth status» answers without logging a call (the principal is always logged in; an
+  // extra account is once <its folder>/.fake-login exists, which a test creates to simulate the login finishing).
+  const authScript = `if [ "$1" = auth ] && [ "$2" = status ]; then\nif [ -z "$CLAUDE_CONFIG_DIR" ] || [ -f "$CLAUDE_CONFIG_DIR/.fake-login" ]; then echo '{"loggedIn":true,"authMethod":"claude.ai","orgName":"Org","subscriptionType":"max"}'; exit 0; fi\necho '{"loggedIn":false}'; exit 1\nfi\n`;
   // Una llamada por línea: los saltos de línea del prompt se anotan como espacios. Con candado (mkdir es atómico):
   // sin él, dos hijos que arrancan a la vez mezclaban sus líneas a mitad de un prompt largo y una prueba fallaba a veces.
   fs.writeFileSync(
     fake,
-    `#!/bin/sh\nline=$(printf '%s' "$*" | tr '\\n' ' ')\n[ -n "$CLAUDE_CONFIG_DIR" ] && line="CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR $line"\nwhile ! mkdir '${claudeLog}.lock' 2>/dev/null; do sleep 0.01; done\nprintf '%s\\n' "$line" >> '${claudeLog}'\nrmdir '${claudeLog}.lock'\n${usageScript}exec cat\n`,
+    `#!/bin/sh\n${authScript}line=$(printf '%s' "$*" | tr '\\n' ' ')\n[ -n "$CLAUDE_CONFIG_DIR" ] && line="CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR $line"\nwhile ! mkdir '${claudeLog}.lock' 2>/dev/null; do sleep 0.01; done\nprintf '%s\\n' "$line" >> '${claudeLog}'\nrmdir '${claudeLog}.lock'\n${usageScript}exec cat\n`,
     { mode: 0o755 }
   );
   if (opts.robots?.length) {
@@ -146,6 +150,7 @@ export async function startOffice(opts = {}) {
     home,
     accDir,
     setAccounts: writeAccounts,
+    setUsage: (id, u) => fs.writeFileSync(path.join(usageDir, id), `${u.s} ${u.w}\n`),
     proc,
     log: () => out,
     claudeCalls: () => (fs.existsSync(claudeLog) ? fs.readFileSync(claudeLog, 'utf8').trim().split('\n').filter(Boolean) : []),

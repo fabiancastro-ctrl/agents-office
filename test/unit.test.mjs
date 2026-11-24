@@ -154,5 +154,29 @@ test('accounts: automatic choice picks the most free weekly quota from simulated
   const old = { weekPct: 99, weekPctAt: end - 9 * 86400e3, weekEnd: end };
   assert.equal(cu.autoAccount({ principal: read(50), b: old }, t), 'b');
   assert.equal(cu.weekUsed(old, t), 0);
+  // 95 % ceiling: an account above it only wins when nothing else is left
+  assert.equal(cu.autoAccount({ principal: read(96), b: read(97) }, t), '', 'all above 95: the least used anyway');
+  assert.equal(cu.autoAccount({ principal: read(96), b: read(80) }, t), 'b');
+  assert.equal(cu.autoAccount({ principal: read(10), b: read(40) }, t, { skip: ['principal'] }), 'b', 'skips an exhausted account');
+  // strict (moving a robot): nothing usable is null; an account never read counts as available
+  assert.equal(cu.pickAccount({ principal: read(10), b: read(96), c: read(99) }, t, { skip: ['principal'], strict: true }), null);
+  assert.equal(cu.pickAccount({ principal: read(10) }, t, { skip: ['principal'], strict: true })?.id, 'b');
   cu.saveAccounts([]);
+});
+
+test('limits: the «hit your limit» text gives its kind and reset instant (with its time zone)', async () => {
+  const { parseLimit } = await import('../daemon/lib/limite-texto.mjs');
+  const from = Date.parse('2026-11-24T15:00:00Z'); // 10:00 in Bogota (UTC-5)
+  const five = parseLimit("You've hit your 5-hour limit · resets 6:20pm (America/Bogota)", from);
+  assert.equal(five.kind, '5h');
+  assert.equal(five.resetsText, '6:20pm (America/Bogota)');
+  assert.equal(new Date(five.until).toISOString(), '2026-11-24T23:20:00.000Z');
+  // The clock already passed today: tomorrow
+  const next = parseLimit("You've hit your 5-hour limit · resets 9am (America/Bogota)", from);
+  assert.equal(new Date(next.until).toISOString(), '2026-11-25T14:00:00.000Z');
+  const week = parseLimit("You've hit your weekly limit · resets Nov 30 at 6pm (America/Bogota)", from);
+  assert.equal(week.kind, 'week');
+  assert.equal(new Date(week.until).toISOString(), '2026-11-30T23:00:00.000Z');
+  const odd = parseLimit("You've hit your weekly limit · resets soon", from);
+  assert.deepEqual([odd.kind, odd.until], ['week', null]);
 });

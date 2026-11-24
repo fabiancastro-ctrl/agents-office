@@ -136,6 +136,8 @@ function robotPanel(a) {
   let alert = '';
   if (d.consoleLost)
     alert = `<div class="alert" id="rp-alert"><b>${icon('burst')} Se cayó su consola</b><span class="note">Su ventana de tmux desapareció (se cerró tmux o la cerraron). Su sesión de Claude sigue en disco: «Reanudar» le abre otra consola con esa misma sesión y recuerda todo. Si tenía agentes o tareas en segundo plano, esos sí se cortaron: pídele que los relance.</span><div class="row"><button class="btn primary sm" data-act="revive">↻ Reanudar</button><button class="btn sm danger" data-act="kill">Dar de baja</button></div></div>`;
+  else if (d.limit)
+    alert = `<div class="alert limit-box" id="rp-alert"><b>${icon('hourglass')} Sin cuota</b><span class="note">${esc(limitText(d))}</span>${d.limit.pending ? `<div class="row">${limitButtons(d)}</div>` : ''}</div>`;
   else if (d.spawnReq) alert = spawnBox(d);
   else if (d.ask) alert = `<div class="alert ask-box" id="rp-alert"><b>Te pregunta</b>${askForm(d, 'p')}</div>`;
   else if (d.hold)

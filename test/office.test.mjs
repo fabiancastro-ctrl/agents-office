@@ -2402,3 +2402,234 @@ test('accounts: a notice (once) when an account passes 90 % of its week, pointin
     await o.stop();
   }
 });
+
+/* ---------- cuentas desde la oficina y continuidad al agotarse (fase 5) ---------- */
+// One line of the transcript like the one Claude writes when the account runs out of quota.
+const limitLine = text =>
+  JSON.stringify({
+    type: 'assistant',
+    timestamp: new Date().toISOString(),
+    isApiErrorMessage: true,
+    error: 'rate_limit',
+    message: { id: `lim-${Math.random()}`, content: [{ type: 'text', text }] }
+  }) + '\n';
+const FIVE_H = "You've hit your 5-hour limit · resets 6:20pm (America/Bogota)";
+// Launches a robot and gives it a transcript file the test can append to.
+async function robotWithTranscript(o, name, extra = {}) {
+  const tr = path.join(o.base, `${name}.jsonl`);
+  fs.writeFileSync(tr, '');
+  await o.api('POST', '/api/robots', { ...libre(name, `Tarea de ${name}`), ...extra });
+  await waitFor(() => o.windows().includes(name), { what: `window of ${name}` });
+  await o.hook(name, { hook_event_name: 'SessionStart', source: 'startup', session_id: `s-${name}`, transcript_path: tr });
+  return { tr, said: (await o.robot(name)).sessionId };
+}
+
+test('accounts panel API: add (links + login window), poll the session, rename, relogin, remove (never the folder)', async () => {
+  const o = await startOffice();
+  try {
+    const dir = o.accDir('n');
+    assert.equal((await o.api('POST', '/api/cuentas', { id: 'Principal', dir })).status, 400, 'reserved id');
+    assert.equal(
+      (await o.api('POST', '/api/cuentas', { id: 'n', dir: path.join(o.base, 'principal') })).status,
+      400,
+      'the principal folder'
+    );
+    const add = await o.api('POST', '/api/cuentas', { id: 'n', nombre: 'Nueva', dir });
+    assert.equal(add.status, 201);
+    assert.equal(fs.lstatSync(path.join(dir, 'projects')).isSymbolicLink(), true, 'shared folders are linked');
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(o.home, 'cuentas.json'), 'utf8')), [{ id: 'n', nombre: 'Nueva', dir }]);
+    assert.equal((await o.api('POST', '/api/cuentas', { id: 'n', dir: o.accDir('x') })).status, 409, 'duplicate id');
+    await waitFor(() => o.windows().includes('_login-n'), { what: 'the login window' });
+    await waitFor(() => o.claudeCalls().some(c => c === `CLAUDE_CONFIG_DIR=${dir} auth login`), { what: 'auth login with that folder' });
+    let list = (await o.api('GET', '/api/cuentas')).body;
+    const row = list.cuentas.find(c => c.id === 'n');
+    assert.deepEqual([row.session.loggedIn, row.login, row.links.ok.includes('projects'), row.principal], [false, true, true, false]);
+    assert.equal(list.cuentas[0].principal, true);
+    // Polling: until the session shows up the window stays; then it is closed
+    assert.equal((await o.api('GET', '/api/cuentas/n/sesion')).body.login, true);
+    fs.writeFileSync(path.join(dir, '.fake-login'), '');
+    const done = (await o.api('GET', '/api/cuentas/n/sesion')).body;
+    assert.deepEqual([done.session.loggedIn, done.login], [true, false]);
+    await waitFor(() => !o.windows().includes('_login-n'), { what: 'the login window closed' });
+    // Relogin opens the same login again; rename; the principal is protected
+    assert.equal((await o.api('POST', '/api/cuentas/n/login')).status, 200);
+    await waitFor(() => o.windows().includes('_login-n'), { what: 'the relogin window' });
+    assert.equal((await o.api('POST', '/api/cuentas/n/renombrar', { nombre: '  Otra   cuenta ' })).body.nombre, 'Otra cuenta');
+    assert.equal((await o.snapshot()).config.accounts.find(a => a.id === 'n').nombre, 'Otra cuenta');
+    assert.equal((await o.api('POST', '/api/cuentas/principal/renombrar', { nombre: 'x' })).status, 409);
+    assert.equal((await o.api('DELETE', '/api/cuentas/principal')).status, 409);
+    assert.equal((await o.api('DELETE', '/api/cuentas/zz')).status, 404);
+    // A robot that uses it blocks the removal; once it is gone the account leaves the registry and the folder stays
+    await o.api('POST', '/api/robots', { ...libre('usa', 'Tarea con n'), account: 'n' });
+    assert.equal((await o.api('DELETE', '/api/cuentas/n')).status, 409);
+    await o.api('DELETE', '/api/robots/usa');
+    assert.equal((await o.api('DELETE', '/api/cuentas/n')).status, 200);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(o.home, 'cuentas.json'), 'utf8')), []);
+    assert.equal(fs.existsSync(path.join(dir, 'projects')), true, 'the folder is never deleted');
+    list = (await o.api('GET', '/api/cuentas')).body;
+    assert.equal(list.cuentas.length, 1);
+  } finally {
+    await o.stop();
+  }
+});
+
+test('out of quota: the robot is marked, reopens THE SAME session on the other account, and «Automática» skips the exhausted one', async () => {
+  const at = Date.now(),
+    weekEnd = at + 3 * 86400e3;
+  const quotaAcc = { principal: { weekPct: 10, weekPctAt: at, weekEnd }, b: { weekPct: 50, weekPctAt: at, weekEnd } };
+  const o = await startOffice({ maxRobots: 5, accounts: ['b'], files: { 'config.json': JSON.stringify({ quotaAcc }) } });
+  try {
+    assert.equal((await o.snapshot()).config.limitPolicy, 'switch', 'with several accounts the default is to move on its own');
+    const { tr, said } = await robotWithTranscript(o, 'rl');
+    fs.appendFileSync(tr, limitLine(FIVE_H));
+    await waitFor(async () => (await o.robot('rl')).account === 'b', { what: 'the move to account b' });
+    const calls = await waitFor(
+      () => {
+        const found = o.claudeCalls().filter(c => c.includes(`--resume ${said}`));
+        return found.length && found;
+      },
+      { what: 'the resume call' }
+    );
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].startsWith(`CLAUDE_CONFIG_DIR=${o.accDir('b')} `), 'with the new account folder');
+    assert.match(calls[0], /sigue exactamente donde quedaste/);
+    assert.equal(o.windows().filter(w => w === 'rl').length, 1, 'one console, the old one closed');
+    const r = await o.robot('rl');
+    assert.equal(r.limit, null);
+    assert.equal(r.sessionId, said, 'the same session');
+    assert.ok(r.log.some(l => l.text.startsWith('Pasó de Principal a Cuenta b por límite') && l.text.includes(FIVE_H)));
+    // The principal is out until its reset: «Automática» does not pick it even though it has the freest quota on paper
+    await o.api('POST', '/api/robots', { ...libre('au', 'Tarea automatica'), account: 'auto' });
+    const call = await waitFor(() => o.claudeCalls().find(c => c.includes('Tarea automatica')), { what: 'the automatic launch' });
+    assert.ok(call.startsWith(`CLAUDE_CONFIG_DIR=${o.accDir('b')} `));
+    // The line only counts once: a duplicate is ignored
+    fs.appendFileSync(tr, limitLine(FIVE_H));
+  } finally {
+    await o.stop();
+  }
+});
+
+test('out of quota: «Preguntarme» asks with the other account and «Esperar»; «Esperar la renovación» resumes on its own', async () => {
+  const o = await startOffice({
+    maxRobots: 5,
+    accounts: ['b'],
+    env: { OFFICE_LIMIT_TICK_MS: '300' },
+    usage: { principal: { s: 100, w: 30 }, b: { s: 10, w: 10 } }
+  });
+  try {
+    assert.equal((await o.api('POST', '/api/config', { limitPolicy: 'nope' })).status, 400);
+    assert.equal((await o.api('POST', '/api/config', { limitPolicy: 'ask' })).body.limitPolicy, 'ask');
+    const a = await robotWithTranscript(o, 'pa');
+    fs.appendFileSync(a.tr, limitLine(FIVE_H));
+    const asked = await waitFor(async () => (await o.robot('pa')).limit?.pending && (await o.robot('pa')), { what: 'the question' });
+    assert.deepEqual([asked.state, asked.limit.kind, asked.limit.options.map(x => x.id)], ['input', '5h', ['b']]);
+    assert.equal(
+      o.claudeCalls().some(c => c.includes('--resume')),
+      false,
+      'nothing is reopened before you answer'
+    );
+    assert.equal((await o.api('POST', '/api/robots/pa/limite', { action: 'cambiar' })).status, 200);
+    await waitFor(() => o.claudeCalls().some(c => c.includes(`--resume ${a.said}`)), { what: 'the resume after «Seguir en»' });
+    assert.equal((await o.robot('pa')).account, 'b');
+    // Another robot of the principal: «Esperar» holds it (state done, in espera) and nothing reopens
+    const w = await robotWithTranscript(o, 'pw');
+    fs.appendFileSync(w.tr, limitLine("You've hit your 5-hour limit · resets soon"));
+    await waitFor(async () => (await o.robot('pw')).limit?.pending, { what: 'the second question' });
+    assert.equal((await o.api('POST', '/api/robots/pw/limite', { action: 'esperar' })).status, 200);
+    const held = await o.robot('pw');
+    assert.deepEqual([held.limit.waiting, held.limit.pending, held.state, held.account], [true, false, 'done', '']);
+    assert.equal(
+      o.claudeCalls().some(c => c.includes(`--resume ${w.said}`)),
+      false
+    );
+    assert.equal(
+      (await o.api('POST', '/api/robots/pw/limite', { action: 'cambiar', account: 'b' })).status,
+      200,
+      'it can still be moved by hand'
+    );
+    assert.equal((await o.robot('pw')).account, 'b');
+  } finally {
+    await o.stop();
+  }
+});
+
+test('out of quota: «Esperar la renovación» (or no other account) waits, and says «continúa» when /usage shows quota again', async () => {
+  const o = await startOffice({ maxRobots: 3, env: { OFFICE_LIMIT_TICK_MS: '300' }, usage: { principal: { s: 100, w: 30 } } });
+  try {
+    assert.equal((await o.snapshot()).config.limitPolicy, 'wait', 'with one account there is nothing to move to');
+    const { tr } = await robotWithTranscript(o, 'esp');
+    fs.appendFileSync(tr, limitLine("You've hit your 5-hour limit · resets soon"));
+    const held = await waitFor(async () => (await o.robot('esp')).limit?.waiting && (await o.robot('esp')), { what: 'the wait' });
+    assert.equal(held.state, 'done');
+    assert.equal(
+      o.claudeCalls().some(c => c.includes('--resume')),
+      false
+    );
+    // The session limit is gone in /usage: the robot resumes by itself
+    o.setUsage('principal', { s: 10, w: 30 });
+    await o.api('GET', '/api/claude-status?refresh=1');
+    await waitFor(async () => (await o.robot('esp')).limit === null, { timeout: 20000, what: 'the automatic resume' });
+    await waitFor(async () => (await o.api('GET', '/api/robots/esp/pane')).body.text.includes('continúa'), {
+      what: 'the «continúa» message'
+    });
+    assert.ok((await o.robot('esp')).log.some(l => /Se renovó la cuota/.test(l.text)));
+  } finally {
+    await o.stop();
+  }
+});
+
+test('out of quota: a routine whose account is exhausted follows the policy (moves on, or waits for the renewal)', async () => {
+  const o = await startOffice({ maxRobots: 4, accounts: ['b'] });
+  try {
+    const { tr } = await robotWithTranscript(o, 'rl', { account: 'b' });
+    await o.api('POST', '/api/config', { limitPolicy: 'wait' });
+    fs.appendFileSync(tr, limitLine(FIVE_H)); // b is out until 6:20pm
+    await waitFor(async () => (await o.robot('rl')).limit?.waiting, { what: 'the wait' });
+    const sch = () => ({ mode: 'once', at: new Date(Date.now() + 400).toISOString() });
+    const mk = async name =>
+      (await o.api('POST', '/api/routines', { type: 'agenda', name, text: `Rutina ${name}`, schedule: sch(), account: 'b' })).body.id;
+    // «Esperar»: the run does not launch
+    await mk('quieta');
+    await sleep(2500);
+    assert.equal(
+      o.claudeCalls().some(c => c.includes('Rutina quieta')),
+      false,
+      'it waits'
+    );
+    // «Pasar solo»: the run goes to the principal
+    await o.api('POST', '/api/config', { limitPolicy: 'switch' });
+    await mk('mueve');
+    const call = await waitFor(() => o.claudeCalls().find(c => c.includes('Rutina mueve')), { what: 'the routine launch' });
+    assert.doesNotMatch(call, /CLAUDE_CONFIG_DIR/, 'on the principal');
+  } finally {
+    await o.stop();
+  }
+});
+
+test('page: the Cuentas section of Ajustes, the «Sin cuota» state (amber) and its buttons are in what the daemon serves', async () => {
+  const o = await startOffice({ accounts: ['b'] });
+  try {
+    const html = await (await fetch(o.url)).text();
+    assert.match(html, /id="vm-cuentas"/);
+    const js = await (await fetch(`${o.url}/app.js`)).text();
+    for (const s of [
+      'Agregar cuenta',
+      'Volver a iniciar sesión',
+      'Quitar del registro',
+      'Autoriza en el navegador que se abrió',
+      'Si una cuenta se queda sin cuota',
+      'Pasar solo a otra cuenta',
+      'Preguntarme',
+      'Esperar la renovación',
+      "'Sin cuota'",
+      'data-limit="cambiar"',
+      'Seguir en '
+    ])
+      assert.ok(js.includes(s), `app.js lacks «${s}»`);
+    const css = await (await fetch(`${o.url}/style.css`)).text();
+    assert.match(css, /\.p-limit\{[^}]*--amber/);
+    assert.doesNotMatch(css.match(/\.p-limit\{[^}]*\}/)[0], /grey|gray|#[5-9a-f]{3}\b/);
+  } finally {
+    await o.stop();
+  }
+});

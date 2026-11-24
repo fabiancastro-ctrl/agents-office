@@ -49,6 +49,7 @@ function saveState() {
         tools: r.tools || [],
         modelPick: r.modelPick || '',
         account: r.account || '',
+        limit: r.limit || null,
         sessionId: r.sessionId,
         transcript: r.transcript,
         startedAt: r.startedAt,

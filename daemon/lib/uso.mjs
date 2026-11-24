@@ -8,6 +8,7 @@ import { broadcast, configView, emit, fmtK } from './estado.mjs';
 import { readConfig, saveConfig } from './carpeta.mjs';
 import { accountName, accounts, accountTmuxEnv, normAccount, PRINCIPAL, weekUsed } from './cuentas.mjs';
 import { log } from './persistencia.mjs';
+import { onUsageReading } from './limites.mjs';
 import { lookFromName } from './equipo.mjs';
 import { archive } from './turno.mjs';
 import { ensureSession } from './tmux.mjs';
@@ -478,12 +479,14 @@ function parseClaudeStatus(text, account = '') {
   const clean = lines.map(l => l.trim());
   const limits = [];
   const ends = {};
+  let sessionPct = NaN;
   clean.forEach((l, i) => {
     const m = l.match(/(\d+)% used/);
     if (!m) return;
     const raw = clean[i + 1] || '';
     limits.push({ title: toSpanish(clean[i - 1] || ''), pct: Number(m[1]), resets: /^Resets/.test(raw) ? toSpanish(raw) : '' });
     const at = /^Resets/.test(raw) ? resetAt(raw) : null;
+    if (/^Current session$/.test(clean[i - 1] || '')) sessionPct = Number(m[1]);
     if (at && /^Current session$/.test(clean[i - 1] || '')) ends.sessionEnd = at;
     if (at && /^Current week \(all models\)$/.test(clean[i - 1] || '')) {
       ends.weekEnd = at;
@@ -510,6 +513,7 @@ function parseClaudeStatus(text, account = '') {
     saveConfig({ quotaAcc: qa, quota: { ...head.q, account: head.id } });
     broadcast({ type: 'config', config: configView() });
     warnAccount(key, q);
+    onUsageReading(key, { weekPct: ends.weekPct, sessionPct }); // forgets stale «sin cuota» notices, moves the active account
   }
   const start = clean.findIndex(l => /^What's contributing/.test(l));
   const detail =

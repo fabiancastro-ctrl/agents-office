@@ -367,6 +367,11 @@ document.addEventListener('click', async e => {
   }
 });
 
+// «Seguir en <cuenta>» / «Esperar» of a robot out of quota that asked what to do (handled in 29-cuentas.js).
+function limitButtons(d) {
+  const o = d.limit.options?.[0];
+  return `${o ? `<button type="button" class="btn primary sm" data-limit="cambiar" data-limit-robot="${esc(d.name)}" data-limit-account="${esc(o.id)}">Seguir en ${esc(o.nombre)}</button>` : ''}<button type="button" class="btn sm" data-limit="esperar" data-limit-robot="${esc(d.name)}">Esperar</button>`;
+}
 function cardHtml(a) {
   const d = a.data,
     g = groupOf(d);
@@ -375,7 +380,9 @@ function cardHtml(a) {
     tok = tokOf(d);
   const pill = d.consoleLost
     ? `<span class="pill p-input">${icon('burst')} se cayó</span>`
-    : d.spawnReq
+    : d.limit
+      ? `<span class="pill p-limit">${icon('hourglass')} Sin cuota</span>`
+      : d.spawnReq
       ? `<span class="pill p-input">pide ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}</span>`
       : d.state === 'input' && d.inputAt
         ? `<span class="pill p-input">espera <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></span>`
@@ -383,7 +390,9 @@ function cardHtml(a) {
   const perm = d.hold || d.needsPermission;
   const line = d.consoleLost
     ? 'Su consola se cerró (tmux). Su sesión sigue en disco: «Reanudar» la abre de nuevo y recuerda todo.'
-    : d.spawnReq
+    : d.limit
+      ? limitText(d)
+      : d.spawnReq
       ? `Quiere lanzar ${d.spawnReq.items.length} robot${d.spawnReq.items.length === 1 ? '' : 's'}: ${d.spawnReq.items.map(i => i.title || plainMd(i.text).slice(0, 40)).join(' · ')}`
       : d.ask
         ? `Te hizo ${d.ask.questions.length === 1 ? 'una pregunta' : `${d.ask.questions.length} preguntas`}: ${d.ask.questions.map(q => q.header || q.question).join(' · ')}`
@@ -399,6 +408,7 @@ function cardHtml(a) {
   let actions = '';
   if (d.consoleLost)
     actions = `<button class="btn primary sm" data-card-act="revive">↻ Reanudar</button><button class="btn sm" data-card-act="open">Ver</button><button class="btn sm danger" data-card-act="kill">Despedir</button>`;
+  else if (d.limit?.pending) actions = `${limitButtons(d)}<button class="btn sm" data-card-act="open">Ver</button>`;
   else if (d.spawnReq) actions = `<button class="btn primary sm" data-card-act="open">Revisar y lanzar</button>`;
   else if (d.ask) actions = askForm(d, 'c');
   else if (d.hold)
@@ -418,6 +428,7 @@ function cardHtml(a) {
     urg ? `urg-${urg}` : '',
     stuck ? 'stuck' : '',
     d.state === 'done' && d.critical > 0 ? 'crit' : '',
+    d.limit ? 'limited' : '',
     st.selected === d.name ? 'sel' : '',
     cardUi.hl === d.name ? 'hl' : ''
   ]

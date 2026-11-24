@@ -6,7 +6,7 @@ import { console_, maxRobots, now, robots, trunc } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { log, saveState } from './persistencia.mjs';
 import { cleanTitle, normModel, normTools } from './turno.mjs';
-import { inheritAccount, normAccountPick } from './cuentas.mjs';
+import { inheritAccount, normAccountInput } from './cuentas.mjs';
 import { launch, launching, say } from './tmux.mjs';
 import {
   checkTeamDone,
@@ -160,7 +160,7 @@ async function decideSpawn(r, id, approve, edited) {
           name: validName(x.name) || kidName(x.title, x.text),
           tools: normTools(x.tools),
           modelPick: normModel(x.modelPick),
-          account: normAccountPick(x.account)
+          account: normAccountInput(x.account)
         }))
         .filter(x => x.text)
     : r.spawnReq.items;
@@ -188,7 +188,7 @@ async function decideSpawn(r, id, approve, edited) {
     name: it.name || '',
     tools: normTools(it.tools),
     modelPick: normModel(it.modelPick),
-    account: normAccountPick(it.account),
+    account: normAccountInput(it.account),
     sala: sala.id,
     at: now()
   }));

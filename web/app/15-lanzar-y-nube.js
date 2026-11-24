@@ -141,7 +141,7 @@ function renderHover() {
   if (!a) return hideHover();
   const d = a.data;
   const label = stateLabel(d);
-  hover.el.innerHTML = `<div class="hc-top"><b>${esc(d.name)}</b><span class="pill p-${d.state}">${esc(label)}</span></div>
+  hover.el.innerHTML = `<div class="hc-top"><b>${esc(d.name)}</b><span class="pill p-${d.limit ? 'limit' : d.state}">${esc(label)}</span></div>
     ${titleOf(d) ? `<div class="hc-title${d.title ? '' : ' auto'}">${icon('pin')} ${esc(titleOf(d))}</div>` : ''}
     <div class="hc-act">${esc(hoverActivity(d).slice(0, 120))}</div>
     ${d.state === 'input' && d.inputAt ? `<div class="hc-wait">Esperando tu respuesta hace <b data-since="${esc(d.inputAt)}">${fmtWait(Date.now() - Date.parse(d.inputAt))}</b></div>` : ''}

@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { now, PERMISSION_MODES, PORT, replaceList, robots, ROUTINE_TICK_MS, run, RUNS, saveJson, trunc, WORKSPACE } from './base.mjs';
-import { normAccountPick } from './cuentas.mjs';
+import { normAccountInput } from './cuentas.mjs';
 import { broadcast, usage } from './estado.mjs';
 import { log } from './persistencia.mjs';
 import { archive, normModel } from './turno.mjs';
@@ -658,7 +658,7 @@ async function buildRoutine(b) {
     type,
     permissionMode: b.permissionMode || '',
     modelPick: normModel(b.modelPick),
-    account: normAccountPick(b.account),
+    account: normAccountInput(b.account),
     schedule: cleanSchedule(type === 'wake' ? { mode: 'every', everyMin: b.schedule?.everyMin || b.everyMin || 5 } : b)
   };
   if (type === 'agenda') {

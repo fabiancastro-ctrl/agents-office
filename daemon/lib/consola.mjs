@@ -43,8 +43,9 @@ async function checkConsoles() {
 setInterval(() => {
   checkConsoles().catch(() => {});
 }, Number(process.env.OFFICE_CONSOLE_CHECK_MS) || 10000);
-async function revive(r) {
-  if (!r.consoleLost) throw new Error('Su consola sigue abierta.');
+// Opens a console for the robot's same session (--resume) with its current account. `prompt` (optional) is the first
+// message, passed as the last argument like a launch does. Used by «Revivir» and by the move to another account.
+async function openResumed(r, prompt = '') {
   await ensureSession();
   let size = 0;
   try {
@@ -79,11 +80,16 @@ async function revive(r) {
     ...robotFlags(r)
   ];
   if (r.permissionMode) tmuxArgs.push('--permission-mode', r.permissionMode);
+  if (prompt) tmuxArgs.push(prompt);
   await run('tmux', tmuxArgs);
   // Lo que ya estaba en su sesión no se repite en la conversación: se sigue leyendo desde el final.
   r.offset = size;
   r.partial = '';
   r.consoleLost = false;
+}
+async function revive(r) {
+  if (!r.consoleLost) throw new Error('Su consola sigue abierta.');
+  await openResumed(r);
   setState(r, 'done');
   log(r, 'sys', `Revivido con su misma sesión (${r.sessionId.slice(0, 8)}): recuerda todo. Escríbele para seguir.`);
   console_(r.name, 'revivido', `tmux attach -t ${SESSION}:${r.name}`);
@@ -147,4 +153,4 @@ async function removeRobot(r, reason, robotSummary, by) {
   setTimeout(drainSpawnQueue, 500);
 }
 
-export { markLost, removeRobot, revive };
+export { markLost, openResumed, removeRobot, revive };
