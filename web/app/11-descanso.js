@@ -8,20 +8,13 @@ const BREAK_SPOTS = [
   [18.5, 18],
   [24, 18.6],
   [30, 18],
-  [36, 18.6],
-  [42, 18.2],
-  [48, 18.6],
-  [54, 18],
-  [62, 18.4],
   [7.5, 29.4],
   [13.5, 30],
   [19.5, 29.4],
   [25.5, 30],
-  [31, 26.4],
-  [44, 29.6],
-  [50, 30],
-  [56, 29.4]
+  [30.5, 29.6]
 ];
+// The break room spans x 2..35 (see setRect of .room.r-break): every spot must stay inside it, never over «Tu escritorio».
 const BREAK_TALK = [
   '¿Alguien vio el pipeline?',
   'Café número tres',
@@ -47,7 +40,7 @@ const busySpots = () => new Set([...brk.bots.values()].map(x => x.spot));
 const spotPos = k => ({ x: BREAK_SPOTS[k][0], y: BREAK_SPOTS[k][1] });
 function breakTarget() {
   const active = [...st.robots.values()].filter(a => a.data.state !== 'done').length;
-  return Math.max(2, Math.min(7, 7 - active)); // de 2 a 7: más cuando hay poco trabajo, sin llenar la sala
+  return Math.max(2, Math.min(5, 6 - active)); // de 2 a 5: más cuando hay poco trabajo; spawnBreakBot sin sitio libre no agrega a nadie
 }
 function spawnBreakBot() {
   const free = BREAK_SPOTS.map((_, k) => k).filter(k => !busySpots().has(k));
