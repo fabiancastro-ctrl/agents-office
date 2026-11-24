@@ -3,7 +3,8 @@
 
 // M · Visita al café: un robot con LISTO (o en espera) hace más de 2 min va de vez en cuando a la cafetera de la sala de descanso
 // con su taza y vuelve. Si le escribes (deja de estar LISTO) regresa enseguida. Uno a la vez, cada robot cada 12 min.
-const COFFEE_SPOT = { x: 61.9, y: 18 };
+// In front of the pot (.deco.bcoffee, setRect x 32.4..35.2, y 16..24 in 02-mapa.js): move both together.
+const COFFEE_SPOT = { x: 33.4, y: 27 };
 const coffee = { last: new Map(), busy: false };
 const quietMs = d => Date.now() - (Date.parse(d.lastEventAt || d.timeline?.at(-1)?.at || '') || Date.now()); // sin actividad desde
 setInterval(() => {
@@ -27,7 +28,7 @@ setInterval(() => {
   queue(a, async () => {
     try {
       a.el.classList.add('coffee');
-      await walkTo(a, { x: COFFEE_SPOT.x + (Math.random() * 3 - 1.5), y: COFFEE_SPOT.y });
+      await walkTo(a, { x: COFFEE_SPOT.x + (Math.random() * 1.2 - 0.6), y: COFFEE_SPOT.y });
       for (let t = 0; t < 12 && a.data.state === 'done' && !st.view; t++) await new Promise(r => setTimeout(r, 500));
       if (st.robots.get(a.data.name) === a) await walkTo(a, restPos(a));
     } finally {
