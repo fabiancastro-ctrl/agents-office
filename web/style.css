@@ -71,6 +71,7 @@ html{font-variant-ligatures:none}
 .hc-org{font-size:10.5px;color:#7a5a12;word-break:break-word}
 .lim{display:grid;gap:4px;margin:10px 0}
 .lim-h{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.acct-q{margin:12px 0;padding-top:8px;border-top:1px solid var(--line)} .acct-q:first-child{border-top:0;padding-top:0} .acct-q h4{margin:0 0 2px;font-size:13px} .acct-q h4 small{color:var(--amber);font-weight:400}
 .bar{height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
 .bar i{display:block;height:100%;background:var(--teal)}
 .bar i.warm{background:var(--amber)} .bar i.hot{background:var(--rose)}
@@ -249,6 +250,8 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 .robot[data-m=opus] > svg{scale:1.12} .robot[data-m=haiku] > svg{scale:.88}
 .robot .nm{position:absolute;top:100%;left:50%;transform:translateX(-50%);font-size:11px;font-family:var(--mono);background:rgba(17,23,34,.85);padding:0 4px;border-radius:3px;white-space:nowrap;margin-top:1px}
 .robot.sel .nm{background:var(--amber);color:#2a1d05}
+.robot .nm .acct{display:inline-block;margin-left:4px;min-width:12px;padding:0 3px;border-radius:6px;background:var(--sky);color:#0d1a2a;font:700 9px/12px var(--mono);text-align:center;vertical-align:1px}
+html.hc .robot .nm .acct{outline:1px solid currentColor}
 .robot .kill-x{position:absolute;top:-4px;right:-12px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;border:1px solid rgba(239,127,138,.6);background:rgba(17,23,34,.92);color:var(--rose);font:600 11px/14px var(--mono);cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s;white-space:nowrap;z-index:2}
 .robot:hover .kill-x,.robot:focus-within .kill-x,.robot.sel .kill-x,.robot .kill-x.armed{opacity:1;pointer-events:auto}
 .robot .kill-x:hover{background:var(--rose);color:#2a0a0e}

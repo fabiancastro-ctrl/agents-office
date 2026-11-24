@@ -814,10 +814,10 @@ test('comandos de la consola, orden por hora real y contexto tras compactar', as
 });
 
 // Dos robots con su transcript (uno con un subagente): cada mensaje con su usage, como lo guarda Claude.
-async function spendOffice(env, perRobot) {
-  const o = await startOffice({ maxRobots: 3, env: { OFFICE_SPEND_TICK_MS: '300', ...env } });
+async function spendOffice(env, perRobot, extra = {}) {
+  const o = await startOffice({ maxRobots: 3, env: { OFFICE_SPEND_TICK_MS: '300', ...env }, ...extra });
   for (const [name, msgs] of Object.entries(perRobot)) {
-    await o.api('POST', '/api/robots', libre(name));
+    await o.api('POST', '/api/robots', { ...libre(name), account: msgs.account });
     const tr = path.join(o.base, `${name}.jsonl`);
     const at = new Date().toISOString();
     fs.writeFileSync(
@@ -2247,6 +2247,84 @@ test('per-robot account: team requests ("cuenta"), handoffs and routines carry i
       await o.api('POST', '/api/routines', { type: 'agenda', name: 'rara', text: 'Rutina rara', schedule: sch(), account: 'zz' })
     ).body.id;
     assert.equal((await o.snapshot()).routines.find(x => x.id === id2).account, '');
+  } finally {
+    await o.stop();
+  }
+});
+
+test('accounts: one /usage window per account, the header reading is the fullest account and the pot says whose', async () => {
+  const o = await startOffice({ maxRobots: 3, accounts: ['b'], usage: { principal: { s: 20, w: 40 }, b: { s: 50, w: 82 } } });
+  try {
+    const cfg = (await o.snapshot()).config;
+    assert.deepEqual(
+      cfg.accounts.map(a => [a.id, !!a.principal]),
+      [
+        ['principal', true],
+        ['b', false]
+      ]
+    );
+    const r = await o.api('GET', '/api/claude-status?refresh=1');
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(
+      r.body.accounts.map(a => [a.id, a.limits.map(l => l.pct)]),
+      [
+        ['principal', [20, 40]],
+        ['b', [50, 82]]
+      ]
+    );
+    assert.equal(r.body.account.id, 'b', 'the top-level reading is the fullest account');
+    assert.deepEqual(
+      r.body.limits.map(l => l.pct),
+      [50, 82]
+    );
+    assert.ok(o.windows().includes('_status') && o.windows().includes('_status-b'));
+    const stats = (await o.snapshot()).config.stats;
+    assert.equal(stats.quotaPct, 82);
+    assert.equal(stats.quotaAccount, 'Cuenta b');
+    const saved = JSON.parse(fs.readFileSync(path.join(o.data, 'config.json'), 'utf8'));
+    assert.equal(saved.quotaAcc.principal.weekPct, 40);
+    assert.equal(saved.quotaAcc.b.weekPct, 82);
+  } finally {
+    await o.stop();
+  }
+});
+
+test('accounts: the 25 % rule counts a robot against its own account', async () => {
+  const o = await spendOffice(
+    { OFFICE_SPEND_HOUR_HOT: '1e12', OFFICE_SPEND_MIN_WEEK: '1000' },
+    { uno: { main: [300], account: 'b' }, tres: { main: [700], account: 'b' }, dos: { main: [9000] } },
+    { accounts: ['b'] }
+  );
+  try {
+    await waitFor(async () => (await o.robot('uno')).spend?.officeWeek === 1000, { what: 'the week of account b' });
+    const uno = await o.robot('uno');
+    assert.equal(uno.spend.pct, 30);
+    assert.equal(uno.spend.hot, 'share', '30 % of its account, only 3 % of the whole office');
+    assert.match(uno.log.find(l => /🔥/.test(l.text)).text, /\(cuenta Cuenta b\)/);
+    assert.equal((await o.robot('dos')).spend.officeWeek, 9000);
+  } finally {
+    await o.stop();
+  }
+});
+
+test('accounts: the page has the Cuenta selector (only with several accounts), the window line, the map badge and the per-account quota', async () => {
+  const o = await startOffice({ accounts: ['b'] });
+  try {
+    const js = await (await fetch(`${o.url}/app.js`)).text();
+    for (const frag of [
+      "accountField('job-account'",
+      "accountField('rt-account'",
+      'hasAccounts()',
+      "' · cuenta: '",
+      'class="acct"',
+      'Cuenta más llena',
+      'acct-q'
+    ])
+      assert.ok(js.includes(frag), frag);
+    assert.ok((await (await fetch(`${o.url}/style.css`)).text()).includes('.nm .acct'));
+    // body flows through: a robot launched with account b is reported with it
+    await o.api('POST', '/api/robots', { ...libre('cb'), account: 'b' });
+    assert.equal((await o.robot('cb')).account, 'b');
   } finally {
     await o.stop();
   }

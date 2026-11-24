@@ -6,6 +6,7 @@ import path from 'node:path';
 import { CLAUDE_BIN, clients, console_, now, robots, run, RUNS, SESSION, WORKSPACE } from './base.mjs';
 import { broadcast, configView, emit, fmtK } from './estado.mjs';
 import { readConfig, saveConfig } from './carpeta.mjs';
+import { accountName, accounts, accountTmuxEnv, normAccount, PRINCIPAL } from './cuentas.mjs';
 import { log } from './persistencia.mjs';
 import { lookFromName } from './equipo.mjs';
 import { archive } from './turno.mjs';
@@ -215,7 +216,9 @@ function fameWall(n = 4) {
   });
 }
 // Lo que gastó toda la oficina en la semana de la cuota: base del «% sem.» de cada robot (así cuadra con el empleado).
-let quotaWeekTotal = 0;
+// quotaWeekByAcc: the same total split by the account that spent it ('' = principal), for the 25 % rule per account.
+let quotaWeekByAcc = new Map();
+const accountOfName = name => normAccount((robots.get(name) || [...archive].reverse().find(a => a.name === name))?.account);
 function computeFame(per) {
   const byWeek = new Map(),
     bySession = new Map();
@@ -236,7 +239,11 @@ function computeFame(per) {
   const top = m => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] || null;
   const em = top(byWeek),
     st = top(bySession);
-  quotaWeekTotal = [...byWeek.values()].reduce((a, b) => a + b, 0); // total de la oficina en la semana de la cuota
+  quotaWeekByAcc = new Map();
+  for (const [name, t] of byWeek) {
+    const a = accountOfName(name);
+    quotaWeekByAcc.set(a, (quotaWeekByAcc.get(a) || 0) + t); // total de cada cuenta en la semana de la cuota
+  }
   let employee = null;
   if (em && em[1] > 0) {
     // su cara: la del robot si está; si no, la que tenía al irse (archivo); si no, la de su nombre
@@ -258,6 +265,8 @@ function computeFame(per) {
     period: { from: new Date(per.weekFrom).toISOString(), to: new Date(per.weekTo).toISOString(), known: per.weekKnown }
   };
 }
+// « (cuenta X)» when the office has several accounts and the robot is not on the principal one.
+const accountTag = r => (normAccount(r.account) ? ` (cuenta ${accountName(r.account)})` : '');
 const crownOf = name => (fame.employee?.name === name ? (fame.sessionTop?.name === name ? 2 : 1) : 0);
 
 // Gasto de cada equipo: lo de todos los que pasaron por su sala (padre e hijos, también los que ya se fueron, con sus
@@ -316,8 +325,8 @@ function updateSpend() {
   }
   // «% sem.»: parte del gasto de la oficina en la semana de la cuota, la misma ventana que el empleado de la semana.
   // Antes usaba la semana del calendario (desde el lunes) y no cuadraba: un robot podía salir con 34 % sin ser el empleado.
-  const officeWeek = quotaWeekTotal;
   for (const r of robots.values()) {
+    const officeWeek = quotaWeekByAcc.get(normAccount(r.account)) || 0; // the 25 % rule counts against the robot's own account
     const { week, hour } = robotSpend(r, per.weekFrom, hourAgo);
     const pct = officeWeek ? Math.min(100, Math.round((week * 100) / officeWeek)) : 0;
     const hot = hour >= SPEND_HOUR_HOT ? 'hour' : pct >= SPEND_SHARE_HOT && officeWeek >= SPEND_SHARE_MIN_WEEK ? 'share' : null;
@@ -328,7 +337,7 @@ function updateSpend() {
       const why =
         hot === 'hour'
           ? `gastó ${fmtM(hour)} tokens en la última hora`
-          : `lleva el ${pct} % del gasto de la oficina esta semana (${fmtM(week)} de ${fmtM(officeWeek)})`;
+          : `lleva el ${pct} % del gasto de la oficina esta semana${accountTag(r)} (${fmtM(week)} de ${fmtM(officeWeek)})`;
       log(r, 'sys', `🔥 Se disparó: ${why}`);
       broadcast({ type: 'notice', text: `🔥 ${r.name} se disparó: ${why}. Míralo por si está en un bucle.` });
     }
@@ -347,26 +356,30 @@ setInterval(spendTick, SPEND_TICK_MS);
 setTimeout(spendTick, Math.min(1500, SPEND_TICK_MS)); // al arrancar: cuadro del mes y coronas sin esperar el primer minuto
 
 /* ---------- estado de la suscripción (/usage) ---------- */
-// Una consola tmux aparte (_status, sin hooks de la oficina) donde se abre /usage y se lee la pantalla.
+// Una consola tmux aparte por cuenta (_status para la principal, _status-<id> para las demás, cada una con su
+// CLAUDE_CONFIG_DIR y sin hooks de la oficina) donde se abre /usage y se lee la pantalla.
 // Mirar /usage no envía mensajes al modelo, así que no gasta cuota.
-const STATUS_WIN = `${SESSION}:_status`;
+const statusWindow = id => (id ? `_status-${id}` : '_status');
 const wait = ms => new Promise(r => setTimeout(r, ms));
-let statusCache = null,
-  statusPending = null;
+const statusCache = new Map(), // account ('' = principal) -> { limits, detail, at } of the last good reading
+  statusErr = new Map(), // account -> message of the last failed reading
+  statusPending = new Map(); // account -> promise of the reading in progress
 
 async function capturePane(target) {
   return (await run('tmux', ['capture-pane', '-p', '-t', target])).stdout;
 }
 
-async function readClaudeStatus() {
+async function readClaudeStatus(account = '') {
   await ensureSession();
+  const win = statusWindow(account),
+    target = `${SESSION}:${win}`;
   let windows = [];
   try {
     windows = (await run('tmux', ['list-windows', '-t', SESSION, '-F', '#{window_name}'])).stdout.split('\n');
   } catch {
     /* sin sesion */
   }
-  const fresh = !windows.includes('_status');
+  const fresh = !windows.includes(win);
   if (fresh) {
     await run('tmux', [
       'new-window',
@@ -374,36 +387,37 @@ async function readClaudeStatus() {
       '-t',
       `${SESSION}:`,
       '-n',
-      '_status',
+      win,
       '-c',
       WORKSPACE,
+      ...accountTmuxEnv(account),
       'env',
       '-u',
       'ANTHROPIC_API_KEY',
       CLAUDE_BIN
     ]);
-    await run('tmux', ['resize-window', '-t', STATUS_WIN, '-x', '120', '-y', '80']).catch(() => {});
+    await run('tmux', ['resize-window', '-t', target, '-x', '120', '-y', '80']).catch(() => {});
     await wait(6000);
   }
   for (let attempt = 0; attempt < 2; attempt++) {
-    await run('tmux', ['send-keys', '-t', STATUS_WIN, 'Escape']);
+    await run('tmux', ['send-keys', '-t', target, 'Escape']);
     await wait(300);
-    await run('tmux', ['send-keys', '-t', STATUS_WIN, '-l', '/usage']);
+    await run('tmux', ['send-keys', '-t', target, '-l', '/usage']);
     await wait(700);
-    await run('tmux', ['send-keys', '-t', STATUS_WIN, 'Enter']);
+    await run('tmux', ['send-keys', '-t', target, 'Enter']);
     for (let i = 0; i < 20; i++) {
       await wait(500);
-      const text = await capturePane(STATUS_WIN);
+      const text = await capturePane(target);
       if (/\d+% used/.test(text) && /Resets/.test(text)) {
         await wait(800); // deja terminar de pintar la lista
-        const full = await capturePane(STATUS_WIN);
-        await run('tmux', ['send-keys', '-t', STATUS_WIN, 'Escape']).catch(() => {});
-        return parseClaudeStatus(full);
+        const full = await capturePane(target);
+        await run('tmux', ['send-keys', '-t', target, 'Escape']).catch(() => {});
+        return parseClaudeStatus(full, account);
       }
     }
     await wait(3000); // la consola pudo no estar lista todavia
   }
-  throw new Error(`No se pudo leer /usage. Abre la consola con: tmux attach -t ${STATUS_WIN}`);
+  throw new Error(`No se pudo leer /usage. Abre la consola con: tmux attach -t ${target}`);
 }
 
 // /usage sale en inglés: se traducen las frases conocidas; lo que no se reconoce se deja tal cual.
@@ -459,7 +473,7 @@ function resetAt(line, from = Date.now()) {
   if (t.getTime() <= from) t.setDate(t.getDate() + 1);
   return t.getTime();
 }
-function parseClaudeStatus(text) {
+function parseClaudeStatus(text, account = '') {
   const lines = text.split('\n').map(l => l.trimEnd());
   const clean = lines.map(l => l.trim());
   const limits = [];
@@ -478,7 +492,12 @@ function parseClaudeStatus(text) {
     }
   });
   if (ends.sessionEnd || ends.weekEnd) {
-    const q = { ...(readConfig().quota || {}), ...ends };
+    // Each account keeps its own reading in quotaAcc; `quota` (what the header chip, the coffee pot, the plants and the
+    // employee of the week read) is a copy of the FULLEST account's reading. With one account it is that account's.
+    const key = account || PRINCIPAL,
+      cfg = readConfig(),
+      qa = { ...(cfg.quotaAcc || {}) };
+    const q = { ...(qa[key] || (account ? null : cfg.quota) || {}), ...ends };
     // 3 · Historial: el % más alto leído en cada semana de la cuota (clave = día en que termina), últimas 16 semanas.
     if (ends.weekEnd && Number.isFinite(ends.weekPct)) {
       const k = new Date(ends.weekEnd).toLocaleDateString('sv'),
@@ -486,7 +505,9 @@ function parseClaudeStatus(text) {
       h[k] = Math.max(h[k] || 0, ends.weekPct);
       q.history = Object.fromEntries(Object.entries(h).sort().slice(-16));
     }
-    saveConfig({ quota: q });
+    qa[key] = q;
+    const head = fullestQuota(qa);
+    saveConfig({ quotaAcc: qa, quota: { ...head.q, account: head.id } });
     broadcast({ type: 'config', config: configView() });
   }
   const start = clean.findIndex(l => /^What's contributing/.test(l));
@@ -506,14 +527,61 @@ function parseClaudeStatus(text) {
 setInterval(() => {
   if (clients.size && WORKSPACE) claudeStatus(true).catch(() => {});
 }, Number(process.env.OFFICE_USAGE_REFRESH_MS) || 3600e3);
+// The registered account with the highest weekly % in the saved readings: { id, q }. Ties go to the first (principal).
+function fullestQuota(qa) {
+  let best = null;
+  for (const a of accounts()) {
+    const q = qa[a.id];
+    if (q && Number.isFinite(q.weekPct) && (!best || q.weekPct > best.q.weekPct)) best = { id: a.id, q };
+  }
+  return best || { id: PRINCIPAL, q: qa[PRINCIPAL] || {} };
+}
+// Weekly % of a /usage reading (the «all models» limit; the highest limit if that one is missing).
+const weekPctOf = s => {
+  const lim = s?.limits || [];
+  const w = lim.find(l => /^Semana actual \(todos los modelos\)$/.test(l.title));
+  return w ? w.pct : lim.length ? Math.max(...lim.map(l => l.pct)) : -1;
+};
+function readOne(id, refresh) {
+  const c = statusCache.get(id);
+  if (c && !refresh && Date.now() - Date.parse(c.at) < 60_000) return Promise.resolve(c);
+  if (!statusPending.has(id))
+    statusPending.set(
+      id,
+      readClaudeStatus(id)
+        .then(s => {
+          statusErr.delete(id);
+          statusCache.set(id, s);
+          return s;
+        })
+        .catch(e => {
+          statusErr.set(id, e.message);
+          throw e;
+        })
+        .finally(() => statusPending.delete(id))
+    );
+  return statusPending.get(id);
+}
+// One reading per registered account. The top-level fields (limits, detail, at) are those of the FULLEST account, so
+// the header chip and everything that read the single account before keep working; `accounts` has every one.
 async function claudeStatus(refresh) {
-  if (statusCache && !refresh && Date.now() - Date.parse(statusCache.at) < 60_000) return statusCache;
-  statusPending ||= readClaudeStatus()
-    .then(s => (statusCache = s))
-    .finally(() => {
-      statusPending = null;
-    });
-  return statusPending;
+  const accs = accounts();
+  const done = await Promise.allSettled(accs.map(a => readOne(a.id === PRINCIPAL ? '' : a.id, refresh)));
+  const list = accs.map((a, i) => {
+    const r = done[i];
+    const data = r.status === 'fulfilled' ? r.value : statusCache.get(a.id === PRINCIPAL ? '' : a.id) || null;
+    return {
+      id: a.id,
+      nombre: a.nombre,
+      principal: !!a.principal,
+      ...(data || { limits: [], detail: '', at: null }),
+      ...(r.status === 'rejected' ? { error: r.reason?.message || 'No se pudo leer /usage.' } : {})
+    };
+  });
+  const withData = list.filter(a => a.at);
+  if (!withData.length) throw new Error(list[0].error || 'No se pudo leer /usage.');
+  const top = withData.reduce((b, a) => (weekPctOf(a) > weekPctOf(b) ? a : b));
+  return { limits: top.limits, detail: top.detail, at: top.at, account: { id: top.id, nombre: top.nombre }, accounts: list };
 }
 
 export { claudeStatus, crownOf, fame, fameWall, loadSessions, officeUsage, quotaPeriods, registerSession, updateTeamSpend };

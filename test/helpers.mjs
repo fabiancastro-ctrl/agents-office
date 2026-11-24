@@ -71,11 +71,21 @@ export async function startOffice(opts = {}) {
   const claudeLog = path.join(base, 'claude.log');
   // Claude falso: anota con qué argumentos lo abrieron y se queda vivo (cat) para que la ventana exista.
   const fake = path.join(base, 'claude-falso.sh');
+  // opts.usage = { <account id | 'principal'>: { s: session %, w: week % } }: the window opened WITHOUT arguments (the _status
+  // ones) answers /usage with that account's numbers, picked by its CLAUDE_CONFIG_DIR.
+  const usageScript = opts.usage
+    ? `if [ $# -eq 0 ]; then\ncase "$CLAUDE_CONFIG_DIR" in\n${Object.entries(opts.usage)
+        .filter(([id]) => id !== 'principal')
+        .map(([id, u]) => `*/cuentas/${id}) S=${u.s}; W=${u.w};;`)
+        .join(
+          '\n'
+        )}\n*) S=${opts.usage.principal?.s ?? 0}; W=${opts.usage.principal?.w ?? 0};;\nesac\nwhile read l; do case "$l" in */usage*) printf 'Current session\\n%s%% used\\nResets 3am\\nCurrent week (all models)\\n%s%% used\\nResets Nov 30 at 6pm\\n' $S $W;; esac; done\nfi\n`
+    : '';
   // Una llamada por línea: los saltos de línea del prompt se anotan como espacios. Con candado (mkdir es atómico):
   // sin él, dos hijos que arrancan a la vez mezclaban sus líneas a mitad de un prompt largo y una prueba fallaba a veces.
   fs.writeFileSync(
     fake,
-    `#!/bin/sh\nline=$(printf '%s' "$*" | tr '\\n' ' ')\n[ -n "$CLAUDE_CONFIG_DIR" ] && line="CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR $line"\nwhile ! mkdir '${claudeLog}.lock' 2>/dev/null; do sleep 0.01; done\nprintf '%s\\n' "$line" >> '${claudeLog}'\nrmdir '${claudeLog}.lock'\nexec cat\n`,
+    `#!/bin/sh\nline=$(printf '%s' "$*" | tr '\\n' ' ')\n[ -n "$CLAUDE_CONFIG_DIR" ] && line="CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR $line"\nwhile ! mkdir '${claudeLog}.lock' 2>/dev/null; do sleep 0.01; done\nprintf '%s\\n' "$line" >> '${claudeLog}'\nrmdir '${claudeLog}.lock'\n${usageScript}exec cat\n`,
     { mode: 0o755 }
   );
   if (opts.robots?.length) {

@@ -386,6 +386,14 @@ function paint(a) {
   ]
     .filter(Boolean)
     .join(' ');
+  // Robots of an extra Claude account carry its initial next to their name (sky blue, never grey).
+  const nmHtml = d.account
+    ? `${esc(d.name)}<b class="acct" title="Cuenta de Claude: ${esc(accountLabel(d.account))}">${esc(accountLabel(d.account).slice(0, 1).toUpperCase())}</b>`
+    : esc(d.name);
+  if (a.nmHtml !== nmHtml) {
+    a.nmHtml = nmHtml;
+    a.el.querySelector('.nm').innerHTML = nmHtml;
+  }
   viewClass(a); // después de rearmar las clases: si no, se pierden las de la vista (sala, globo abajo, cartel a la izquierda)
   // Pide robots nuevos: cartel propio (no «LISTO») para que se vea que espera tu aprobación.
   // Al revivirlo: se endereza y los ojos vuelven a encender (solo la primera vez que deja de estar caído).

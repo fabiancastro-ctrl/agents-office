@@ -5,6 +5,7 @@ import path from 'node:path';
 import { APPROVAL, clients, inbox, MAX_ROBOTS_LIMIT, maxRobots, now, robots, RUNS, saveJson, SESSION, WORKSPACE } from './base.mjs';
 import { crownOf, quotaPeriods } from './uso.mjs';
 import { officeName, readConfig } from './carpeta.mjs';
+import { accountName, accounts, hasMany } from './cuentas.mjs';
 import { saveState } from './persistencia.mjs';
 import { kidsOf } from './equipo.mjs';
 import { archive, criticalOf, requestOf } from './turno.mjs';
@@ -222,6 +223,7 @@ function statsView() {
     days: week,
     quotaPct,
     quotaAt: measured || null,
+    quotaAccount: hasMany() && q.account ? accountName(q.account === 'principal' ? '' : q.account) : '', // whose reading the pot shows
     quotaHistory: Object.entries(q.history || {})
       .sort()
       .map(([end, pct]) => ({ end, pct })),
@@ -232,6 +234,14 @@ function statsView() {
 setInterval(() => {
   if (rollWeek()) broadcast({ type: 'config', config: configView() });
 }, 60e3);
+// `office cuenta add|rm` changes the registry file: tell the open pages so the account selector appears or goes away.
+let accountsSig = JSON.stringify(accounts().map(a => a.id));
+setInterval(() => {
+  const sig = JSON.stringify(accounts().map(a => a.id));
+  if (sig === accountsSig) return;
+  accountsSig = sig;
+  broadcast({ type: 'config', config: configView() });
+}, 5e3);
 function bumpStats(r) {
   const d = localDay();
   if (stats.day !== d) {
@@ -342,6 +352,7 @@ function configView() {
     approval: APPROVAL,
     name: officeName,
     session: SESSION,
+    accounts: accounts().map(a => ({ id: a.id, nombre: a.nombre, principal: !!a.principal })),
     stats: statsView(),
     mapTheme: MAP_THEMES.includes(readConfig().mapTheme) ? readConfig().mapTheme : 'moderna'
   };

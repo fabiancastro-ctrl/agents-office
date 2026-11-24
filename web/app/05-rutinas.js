@@ -177,6 +177,7 @@ function cronPanel() {
         <div class="field"><label for="rt-name">Nombre</label><input id="rt-name" placeholder="se genera solo"></div>
         <div class="field"><label for="rt-mode">Permisos de los robots</label><select id="rt-mode"><option value="">Heredar tu modo</option><option value="default">Preguntar (default)</option><option value="acceptEdits">Aceptar ediciones</option><option value="plan">Solo planear</option></select></div>
         <div class="field"><label for="rt-model">Modelo de los robots</label><select id="rt-model"><option value="">Por defecto (el de Claude)</option><option value="opus">Opus</option><option value="sonnet">Sonnet</option><option value="haiku">Haiku</option></select></div>
+        ${accountField('rt-account', 'Cuenta de los robots')}
 
         <div class="fgrid full" id="g-sched">
           <div class="seg full" role="radiogroup" aria-label="Cuándo corre">
@@ -261,7 +262,7 @@ function routineBody() {
               everyMin: Number(val('rt-every')),
               ...(chk('rt-hours') ? { hours: { from: val('rt-h-from'), to: val('rt-h-to'), days: daysOf('rt-hday') } } : {})
             };
-  const common = { type, name: val('rt-name').trim() || undefined, schedule, permissionMode: val('rt-mode'), modelPick: val('rt-model') };
+  const common = { type, name: val('rt-name').trim() || undefined, schedule, permissionMode: val('rt-mode'), modelPick: val('rt-model'), account: val('rt-account') };
   if (type === 'agenda') return { ...common, text: val('rt-agenda'), delegate: chk('rt-delegate'), gate: val('rt-gate') };
   if (type === 'wake') {
     const ck = val('rt-c-kind'),
@@ -308,6 +309,7 @@ function fillRoutineForm(rt, dup) {
   setField('rt-name', dup ? `${rt.name} (copia)` : rt.name);
   setField('rt-mode', rt.permissionMode || '');
   setField('rt-model', rt.modelPick || '');
+  setField('rt-account', rt.account || '');
   const sch = rt.schedule || { mode: 'every', everyMin: rt.everyMin || 30 };
   setField(`rt-when-${sch.mode}`, true);
   if (sch.mode === 'every') {

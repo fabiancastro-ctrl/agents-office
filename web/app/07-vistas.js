@@ -80,7 +80,7 @@ function renderCoffee() {
   el.classList.toggle('low', left <= 30 && left > 10);
   el.classList.toggle('empty', left <= 10);
   const at = s.quotaAt ? fmtTime(s.quotaAt) : '';
-  el.title = `Cafetera: queda ${left} % de tu cuota semanal (usado ${pct} %${at ? `, medido a las ${at}` : ''}). Se vuelve a llenar cuando se renueva la cuota.`;
+  el.title = `Cafetera: queda ${left} % de tu cuota semanal${s.quotaAccount ? ` (cuenta más llena: ${s.quotaAccount})` : ''} (usado ${pct} %${at ? `, medido a las ${at}` : ''}). Se vuelve a llenar cuando se renueva la cuota.`;
 }
 function renderGrowth() {
   renderClock();

@@ -272,8 +272,8 @@ function renderKpis() {
   const weekTok = week ? week.out + week.in + week.cacheWrite : 0;
   const lim = st.claude?.limits?.[0];
   const max = st.config.maxRobots || 3;
-  const k = (cls, n, label, extra = '', act = '') =>
-    `<button type="button" class="kpi ${cls}"${act ? ` data-kpi="${act}"` : ''}>${extra}<b>${n}</b><span>${label}</span></button>`;
+  const k = (cls, n, label, extra = '', act = '', tip = '') =>
+    `<button type="button" class="kpi ${cls}"${act ? ` data-kpi="${act}"` : ''}${tip ? ` title="${esc(tip)}"` : ''}>${extra}<b>${n}</b><span>${label}</span></button>`;
   const html =
     // "te necesitan" lives in the need bar and the tab title; the full detail stays in "Uso Claude".
     (work
@@ -294,7 +294,9 @@ function renderKpis() {
           `${lim.pct}<small>%</small>`,
           esc(lim.title).toLowerCase(),
           `<i class="kbar" style="--p:${Math.min(100, lim.pct)}%"></i>`,
-          'usage'
+          'usage',
+          // With several accounts the chip shows the fullest one: say whose it is.
+          st.claude.accounts?.length > 1 && st.claude.account ? `Cuenta más llena: ${st.claude.account.nombre}` : ''
         )
       : k('k-tok', week ? fmtTok(weekTok) : '–', 'tokens esta semana', '', 'usage'));
   if (KPIS._html !== html) {

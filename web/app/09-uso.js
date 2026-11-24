@@ -36,20 +36,36 @@ async function loadClaudeStatus(refresh) {
 
 function usagePanel() {
   const c = st.claude;
-  const bars = c
-    ? c.limits
-        .map(
-          l => `<div class="lim"><div class="lim-h"><b>${esc(l.title)}</b><span>${l.pct}% usado</span></div>
+  const limBars = limits =>
+    limits
+      .map(
+        l => `<div class="lim"><div class="lim-h"><b>${esc(l.title)}</b><span>${l.pct}% usado</span></div>
       <div class="bar"><i style="width:${Math.min(100, l.pct)}%" class="${l.pct >= 90 ? 'hot' : l.pct >= 70 ? 'warm' : ''}"></i></div>
       <div class="note">${esc(l.resets)}</div></div>`
-        )
-        .join('')
-    : '';
+      )
+      .join('');
+  // With several Claude accounts every one gets its own block (the quota is per account); the header chip shows the fullest.
+  const multi = (c?.accounts?.length || 0) > 1;
+  const bars = !c
+    ? ''
+    : multi
+        ? c.accounts
+            .map(
+              a => `<div class="acct-q"><h4>Cuenta: ${esc(a.nombre)}${c.account?.id === a.id ? ' <small>(la más llena)</small>' : ''}</h4>${
+                a.error && !a.limits.length ? `<p class="err">${esc(a.error)}</p>` : limBars(a.limits)
+              }${a.error && a.limits.length ? `<div class="note err">No se pudo releer: ${esc(a.error)}. Se muestra la última lectura (${fmtTime(a.at)}).</div>` : ''}${
+                a.detail ? `<details><summary>Qué está consumiendo (según Claude)</summary><pre class="term">${esc(a.detail)}</pre></details>` : ''
+              }<div class="note">${a.at ? `Leído ${fmtTime(a.at)} · ` : ''}consola: tmux attach -t ${esc(st.config.session || 'office')}:_status${a.principal ? '' : '-' + esc(a.id)}</div></div>`
+            )
+            .join('')
+        : limBars(c.limits);
   const status = st.claudeError
     ? `<p class="err">${esc(st.claudeError)}</p>`
     : !c
       ? `<p>${st.claudeLoading ? 'Abriendo /usage en una consola aparte… (la primera vez tarda unos segundos)' : 'Sin datos todavía.'}</p>`
-      : `${bars}${c.detail ? `<details><summary>Qué está consumiendo (según Claude)</summary><pre class="term">${esc(c.detail)}</pre></details>` : ''}
+      : multi
+        ? bars
+        : `${bars}${c.detail ? `<details><summary>Qué está consumiendo (según Claude)</summary><pre class="term">${esc(c.detail)}</pre></details>` : ''}
        <div class="note">Leído ${fmtTime(c.at)} · consola: tmux attach -t ${esc(st.config.session || 'office')}:_status</div>`;
   // 3 · Tu cuota semana a semana (lo más alto leído de /usage en cada semana; se arma solo mientras usas la oficina).
   const qh = st.config?.stats?.quotaHistory || [];

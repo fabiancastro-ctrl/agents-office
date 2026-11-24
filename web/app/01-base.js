@@ -162,3 +162,17 @@ const st = {
 };
 const ATTACH_MAX = 20 * 1024 * 1024;
 const brk = { bots: new Map() }; // robots de la sala de descanso (solo animación)
+
+/* ---------- cuentas de Claude ---------- */
+// The «Cuenta» selector only exists when the office knows more than one Claude account (`office cuenta add`).
+// '' = principal; 'auto' = the daemon picks the account with the most free weekly quota when the robot is launched.
+const hasAccounts = () => (st.config?.accounts?.length || 0) > 1;
+const accountLabel = id => (st.config?.accounts || []).find(a => a.id === id)?.nombre || id;
+function accountField(id, label) {
+  if (!hasAccounts()) return '';
+  const others = st.config.accounts
+    .filter(a => !a.principal)
+    .map(a => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`)
+    .join('');
+  return `<div class="field"><label for="${id}">${label}</label><select id="${id}"><option value="">Principal (la de siempre)</option>${others}<option value="auto">Automática (la de más cuota libre)</option></select></div>`;
+}
