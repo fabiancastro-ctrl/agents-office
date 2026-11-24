@@ -33,6 +33,7 @@ import { listSkills, openConsole, pane, pressKey, say } from './tmux.mjs';
 import { resetRepoIndex, routines, routineView, rutinasApi } from './rutinas.mjs';
 import { moveToSala, salas, salasApi, salaView } from './salas.mjs';
 import { mantenimientoApi } from './mantenimiento.mjs';
+import { cuadernoApi, summary as memoriaSummary } from './cuaderno.mjs';
 import { openChange, robotChanges } from './cambios.mjs';
 import { ackClash } from './choques.mjs';
 import { allowRule, ruleFor, settingsFile } from './permisos.mjs';
@@ -355,7 +356,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
       res.write(
-        `data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins, archiveCount: archive.length, door: doorView(), fame })}\n\n`
+        `data: ${JSON.stringify({ type: 'snapshot', setup: setupView(), robots: [...robots.values()].map(r => view(r, true)), inbox, routines: routines.map(routineView), salas: salas.map(salaView), config: configView(), favorites, pins, archiveCount: archive.length, door: doorView(), fame, memoria: memoriaSummary() })}\n\n`
       );
       clients.add(res);
       const ping = setInterval(() => res.write(': ping\n\n'), 20000);
@@ -434,6 +435,7 @@ const server = http.createServer(async (req, res) => {
     if (await cuentasApi(req, res, url, parts)) return;
     if (await rutinasApi(req, res, url, parts)) return;
     if (await mantenimientoApi(req, res, url)) return;
+    if (await cuadernoApi(req, res, url, parts)) return;
     if (await salasApi(req, res, url, parts)) return;
     if (await frecuentesApi(req, res, url, parts)) return;
     if (await despedidosApi(req, res, url, parts)) return;

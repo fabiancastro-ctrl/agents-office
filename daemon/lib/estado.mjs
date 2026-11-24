@@ -7,6 +7,7 @@ import { crownOf, quotaPeriods } from './uso.mjs';
 import { officeName, readConfig } from './carpeta.mjs';
 import { accountName, accounts, activeAccount, hasMany, weekUsed } from './cuentas.mjs';
 import { saveState } from './persistencia.mjs';
+import { robotReads } from './memoria.mjs';
 import { kidsOf } from './equipo.mjs';
 import { archive, criticalOf, requestOf } from './turno.mjs';
 import { convDir } from './exportar.mjs';
@@ -136,7 +137,8 @@ function view(r, withLog = false) {
     stalled: isStalled(r) ? stallSince(r) : null, // since when it has had no activity (ISO date)
     spend: r.spend || null,
     crown: crownOf(r.name),
-    loop: r.loop || null
+    loop: r.loop || null,
+    notasLeidas: robotReads(r.name, r.startedAt) // distinct notebook notes this robot read (see memoria.mjs)
   };
   if (withLog) v.log = r.log.slice(-150);
   return v;

@@ -2710,3 +2710,82 @@ test('page: the coffee pot opens the active-account menu and shows the active in
     await o.stop();
   }
 });
+
+test('cuaderno: a robot proposes by CLI, Fabian approves, the search finds it and the robot shows its reads', async () => {
+  const o = await startOffice();
+  try {
+    const bin = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'bin', 'office.mjs');
+    const cli = (args, robot = 'uno') =>
+      execFileSync(process.execPath, [bin, 'memoria', ...args], {
+        env: { ...process.env, OFFICE_PORT: String(o.port), OFFICE_ROBOT: robot },
+        encoding: 'utf8'
+      });
+    assert.equal((await o.api('POST', '/api/robots', libre('uno'))).status, 201);
+    assert.match(cli(['buscar', 'merge']), /Sin notas/);
+    // forbidden content is rejected (and the CLI fails)
+    assert.throws(() => cli(['proponer', '--titulo', 'Clave', 'password: hunter2hunter2']), /rechazada/);
+    assert.equal((await o.api('GET', '/api/memoria/propuestas')).body.propuestas.length, 0);
+    // propose: from flags and the fact from stdin-less positional
+    const out = cli([
+      'proponer',
+      '--titulo',
+      'nr-infra se fusiona con --admin',
+      '--tema',
+      'merge, nr-infra',
+      '--porque',
+      'el ruleset exige un architect',
+      '--cuando',
+      'solo nr-infra',
+      'Los PR de nr-infra se fusionan con gh pr merge --admin.'
+    ]);
+    assert.match(out, /enviada/);
+    const props = (await o.api('GET', '/api/memoria/propuestas')).body.propuestas;
+    assert.equal(props.length, 1);
+    assert.equal(props[0].autor, 'robot uno');
+    assert.match(props[0].cuerpo, /\*\*Por qué:\*\* el ruleset/);
+    assert.equal((await o.snapshot()).memoria.propuestas, 1);
+    // not searchable until approved
+    assert.match(cli(['buscar', 'merge']), /Sin notas/);
+    // a similar proposal reports «se parece a»
+    assert.match(
+      cli(['proponer', '--titulo', 'Fusionar nr-infra con admin', '--tema', 'merge', 'Otra vez lo mismo.']),
+      /Se parece a «nr-infra se fusiona/
+    );
+    // approve with edited text, discard the duplicate (goes to the office Papelera)
+    const all = (await o.api('GET', '/api/memoria/propuestas')).body.propuestas;
+    const first = all.find(p => p.titulo.startsWith('nr-infra se fusiona')),
+      dup = all.find(p => p !== first);
+    const edited = `---\ntitulo: ${first.titulo}\ntema: merge, nr-infra\nalcance: oficina\n---\nEditada: usar --admin en nr-infra.`;
+    assert.equal((await o.api('POST', `/api/memoria/propuestas/${first.id}/aprobar`, { texto: edited })).status, 200);
+    assert.equal((await o.api('POST', `/api/memoria/propuestas/${dup.id}/descartar`, {})).status, 200);
+    assert.ok(fs.readdirSync(path.join(o.base, 'papelera')).some(f => f.startsWith('cuaderno-propuesta-')));
+    assert.equal((await o.snapshot()).memoria.propuestas, 0);
+    assert.match(
+      fs.readFileSync(path.join(o.data, 'memoria', 'INDICE.md'), 'utf8'),
+      /nr-infra se fusiona con --admin — merge, nr-infra — notas\//
+    );
+    // the search finds it (accent-insensitive), and the robot window counts the read
+    const found = cli(['buscar', 'FUSIÓN merge admin']);
+    assert.match(found, /Editada: usar --admin/);
+    assert.match(found, /alcance: oficina/);
+    await waitFor(async () => (await o.robot('uno')).notasLeidas === 1, { what: 'la lectura en la ventana del robot' });
+    const notas = (await o.api('GET', '/api/memoria/notas')).body.notas;
+    assert.equal(notas[0].lecturas, 1, 'listing for the panel does not count; the one search that found it does');
+    // an expired note is still returned, marked
+    fs.writeFileSync(
+      path.join(o.data, 'memoria', 'notas', 'vieja.md'),
+      '---\ntitulo: Nota vieja de merge\ntema: merge\ncreada: 2025-01-01\nrevisar: 2025-04-01\n---\nAlgo de merge que ya venció.'
+    );
+    assert.match(cli(['buscar', 'vieja']), /⏳ por revisar/);
+    assert.equal((await o.api('GET', '/api/memoria/resumen')).body.porRevisar, 1);
+    assert.equal((await o.api('POST', '/api/memoria/notas/vieja/renovar', {})).status, 200);
+    assert.equal((await o.api('GET', '/api/memoria/resumen')).body.porRevisar, 0);
+    assert.equal((await o.api('DELETE', '/api/memoria/notas/vieja')).status, 200);
+    assert.ok(!fs.existsSync(path.join(o.data, 'memoria', 'notas', 'vieja.md')));
+    // the page serves the panel
+    const app = await (await fetch(`${o.url}/app.js`)).text();
+    assert.match(app, /cuadernoPanel/);
+  } finally {
+    await o.stop();
+  }
+});

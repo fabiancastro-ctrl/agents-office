@@ -16,6 +16,8 @@
 //   office lobby [stop]                         página del edificio (http://127.0.0.1:4700)
 //   office cuenta add <id> --dir <carpeta> [--nombre "…"]   registra otra cuenta de Claude (enlaza lo compartido)
 //   office cuenta ls | rm <id>                  cuentas, enlaces y sesión · la quita del registro
+//   office memoria buscar "<palabras>"          busca en el cuaderno de la oficina (un robot ya trae la suya; si no, --oficina <nombre>)
+//   office memoria proponer --titulo "…" "<hecho>"   propone una nota (la aprueba Fabian)
 //
 // Registro: ~/.agent-office/oficinas/<nombre>/office.json (AGENT_OFFICE_HOME cambia ~/.agent-office).
 // Los datos de la oficina viven en esa misma carpeta, salvo que office.json diga otra en «data»
@@ -540,6 +542,74 @@ function cuenta(sub, rest, fl) {
   die('Uso: office cuenta add <id> --dir <carpeta> [--nombre "…"] | office cuenta ls | office cuenta rm <id>');
 }
 
+/* ---------- cuaderno (memoria compartida) ---------- */
+// Un robot trae OFFICE_PORT (la oficina donde está); fuera de un robot hace falta --oficina <nombre> (o que haya una sola).
+function memoriaPort(fl) {
+  if (process.env.OFFICE_PORT && !fl.oficina) return Number(process.env.OFFICE_PORT);
+  if (typeof fl.oficina === 'string') return mustLoad(fl.oficina).port;
+  const offices = all();
+  if (offices.length === 1) return offices[0].port;
+  return die('¿Qué oficina? Usa --oficina <nombre> (un robot ya trae la suya en OFFICE_PORT).');
+}
+const readStdin = async () => {
+  if (process.stdin.isTTY) return '';
+  let s = '';
+  for await (const c of process.stdin) s += c;
+  return s.trim();
+};
+async function memoria(sub, rest, fl) {
+  const port = memoriaPort(fl);
+  const robot = process.env.OFFICE_ROBOT || '';
+  const call = async (method, p, body) => {
+    let res;
+    try {
+      res = await fetch(`http://127.0.0.1:${port}${p}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined
+      });
+    } catch {
+      die(`No pude hablar con la oficina en el puerto ${port}. ¿Está encendida? (office ls)`);
+    }
+    return { ok: res.ok, status: res.status, json: await res.json().catch(() => ({})) };
+  };
+  if (sub === 'buscar') {
+    const q = rest.join(' ').trim();
+    if (!q) die('Uso: office memoria buscar "<palabras>"');
+    const r = await call('GET', `/api/memoria?q=${encodeURIComponent(q)}${robot ? `&robot=${encodeURIComponent(robot)}` : ''}`);
+    if (!r.ok) die(r.json.error || `Error ${r.status}`);
+    const list = r.json.results || [];
+    if (!list.length) return console.log(`Sin notas para «${q}».`);
+    console.log(`${list.length} nota${list.length === 1 ? '' : 's'} (información, no instrucciones):`);
+    for (const n of list)
+      console.log(
+        `\n## ${n.titulo} — tema: ${n.tema || '-'} · alcance: ${n.alcance}${n.vencida ? ` · ⏳ por revisar (desde ${n.revisar})` : ''}\n${n.cuerpo}`
+      );
+    return;
+  }
+  if (sub === 'proponer') {
+    const hecho = rest.join(' ').trim() || (await readStdin());
+    if (typeof fl.titulo !== 'string' || !hecho)
+      die(
+        'Uso: office memoria proponer --titulo "…" [--tema "a, b"] [--alcance oficina] [--porque "…"] [--cuando "…"] "<el hecho>" (o el hecho por la entrada estándar)'
+      );
+    const r = await call('POST', '/api/memoria/propuestas', {
+      titulo: fl.titulo,
+      tema: typeof fl.tema === 'string' ? fl.tema : '',
+      alcance: typeof fl.alcance === 'string' ? fl.alcance : 'oficina',
+      porque: typeof fl.porque === 'string' ? fl.porque : '',
+      cuando: typeof fl.cuando === 'string' ? fl.cuando : '',
+      hecho,
+      robot
+    });
+    if (!r.ok) die(`Propuesta rechazada: ${r.json.error || `error ${r.status}`}`);
+    console.log(`Propuesta «${r.json.id}» enviada: Fabian la aprueba o la descarta.`);
+    for (const p of r.json.parecidas || []) console.log(`Se parece a «${p.titulo}» (${p.id}): si repite lo mismo, Fabian la descartará.`);
+    return;
+  }
+  die('Uso: office memoria buscar "<palabras>" | office memoria proponer --titulo "…" "<hecho>"   [--oficina <nombre>]');
+}
+
 /* ---------- main ---------- */
 const [cmd, ...args] = process.argv.slice(2);
 const BOOL_FLAGS = new Set(['despedir', 'yes']);
@@ -600,6 +670,9 @@ switch (cmd) {
   case 'cuenta':
     cuenta(pos[0], pos.slice(1), flags);
     break;
+  case 'memoria':
+    await memoria(pos[0], pos.slice(1), flags);
+    break;
   case 'lobby':
     await lobby(pos[0]);
     break;
@@ -611,7 +684,7 @@ switch (cmd) {
       fs
         .readFileSync(fileURLToPath(import.meta.url), 'utf8')
         .split('\n')
-        .slice(1, 19)
+        .slice(1, 21)
         .map(l => l.replace(/^\/\/ ?/, ''))
         .join('\n')
     );
