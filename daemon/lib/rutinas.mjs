@@ -6,7 +6,7 @@ import path from 'node:path';
 import { now, PERMISSION_MODES, PORT, replaceList, robots, ROUTINE_TICK_MS, run, RUNS, saveJson, trunc, WORKSPACE } from './base.mjs';
 import { broadcast, usage } from './estado.mjs';
 import { log } from './persistencia.mjs';
-import { archive } from './turno.mjs';
+import { archive, normModel } from './turno.mjs';
 import { retake } from './exportar.mjs';
 import { revive } from './consola.mjs';
 import { launch, say } from './tmux.mjs';
@@ -148,6 +148,7 @@ function routineView(rt) {
     memory: rt.type === 'agenda' ? path.relative(WORKSPACE, memoryPath(rt)) : null,
     runs: rt.runs || 0,
     permissionMode: rt.permissionMode,
+    modelPick: rt.modelPick || '',
     paused: rt.paused,
     running: !!rt.running,
     nextAt: Number.isFinite(rt.nextAt) ? rt.nextAt : null,
@@ -195,7 +196,7 @@ function fillTemplate(s, pr) {
 function jobFor(rt, pr) {
   const origin = `Lanzado por la rutina «${rt.name}» para ${pr.repo}#${pr.number} (${trunc(pr.title, 60)})${pr.event ? ` · ${pr.event}` : ''}`;
   const extra = rt.extra ? `\n\nInstrucciones adicionales: ${fillTemplate(rt.extra, pr)}` : '';
-  const base = { permissionMode: rt.permissionMode, origin, leaveWhenDone: true, routine: rt.id };
+  const base = { permissionMode: rt.permissionMode, modelPick: rt.modelPick, origin, leaveWhenDone: true, routine: rt.id };
   if (rt.action.kind === 'skill') return { ...base, kind: 'skill', skill: rt.action.skill, args: fillTemplate(rt.action.args, pr) + extra };
   return { ...base, kind: 'libre', text: fillTemplate(rt.action.text, pr) + extra };
 }
@@ -400,6 +401,7 @@ async function runAgenda(rt) {
       text: agendaPrompt(rt),
       label: `Rutina «${rt.name}» #${rt.runs}`,
       permissionMode: rt.permissionMode,
+      modelPick: rt.modelPick,
       origin: `Ejecución #${rt.runs} de la rutina «${rt.name}»`,
       leaveWhenDone: true,
       routine: rt.id
@@ -584,6 +586,7 @@ async function wakeAct(rt, what) {
       text: `${a.text}\n\n(Lo lanzó el despertador «${rt.name}»: ${what}.)`,
       title: rt.name,
       permissionMode: rt.permissionMode,
+      modelPick: rt.modelPick,
       origin: `Lanzado por el despertador «${rt.name}»`
     });
     return `lancé a ${r.name}`;
@@ -643,6 +646,7 @@ async function buildRoutine(b) {
   const f = {
     type,
     permissionMode: b.permissionMode || '',
+    modelPick: normModel(b.modelPick),
     schedule: cleanSchedule(type === 'wake' ? { mode: 'every', everyMin: b.schedule?.everyMin || b.everyMin || 5 } : b)
   };
   if (type === 'agenda') {

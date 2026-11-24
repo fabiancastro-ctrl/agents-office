@@ -123,6 +123,7 @@ function view(r, withLog = false) {
     bg: bgList(r),
     permissionMode: r.permissionMode,
     tools: r.tools || [],
+    modelPick: r.modelPick || '',
     startedAt: r.startedAt,
     timeline: (r.timeline || []).slice(-1),
     lastEventAt: r.lastEventAt || null,

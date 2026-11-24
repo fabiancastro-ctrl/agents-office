@@ -146,6 +146,7 @@ async function finishRelevo(r, summary) {
     sala: r.place?.sala || null,
     permissionMode: r.permissionMode || '',
     tools: r.tools || [],
+    modelPick: r.modelPick || '',
     request: r.request || null,
     skill: r.skill,
     kind: r.kind,
@@ -181,6 +182,7 @@ async function relaunch(r, old, summary) {
     parent: old.parent || undefined,
     permissionMode: old.permissionMode || undefined,
     tools: old.tools,
+    modelPick: old.modelPick,
     origin: `Relevo por contexto de ${old.name} (${fmtK(old.tokens)}): sigue con su resumen`
   };
   let n;

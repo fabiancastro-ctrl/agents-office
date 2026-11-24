@@ -22,7 +22,7 @@ import {
 } from './base.mjs';
 import { emit } from './estado.mjs';
 import { freeDesk, log, roomSeat, setState } from './persistencia.mjs';
-import { cleanTitle, normTools, robotFlags, robotHints } from './turno.mjs';
+import { cleanTitle, normModel, normTools, robotFlags, robotHints } from './turno.mjs';
 import { attachmentNote } from './adjuntos.mjs';
 import { routines } from './rutinas.mjs';
 import { salaPreamble, salas } from './salas.mjs';
@@ -86,7 +86,8 @@ async function launch({
   parent,
   color,
   look,
-  tools
+  tools,
+  modelPick
 }) {
   // El tope cuenta solo los que trabajan: los que terminaron esperan su baja sin gastar cuota.
   const active = [...robots.values()].filter(x => x.state !== 'done');
@@ -116,7 +117,8 @@ async function launch({
       parent,
       color,
       look,
-      tools
+      tools,
+      modelPick
     });
   } finally {
     launching.delete(name);
@@ -140,7 +142,8 @@ async function launchReserved({
   parent,
   color,
   look,
-  tools
+  tools,
+  modelPick
 }) {
   let prompt, label;
   if (kind === 'skill') {
@@ -185,10 +188,12 @@ async function launchReserved({
       args: kind === 'skill' ? String(args || '') : '',
       text: kind === 'libre' ? String(text || '').trim() : '',
       permissionMode: permissionMode || '',
-      tools: normTools(tools)
+      tools: normTools(tools),
+      modelPick: normModel(modelPick)
     },
     permissionMode: permissionMode || '',
     tools: normTools(tools),
+    modelPick: normModel(modelPick),
     leaveWhenDone: !!leaveWhenDone,
     origin: trunc(origin || 'Lanzado por la API local sin indicar quién', 200),
     routine: routine || null,

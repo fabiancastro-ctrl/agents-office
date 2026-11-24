@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { console_, maxRobots, now, robots, trunc } from './base.mjs';
 import { broadcast, emit } from './estado.mjs';
 import { log, saveState } from './persistencia.mjs';
-import { cleanTitle, normTools } from './turno.mjs';
+import { cleanTitle, normModel, normTools } from './turno.mjs';
 import { launch, launching, say } from './tmux.mjs';
 import {
   checkTeamDone,
@@ -100,7 +100,13 @@ function requestSpawn(r, body) {
         text = String(x.encargo ?? x.text ?? x.tarea ?? '')
           .trim()
           .slice(0, 20000);
-      return { title, text, name: validName(x.nombre ?? x.name) || kidName(title, text), tools: normTools(x.herramientas ?? x.tools) };
+      return {
+        title,
+        text,
+        name: validName(x.nombre ?? x.name) || kidName(title, text),
+        tools: normTools(x.herramientas ?? x.tools),
+        modelPick: normModel(x.modelo ?? x.model)
+      };
     })
     .filter(x => x.text);
   if (!items.length) throw new Error('Manda {"encargos":[{"titulo":"…","encargo":"…"}]} con al menos un encargo.');
@@ -150,7 +156,8 @@ async function decideSpawn(r, id, approve, edited) {
           title: cleanTitle(x.title ?? ''),
           text: String(x.text ?? '').trim(),
           name: validName(x.name) || kidName(x.title, x.text),
-          tools: normTools(x.tools)
+          tools: normTools(x.tools),
+          modelPick: normModel(x.modelPick)
         }))
         .filter(x => x.text)
     : r.spawnReq.items;
@@ -177,6 +184,7 @@ async function decideSpawn(r, id, approve, edited) {
     text: it.text,
     name: it.name || '',
     tools: normTools(it.tools),
+    modelPick: normModel(it.modelPick),
     sala: sala.id,
     at: now()
   }));
@@ -240,6 +248,7 @@ async function drainSpawnQueue() {
           title: q.title,
           parent: q.parent,
           tools: q.tools,
+          modelPick: q.modelPick,
           sala,
           color: par?.color,
           look: par ? { ...lookFromName(par.name), ...(par.look || {}) } : null,

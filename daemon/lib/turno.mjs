@@ -157,8 +157,8 @@ function requestOf(r) {
   const p = String(r.prompt || '').replace(/ \[Adjuntos: [^\]]*\]$/, '');
   const m = /^\/([a-z0-9:_-]+)\s*([\s\S]*)$/i.exec(p);
   return m
-    ? { kind: 'skill', skill: m[1], args: m[2], text: '', permissionMode: r.permissionMode || '' }
-    : { kind: 'libre', skill: null, args: '', text: p, permissionMode: r.permissionMode || '' };
+    ? { kind: 'skill', skill: m[1], args: m[2], text: '', permissionMode: r.permissionMode || '', modelPick: r.modelPick || '' }
+    : { kind: 'libre', skill: null, args: '', text: p, permissionMode: r.permissionMode || '', modelPick: r.modelPick || '' };
 }
 
 // Encargos frecuentes: atajos guardados en Nuevo encargo (por oficina, en su carpeta de datos).
@@ -211,14 +211,25 @@ const KNOWN_TOOLS = ['artifact'];
 const normTools = list => [
   ...new Set((Array.isArray(list) ? list : []).map(t => String(t).trim().toLowerCase()).filter(t => KNOWN_TOOLS.includes(t)))
 ];
-// Launch flags for one robot: the shared disallowed list, minus the Artifact tools when the robot has "artifact".
+// Per-robot model choice (r.modelPick; r.model is the model SEEN in the transcript). '' = whatever Claude Code is set to.
+const MODEL_PICKS = ['opus', 'sonnet', 'haiku'];
+const normModel = v => {
+  const m = String(v ?? '')
+    .trim()
+    .toLowerCase();
+  return MODEL_PICKS.includes(m) ? m : '';
+};
+// Launch flags for one robot: the shared disallowed list, minus the Artifact tools when the robot has "artifact",
+// plus --model when the robot has a model choice.
 // Every launch/relaunch path (new, revive, relay, retake) must build its flags through this function.
 function robotFlags(r) {
   let list = ROBOT_DISALLOWED.split(',')
     .map(s => s.trim())
     .filter(Boolean);
   if (normTools(r?.tools).includes('artifact')) list = list.filter(t => !ARTIFACT_TOOLS.has(t));
+  const pick = normModel(r?.modelPick);
   return [
+    ...(pick ? ['--model', pick] : []),
     ...(list.length ? [`--disallowedTools=${list.join(',')}`] : []),
     ...(process.env.OFFICE_ROBOT_STRICT_MCP === '1' ? ['--strict-mcp-config'] : [])
   ];
@@ -320,6 +331,7 @@ async function frecuentesApi(req, res, url, parts) {
       args: kind === 'skill' ? String(b.args || '') : '',
       text: kind === 'libre' ? String(b.text || '') : '',
       permissionMode: b.permissionMode || '',
+      modelPick: normModel(b.modelPick),
       title: cleanTitle(b.title)
     };
     if (kind === 'skill' ? !f.skill : !f.text.trim()) return send(res, 400, { error: 'Llena el encargo antes de guardarlo.' });
@@ -388,6 +400,7 @@ export {
   pins,
   requestOf,
   normTools,
+  normModel,
   robotFlags,
   robotHints,
   saveFavorites,

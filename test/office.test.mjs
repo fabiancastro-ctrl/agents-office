@@ -2017,3 +2017,89 @@ test('per-robot tools: a team request with "herramientas" reaches r.tools and su
     await o.stop();
   }
 });
+
+test('per-robot model: direct launch adds --model only when chosen, junk values are dropped', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', libre('base', 'Tarea sin eleccion de modelo'));
+    await o.api('POST', '/api/robots', { ...libre('son', 'Tarea con sonnet'), modelPick: 'Sonnet' });
+    await o.api('POST', '/api/robots', { ...libre('raro', 'Tarea con modelo raro'), modelPick: 'gpt-9' });
+    const call = text => waitFor(() => o.claudeCalls().find(c => c.includes(text)), { what: `Claude abierto para ${text}` });
+    assert.doesNotMatch(await call('Tarea sin eleccion de modelo'), /--model/);
+    assert.match(await call('Tarea con sonnet'), /--model sonnet /);
+    assert.doesNotMatch(await call('Tarea con modelo raro'), /--model/);
+    assert.equal((await o.robot('base')).modelPick, '');
+    assert.equal((await o.robot('son')).modelPick, 'sonnet');
+    assert.equal((await o.robot('raro')).modelPick, '');
+  } finally {
+    await o.stop();
+  }
+});
+
+test('per-robot model: a team request with "modelo" (or "model") reaches the child and survives resume', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', libre('jefe'));
+    const req = await o.api('POST', '/api/robots/jefe/encargos', {
+      encargos: [
+        { nombre: 'rapido', titulo: 'Rapido', encargo: 'Trabajo rapido del equipo', modelo: 'haiku' },
+        { nombre: 'ingles', titulo: 'Ingles', encargo: 'Trabajo con model en ingles', model: 'opus' },
+        { nombre: 'plano', titulo: 'Plano', encargo: 'Trabajo del equipo sin modelo' }
+      ]
+    });
+    assert.equal(req.status, 202);
+    assert.equal((await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' })).status, 200);
+    await waitFor(() => o.windows().includes('plano'), { what: 'the child windows' });
+    const call = text => waitFor(() => o.claudeCalls().find(c => c.includes(text)), { what: `launch of ${text}` });
+    assert.match(await call('Trabajo rapido del equipo'), /--model haiku /);
+    assert.match(await call('Trabajo con model en ingles'), /--model opus /);
+    assert.doesNotMatch(await call('Trabajo del equipo sin modelo'), /--model/);
+    assert.equal((await o.robot('rapido')).modelPick, 'haiku');
+    // Resume after the console drops: same model flag.
+    await turn(o, 'rapido', 'hola', 'Hecho.');
+    execFileSync('tmux', ['kill-window', '-t', `${o.session}:rapido`]);
+    await waitFor(async () => (await o.robot('rapido'))?.consoleLost, { what: 'the lost console' });
+    const sid = (await o.robot('rapido')).sessionId;
+    assert.equal((await o.api('POST', '/api/robots/rapido/revivir')).status, 200);
+    assert.match(await call(`--resume ${sid}`), /--model haiku /);
+  } finally {
+    await o.stop();
+  }
+});
+
+test('per-robot model: a context handoff keeps the choice', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', { ...libre('pesado', 'Tarea larga con sonnet'), modelPick: 'sonnet' });
+    await turn(o, 'pesado', 'hola', 'Hecho.');
+    assert.equal((await o.api('POST', '/api/robots/pesado/relevar')).status, 200);
+    await o.hook('pesado', { hook_event_name: 'Stop', last_assistant_message: '## Relevo\n- Falta cerrar el PR 7.' });
+    const call = await waitFor(() => o.claudeCalls().find(c => c.includes('relevo por contexto')), { what: 'the handoff robot' });
+    assert.match(call, /--model sonnet /);
+    assert.equal((await o.robot('pesado')).modelPick, 'sonnet');
+  } finally {
+    await o.stop();
+  }
+});
+
+test('per-robot model: a routine stores its model and launches its robot with it', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    // One at a time: two first launches at once race on creating the tmux session.
+    const mk = async (name, modelPick) => {
+      const sch = { mode: 'once', at: new Date(Date.now() + 500).toISOString() };
+      const id = (await o.api('POST', '/api/routines', { type: 'agenda', name, text: `Rutina ${name}`, schedule: sch, modelPick })).body.id;
+      await waitFor(async () => (await o.snapshot()).routines.find(x => x.id === id && x.doneOnce), { what: 'the routine run' });
+      return id;
+    };
+    const con = await mk('con', 'haiku');
+    const sin = await mk('sin', 'nada');
+    const rts = (await o.snapshot()).routines;
+    assert.equal(rts.find(x => x.id === con).modelPick, 'haiku');
+    assert.equal(rts.find(x => x.id === sin).modelPick, '');
+    assert.match(await waitFor(() => o.claudeCalls().find(c => c.includes('Rutina con')), { what: 'its launch' }), /--model haiku /);
+    assert.doesNotMatch(await waitFor(() => o.claudeCalls().find(c => c.includes('Rutina sin')), { what: 'its launch' }), /--model/);
+  } finally {
+    await o.stop();
+  }
+});
