@@ -364,3 +364,65 @@ test('shared quota: the newest reading wins, histories merge by max, a missing o
   assert.equal(Object.keys(cu.quotaReadings().d.history).length, 16);
   assert.ok(cu.quotaFileStamp() > 0);
 });
+
+test('notebook: a note unread for 60+ days is a candidate (from the last read, or from creation if never read)', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const note = { creada: '2026-01-01' };
+  assert.equal(m.daysUnread(note, '2026-11-14', '2026-11-24'), 10);
+  assert.equal(m.daysUnread(note, '', '2026-01-31'), 30, 'never read: counts from creation');
+  assert.equal(m.daysUnread({ creada: '' }, '', '2026-11-24'), null, 'unknown');
+  assert.equal(m.isUnread(note, '2026-09-25', '2026-11-24'), true, 'exactly 60 days');
+  assert.equal(m.isUnread(note, '2026-09-26', '2026-11-24'), false, '59 days');
+  assert.equal(m.isUnread(note, '', '2026-02-15'), false, 'created 45 days ago and never read is not yet a candidate');
+  assert.equal(m.isUnread({ creada: '' }, '', '2026-11-24'), false);
+});
+
+test('notebook: recordReads keeps the last read day', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const dir = memDir();
+  m.recordReads(['a'], '', undefined, dir, '2026-11-01');
+  m.recordReads(['a', 'b'], '', undefined, dir, '2026-11-20');
+  const r = m.readReads(dir);
+  assert.deepEqual(r.notas, { a: 2, b: 1 });
+  assert.deepEqual(r.ultima, { a: '2026-11-20', b: '2026-11-20' });
+});
+
+test('notebook: health report finds unparseable notes, missing fields, a stale INDICE and old proposals', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const dir = memDir();
+  const nd = path.join(dir, 'notas'),
+    pd = path.join(dir, 'propuestas');
+  fs.mkdirSync(nd, { recursive: true });
+  fs.mkdirSync(pd, { recursive: true });
+  fs.writeFileSync(path.join(nd, 'ok.md'), '---\ntitulo: Bien\ncreada: 2026-11-01\nrevisar: 2027-02-01\n---\nTexto.');
+  fs.writeFileSync(path.join(nd, 'roto.md'), 'sin encabezado alguno');
+  fs.writeFileSync(path.join(nd, 'falta.md'), '---\ntitulo: Falta\n---\nTexto.');
+  fs.writeFileSync(path.join(pd, 'vieja.md'), '---\ntitulo: Vieja\ncreada: 2026-10-01\nrevisar: 2027-01-01\n---\nTexto.');
+  fs.writeFileSync(path.join(pd, 'nueva.md'), '---\ntitulo: Nueva\ncreada: 2026-11-20\nrevisar: 2027-02-20\n---\nTexto.');
+  const h = m.healthReport(dir, '2026-11-24');
+  assert.equal(h.notes, 3);
+  assert.equal(h.proposals, 2);
+  assert.deepEqual(h.unparseable, ['notas/roto']);
+  assert.deepEqual(h.incomplete, [{ id: 'notas/falta', missing: ['creada', 'revisar'] }]);
+  assert.deepEqual(h.oldProposals, [{ id: 'vieja', days: 54 }]);
+  assert.equal(h.indexStale, true, 'no INDICE.md yet');
+  m.writeIndex(dir);
+  assert.equal(m.healthReport(dir, '2026-11-24').indexStale, false);
+});
+
+test('notebook: backup export and import add only what is missing', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const a = memDir(),
+    b = memDir();
+  fs.mkdirSync(path.join(a, 'notas'), { recursive: true });
+  fs.mkdirSync(path.join(b, 'notas'), { recursive: true });
+  fs.writeFileSync(path.join(a, 'notas', 'uno.md'), '---\ntitulo: Uno\n---\nA.');
+  fs.writeFileSync(path.join(a, 'notas', 'dos.md'), '---\ntitulo: Dos\n---\nA.');
+  fs.writeFileSync(path.join(b, 'notas', 'uno.md'), '---\ntitulo: Uno\n---\nB local.');
+  const data = m.exportAll(a);
+  assert.deepEqual(Object.keys(data.notas).sort(), ['dos', 'uno']);
+  assert.equal(m.importAll(data, b), 1);
+  assert.match(fs.readFileSync(path.join(b, 'notas', 'uno.md'), 'utf8'), /B local/, 'existing note kept');
+  assert.ok(fs.existsSync(path.join(b, 'notas', 'dos.md')));
+  assert.equal(m.importAll({ notas: { '../x': 'mal' } }, b), 0, 'unsafe ids are ignored');
+});

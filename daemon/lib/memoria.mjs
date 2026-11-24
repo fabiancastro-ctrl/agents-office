@@ -278,17 +278,20 @@ function readReads(dir = MEMORIA_DIR) {
     const hit = readsCache.get(file);
     if (hit?.key === key) return hit.value;
     const j = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const value = { notas: j.notas || {}, robots: j.robots || {} };
+    const value = { notas: j.notas || {}, ultima: j.ultima || {}, robots: j.robots || {} };
     readsCache.set(file, { key, value });
     return value;
   } catch {
-    return { notas: {}, robots: {} };
+    return { notas: {}, ultima: {}, robots: {} };
   }
 }
-function recordReads(ids, robot, since, dir = MEMORIA_DIR) {
+function recordReads(ids, robot, since, dir = MEMORIA_DIR, today = localDay()) {
   if (!ids.length) return 0;
   const j = structuredClone(readReads(dir)); // never mutate the cached copy
-  for (const id of ids) j.notas[id] = (j.notas[id] || 0) + 1;
+  for (const id of ids) {
+    j.notas[id] = (j.notas[id] || 0) + 1;
+    j.ultima[id] = today; // last read day (lecturas.json written before this field existed simply has none)
+  }
   let n = 0;
   if (robot) {
     const r = j.robots[robot]?.since === since ? j.robots[robot] : (j.robots[robot] = { since, ids: [] });
@@ -304,6 +307,96 @@ const robotReads = (robot, since, dir = MEMORIA_DIR) => {
   const r = readReads(dir).robots[robot];
   return r && r.since === since ? r.ids.length : 0;
 };
+
+const STALE_READ_DAYS = 60; // a note nobody read for this long is a candidate to archive
+const PROPOSAL_DAYS = 30; // a proposal waiting this long is surfaced in the health report
+const dayNumber = day => Math.floor(Date.parse(`${day}T00:00:00Z`) / 86400e3);
+// Whole days between two YYYY-MM-DD days (null when either is not a day).
+const daysBetween = (from, to) => (DAY_RE.test(from || '') && DAY_RE.test(to || '') ? dayNumber(to) - dayNumber(from) : null);
+// Days since the note was last read; without a read date it counts from its creation. null = unknown.
+const daysUnread = (note, lastRead, today = localDay()) => daysBetween(lastRead || note.creada, today);
+// True when the note has gone `limit` days or more without being read.
+const isUnread = (note, lastRead, today = localDay(), limit = STALE_READ_DAYS) => {
+  const d = daysUnread(note, lastRead, today);
+  return d !== null && d >= limit;
+};
+
+// Health of the notebook folder, from the raw files: notes that do not parse, notes missing fields, INDICE.md out of sync
+// and proposals waiting too long. Read-only; the caller decides what to fix.
+function healthReport(dir = MEMORIA_DIR, today = localDay()) {
+  const out = { notes: 0, proposals: 0, unparseable: [], incomplete: [], indexStale: false, oldProposals: [] };
+  const scan = (folder, kind) => {
+    let files = [];
+    try {
+      files = fs.readdirSync(folder).filter(f => f.endsWith('.md'));
+    } catch {
+      return;
+    }
+    for (const f of files.sort()) {
+      const id = f.slice(0, -3);
+      let text;
+      try {
+        text = fs.readFileSync(path.join(folder, f), 'utf8');
+      } catch {
+        out.unparseable.push(`${kind}/${id}`);
+        continue;
+      }
+      kind === 'notas' ? out.notes++ : out.proposals++;
+      const { meta, body } = parseNote(text);
+      if (!/^---\n[\s\S]*?\n---/.test(text.replace(/\r\n/g, '\n')) || !Object.keys(meta).length || !body) {
+        out.unparseable.push(`${kind}/${id}`);
+        continue;
+      }
+      const missing = ['titulo', 'creada', 'revisar'].filter(k => (k === 'titulo' ? !meta.titulo : !DAY_RE.test(meta[k] || '')));
+      if (missing.length) out.incomplete.push({ id: `${kind}/${id}`, missing });
+      if (kind === 'propuestas') {
+        const age = daysBetween(meta.creada, today);
+        if (age !== null && age >= PROPOSAL_DAYS) out.oldProposals.push({ id, days: age });
+      }
+    }
+  };
+  scan(notesDir(dir), 'notas');
+  scan(proposalsDir(dir), 'propuestas');
+  if (fs.existsSync(notesDir(dir))) {
+    try {
+      out.indexStale = fs.readFileSync(path.join(dir, 'INDICE.md'), 'utf8') !== indexText(listNotes(dir, today));
+    } catch {
+      out.indexStale = out.notes > 0;
+    }
+  }
+  return out;
+}
+
+// Backup payload: every note and proposal as raw text, by id.
+function exportAll(dir = MEMORIA_DIR) {
+  const read = folder => {
+    const o = {};
+    try {
+      for (const f of fs.readdirSync(folder).filter(x => x.endsWith('.md'))) o[f.slice(0, -3)] = fs.readFileSync(path.join(folder, f), 'utf8');
+    } catch {
+      /* no folder */
+    }
+    return o;
+  };
+  return { notas: read(notesDir(dir)), propuestas: read(proposalsDir(dir)) };
+}
+// Restore ADDS: an id that already exists is kept as it is. Returns how many files were written.
+function importAll(data, dir = MEMORIA_DIR) {
+  let n = 0;
+  for (const [kind, folder] of [
+    ['notas', notesDir(dir)],
+    ['propuestas', proposalsDir(dir)]
+  ]) {
+    for (const [id, text] of Object.entries(data?.[kind] || {})) {
+      if (!/^[\w-]+$/.test(id) || typeof text !== 'string' || fs.existsSync(path.join(folder, `${id}.md`))) continue;
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(path.join(folder, `${id}.md`), text);
+      n++;
+    }
+  }
+  if (n) writeIndex(dir);
+  return n;
+}
 
 /* ---------- mutations ---------- */
 
@@ -364,9 +457,16 @@ export {
   approve,
   buildNote,
   checkText,
+  daysUnread,
   editNote,
+  exportAll,
   forbidden,
+  healthReport,
+  importAll,
   indexText,
+  isUnread,
+  PROPOSAL_DAYS,
+  STALE_READ_DAYS,
   listNotes,
   listProposals,
   localDay,

@@ -168,13 +168,14 @@ function oficinaPanel() {
       <div class="row"><a class="btn sm" href="/api/respaldo" download>${icon('down')} Descargar respaldo</a><label class="btn sm" for="bk-file">${icon('up')} Importar respaldo…</label><input type="file" id="bk-file" accept=".json,application/json" hidden></div>
       ${
         imp
-          ? `<div class="bk-imp"><p><b>${esc(imp.file)}</b> (de ${esc(new Date(imp.data.at).toLocaleString('es'))}): ${imp.data.routines?.length || 0} rutinas · ${imp.data.favorites?.length || 0} frecuentes · ${imp.data.pins?.length || 0} para enviar · ${Object.keys(imp.data.looks || {}).length} apariencias.</p>
+          ? `<div class="bk-imp"><p><b>${esc(imp.file)}</b> (de ${esc(new Date(imp.data.at).toLocaleString('es'))}): ${imp.data.routines?.length || 0} rutinas · ${imp.data.favorites?.length || 0} frecuentes · ${imp.data.pins?.length || 0} para enviar · ${Object.keys(imp.data.looks || {}).length} apariencias · ${Object.keys(imp.data.cuaderno?.notas || {}).length} notas.</p>
         <div class="cz-mini">${[
           ['routines', 'Rutinas (llegan en pausa)'],
           ['favorites', 'Encargos frecuentes'],
           ['pins', 'Para enviar'],
           ['office', 'Nombre, estilo y tope'],
-          ['looks', 'Apariencias (robots con el mismo nombre)']
+          ['looks', 'Apariencias (robots con el mismo nombre)'],
+          ['cuaderno', 'Cuaderno (suma las notas y propuestas que falten)']
         ]
           .map(([k, l]) => `<label class="check"><input type="checkbox" name="bk-part" value="${k}" checked> ${l}</label>`)
           .join('')}</div>
@@ -223,7 +224,7 @@ PANEL.addEventListener('click', async e => {
     try {
       const r = await api('POST', '/api/respaldo', { data: oficinaUi.imp.data, parts });
       toast(
-        `Importé ${r.routines} rutina${r.routines === 1 ? '' : 's'}, ${r.favorites} frecuente${r.favorites === 1 ? '' : 's'}, ${r.pins} para enviar${r.office ? ', la oficina' : ''} y ${r.looks} apariencia${r.looks === 1 ? '' : 's'}.`
+        `Importé ${r.routines} rutina${r.routines === 1 ? '' : 's'}, ${r.favorites} frecuente${r.favorites === 1 ? '' : 's'}, ${r.pins} para enviar${r.office ? ', la oficina' : ''}, ${r.looks} apariencia${r.looks === 1 ? '' : 's'} y ${r.cuaderno || 0} archivo${r.cuaderno === 1 ? '' : 's'} del cuaderno.`
       );
       oficinaUi.imp = null;
       renderPanel();

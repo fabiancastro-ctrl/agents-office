@@ -2771,6 +2771,24 @@ test('cuaderno: a robot proposes by CLI, Fabian approves, the search finds it an
     await waitFor(async () => (await o.robot('uno')).notasLeidas === 1, { what: 'la lectura en la ventana del robot' });
     const notas = (await o.api('GET', '/api/memoria/notas')).body.notas;
     assert.equal(notas[0].lecturas, 1, 'listing for the panel does not count; the one search that found it does');
+    assert.match(notas[0].ultimaLectura, /^\d{4}-\d{2}-\d{2}$/, 'the last read day is recorded');
+    assert.equal(notas[0].sinLeer, false);
+    // a new proposal that resembles an approved note carries it, for the panel to warn before approving
+    cli(['proponer', '--titulo', 'Fusionar nr-infra con admin otra vez', '--tema', 'merge, nr-infra', 'Repetida.']);
+    const again = (await o.api('GET', '/api/memoria/propuestas')).body.propuestas;
+    assert.equal(again[0].parecidas.length, 1);
+    assert.match(again[0].parecidas[0].titulo, /nr-infra se fusiona/);
+    // the notebook is in the health report (old proposals are reported, not deleted) and in the backup
+    fs.writeFileSync(
+      path.join(o.data, 'memoria', 'propuestas', 'antigua.md'),
+      '---\ntitulo: Antigua\ncreada: 2020-01-01\nrevisar: 2020-04-01\n---\nUna propuesta olvidada.'
+    );
+    const cuad = (await o.api('GET', '/api/salud')).body.checks.find(c => c.label === 'Cuaderno');
+    assert.equal(cuad.ok, false);
+    assert.match(cuad.detail, /antigua/);
+    assert.ok(fs.existsSync(path.join(o.data, 'memoria', 'propuestas', 'antigua.md')));
+    const bk = JSON.parse(await (await fetch(`${o.url}/api/respaldo`)).text());
+    assert.ok(Object.keys(bk.cuaderno.notas).length >= 1 && bk.cuaderno.propuestas.antigua);
     // an expired note is still returned, marked
     fs.writeFileSync(
       path.join(o.data, 'memoria', 'notas', 'vieja.md'),
@@ -2785,6 +2803,7 @@ test('cuaderno: a robot proposes by CLI, Fabian approves, the search finds it an
     // the page serves the panel
     const app = await (await fetch(`${o.url}/app.js`)).text();
     assert.match(app, /cuadernoPanel/);
+    assert.match(app, /Sin leer en 60\+ días/);
   } finally {
     await o.stop();
   }

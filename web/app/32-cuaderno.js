@@ -13,7 +13,7 @@ const cuadText = n =>
   `---\ntitulo: ${n.titulo}\ntema: ${n.tema}\nalcance: ${n.alcance}\nautor: ${n.autor}\ncreada: ${n.creada}\nrevisar: ${n.revisar}\n---\n${n.cuerpo}\n`;
 
 function renderCuadBadge() {
-  const n = st.memoria?.propuestas || 0;
+  const n = (st.memoria?.propuestas || 0) + (st.memoria?.porRevisar || 0); // proposals to decide + notes past their review day
   const b = $('#cuad-n');
   if (!b) return;
   b.textContent = n;
@@ -39,7 +39,11 @@ async function loadCuaderno() {
 }
 
 const cuadMeta = n =>
-  `<div class="pathx">${n.tema ? `${esc(n.tema)} · ` : ''}${esc(n.alcance)}${n.autor ? ` · ${esc(n.autor)}` : ''}${n.revisar ? ` · revisar ${esc(n.revisar)}` : ''}${n.lecturas ? ` · leída ${n.lecturas} ${n.lecturas === 1 ? 'vez' : 'veces'}` : ''}</div>`;
+  `<div class="pathx">${n.tema ? `${esc(n.tema)} · ` : ''}${esc(n.alcance)}${n.autor ? ` · ${esc(n.autor)}` : ''}${n.revisar ? ` · revisar ${esc(n.revisar)}` : ''}${n.lecturas === undefined ? '' : n.lecturas ? ` · leída ${n.lecturas} ${n.lecturas === 1 ? 'vez' : 'veces'}${n.ultimaLectura ? `, la última el ${esc(n.ultimaLectura)}` : ''}` : ' · nunca leída'}</div>${
+    n.parecidas?.length
+      ? `<div class="note cu-dup">Se parece a ${n.parecidas.map(p => `«${esc(p.titulo)}»`).join(', ')}: revisa que no sea un duplicado antes de aprobar.</div>`
+      : ''
+  }`;
 const cuadDue = n => (n.vencida ? ` <span class="tagx cu-due">${icon('hourglass')} por revisar</span>` : '');
 
 // One row: a primary button and the rest under «⋯», like the inbox. While it is being edited, a text box replaces the body.
@@ -93,14 +97,17 @@ function cuadernoPanel() {
     const q = cuadNorm(cuad.q).split(/\s+/).filter(Boolean);
     const f = cuad.filtro;
     const shown = notas.filter(n => {
+      if (f === 'sinleer' && !n.sinLeer) return false;
       if (f.startsWith('tema:') && !n.tema.split(',').some(t => t.trim() === f.slice(5))) return false;
       if (f.startsWith('alcance:') && n.alcance !== f.slice(8)) return false;
       const hay = cuadNorm(`${n.titulo} ${n.tema} ${n.cuerpo}`);
       return q.every(w => hay.includes(w));
     });
+    if (f === 'sinleer') shown.sort((a, b) => (b.diasSinLeer ?? 0) - (a.diasSinLeer ?? 0)); // longest unread first
+    const unread = notas.filter(n => n.sinLeer).length;
     const opt = (v, l) => `<option value="${esc(v)}"${f === v ? ' selected' : ''}>${esc(l)}</option>`;
     content = `<div class="row between ib-filters"><input id="cu-q" type="search" placeholder="Buscar en las notas…" value="${esc(cuad.q)}" aria-label="Buscar en las notas" autocomplete="off">
-      <select id="cu-f" aria-label="Filtrar por tema o alcance"><option value="">Todos los temas y alcances</option>${temas.length ? `<optgroup label="Tema">${temas.map(t => opt(`tema:${t}`, t)).join('')}</optgroup>` : ''}${alcances.length ? `<optgroup label="Alcance">${alcances.map(a => opt(`alcance:${a}`, a)).join('')}</optgroup>` : ''}</select></div>
+      <select id="cu-f" aria-label="Filtrar por tema o alcance"><option value="">Todos los temas y alcances</option><option value="sinleer"${f === 'sinleer' ? ' selected' : ''}>Sin leer en 60+ días (${unread}): candidatas a archivar</option>${temas.length ? `<optgroup label="Tema">${temas.map(t => opt(`tema:${t}`, t)).join('')}</optgroup>` : ''}${alcances.length ? `<optgroup label="Alcance">${alcances.map(a => opt(`alcance:${a}`, a)).join('')}</optgroup>` : ''}</select></div>
       ${shown.length ? shown.map(n => cuadRow(n, 'nota')).join('') : `<p>${notas.length ? 'Ninguna nota coincide.' : 'El cuaderno está vacío. Cuando apruebes propuestas, aparecen aquí.'}</p>`}`;
   }
   return `<div class="dlg-head"><h3>${icon('notebook')} Cuaderno <small>${notas.length || ''}</small></h3><p>Lo que esta oficina sabe y los robots consultan con «office memoria buscar». Los robots proponen; nada entra sin que lo apruebes. Una nota vence a los 3 meses salvo que la renueves.</p></div>

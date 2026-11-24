@@ -6,7 +6,10 @@ import { toTrash } from './salas.mjs';
 import { readBody, send } from './http.mjs';
 import {
   approve,
+  daysUnread,
   editNote,
+  isUnread,
+  similar,
   listNotes,
   listProposals,
   notePath,
@@ -33,9 +36,27 @@ try {
 }
 
 const withReads = notes => {
-  const reads = readReads().notas;
-  return notes.map(n => ({ ...n, lecturas: reads[n.id] || 0 }));
+  const { notas, ultima } = readReads();
+  return notes.map(n => ({
+    ...n,
+    lecturas: notas[n.id] || 0,
+    ultimaLectura: ultima[n.id] || '',
+    diasSinLeer: daysUnread(n, ultima[n.id]),
+    sinLeer: isUnread(n, ultima[n.id])
+  }));
 };
+// Each proposal with the approved notes it resembles, so the panel can warn before approving.
+const withSimilar = (props, notes = listNotes()) => props.map(p => ({ ...p, parecidas: similar(notes, p) }));
+
+// The badge counts what needs Fabian: proposals waiting plus notes past their review day. A note becomes due with the
+// calendar, not with an event, so a slow tick tells the page when the count changed.
+let lastCount = '';
+setInterval(() => {
+  const s = summary(),
+    key = `${s.propuestas}:${s.porRevisar}`;
+  if (lastCount && key !== lastCount) emitMemoria();
+  lastCount = key;
+}, Number(process.env.OFFICE_MEMORIA_TICK_MS) || 3600e3).unref();
 // Errors from memoria.mjs carry a status; anything else is a bad request from the caller.
 const fail = (res, e) => send(res, e.status || (e.motivos ? 422 : 400), { error: e.message, motivos: e.motivos });
 
@@ -62,7 +83,7 @@ async function cuadernoApi(req, res, url, parts) {
     if (req.method === 'GET' && sub === 'resumen') return send(res, 200, summary());
     // The page lists and filters without counting reads.
     if (req.method === 'GET' && sub === 'notas') return send(res, 200, { notas: withReads(listNotes()) });
-    if (req.method === 'GET' && sub === 'propuestas') return send(res, 200, { propuestas: listProposals() });
+    if (req.method === 'GET' && sub === 'propuestas') return send(res, 200, { propuestas: withSimilar(listProposals()) });
 
     if (req.method === 'POST' && sub === 'propuestas' && !id) {
       const b = await readBody(req);

@@ -26,6 +26,7 @@ import { favorites, pins, saveFavorites, savePins } from './turno.mjs';
 import { emitRoutines, routines, saveRoutines } from './rutinas.mjs';
 import { salas, salasArchive, SALAS_DIR, toTrash } from './salas.mjs';
 import { readBody, readRaw, send } from './http.mjs';
+import { exportAll, healthReport, importAll, PROPOSAL_DAYS, writeIndex } from './memoria.mjs';
 
 const STARTED = Date.now();
 const DAY = 86400e3;
@@ -141,6 +142,33 @@ setInterval(() => {
 }, Number(process.env.OFFICE_CLEAN_TICK_MS) || 3600e3);
 
 /* ---------- 3 · salud ---------- */
+// The notebook's health line. An out-of-sync INDICE.md is regenerated here (it is derived, nothing is lost); broken notes
+// and old proposals are only reported: they are Fabian's to fix, approve or discard.
+function notebookCheck() {
+  let h;
+  try {
+    h = healthReport();
+    if (h.indexStale) {
+      writeIndex();
+      h.indexRegenerated = true;
+    }
+  } catch (e) {
+    return { label: 'Cuaderno', ok: false, detail: `No pude revisar el cuaderno: ${e.message}`, fix: 'Revisa la carpeta memoria/ de los datos de la oficina.' };
+  }
+  const problems = [];
+  if (h.unparseable.length) problems.push(`${h.unparseable.length} sin formato legible (${h.unparseable.join(', ')})`);
+  if (h.incomplete.length)
+    problems.push(`${h.incomplete.length} con campos faltantes (${h.incomplete.map(i => `${i.id}: ${i.missing.join('/')}`).join('; ')})`);
+  if (h.oldProposals.length)
+    problems.push(`${h.oldProposals.length} propuesta${h.oldProposals.length === 1 ? '' : 's'} con más de ${PROPOSAL_DAYS} días sin decidir (${h.oldProposals.map(p => p.id).join(', ')})`);
+  const base = `${h.notes} nota${h.notes === 1 ? '' : 's'}, ${h.proposals} propuesta${h.proposals === 1 ? '' : 's'}${h.indexRegenerated ? ' · regeneré INDICE.md' : ''}`;
+  return {
+    label: 'Cuaderno',
+    ok: !problems.length,
+    detail: problems.length ? `${base} · ${problems.join(' · ')}` : base,
+    fix: problems.length ? 'Abre el Cuaderno: aprueba o descarta las propuestas viejas y corrige las notas con campos faltantes.' : ''
+  };
+}
 async function healthView() {
   const checks = [];
   const ok = (label, good, detail, fix = '') => checks.push({ label, ok: !!good, detail, fix: good ? '' : fix });
@@ -207,6 +235,7 @@ async function healthView() {
     `${fmtBytes(total)} en su carpeta de datos${freeable ? ` · ${fmtBytes(freeable)} se pueden limpiar` : ''}`,
     'Usa «Limpiar» aquí abajo.'
   );
+  checks.push(notebookCheck());
   const robotsView = [...robots.values()].map(r => ({
     name: r.name,
     state: r.state,
@@ -239,6 +268,7 @@ function backup() {
     routines: routines.map(({ running, lastRun, runs, seen, baselined, history, ...rt }) => rt),
     favorites,
     pins,
+    cuaderno: exportAll(),
     looks: Object.fromEntries(
       [...robots.values()].filter(r => r.look || Number.isInteger(r.color)).map(r => [r.name, { look: r.look || null, color: r.color }])
     )
@@ -246,8 +276,9 @@ function backup() {
 }
 function restoreBackup(data, parts) {
   if (data?.app !== 'agent-office' || data.version !== 1) throw new Error('Ese archivo no es un respaldo de la oficina.');
-  const want = new Set(Array.isArray(parts) && parts.length ? parts : ['routines', 'favorites', 'pins', 'office', 'looks']);
-  const out = { routines: 0, favorites: 0, pins: 0, office: false, looks: 0 };
+  const want = new Set(Array.isArray(parts) && parts.length ? parts : ['routines', 'favorites', 'pins', 'office', 'looks', 'cuaderno']);
+  const out = { routines: 0, favorites: 0, pins: 0, office: false, looks: 0, cuaderno: 0 };
+  if (want.has('cuaderno') && data.cuaderno && typeof data.cuaderno === 'object') out.cuaderno = importAll(data.cuaderno);
   if (want.has('routines') && Array.isArray(data.routines)) {
     for (const rt of data.routines) {
       if (!rt || typeof rt !== 'object' || !rt.type) continue;
