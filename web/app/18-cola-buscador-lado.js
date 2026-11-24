@@ -192,7 +192,7 @@ PANEL.addEventListener('submit', async e => {
   if (e.target.id !== 'retake-form') return;
   e.preventDefault();
   const b = e.target.querySelector('button');
-  if (!(await quotaOk(`Vas a lanzar un robot para retomar la tarea de ${st.archView?.name || 'este robot'}.`))) return;
+  if (!(await quotaOk(`Vas a lanzar un robot para retomar la tarea de ${st.archView?.name || 'este robot'}.`, st.archView?.account || ''))) return;
   b.disabled = true;
   try {
     const { name } = await api('POST', `/api/despedidos/${e.target.dataset.archId}/retomar`, { text: $('#retake-in').value });

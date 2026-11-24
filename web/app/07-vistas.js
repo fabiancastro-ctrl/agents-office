@@ -69,10 +69,11 @@ setInterval(renderClock, 30e3);
 function renderCoffee() {
   const el = $('#bcoffee'),
     s = st.config?.stats || {};
-  const pct = s.quotaPct;
-  el.classList.toggle('unknown', pct == null);
-  // With several accounts the pot also says which one the new launches use («cuenta activa»); a click opens the menu.
+  // With several accounts the pot shows the active account (the one new launches use) and fills or empties when it
+  // changes; a click opens the menu to pick it.
   const act = hasAccounts() ? st.config.activeAccount || 'principal' : '';
+  const pct = act ? (st.config.accounts.find(a => a.id === act)?.weekPct ?? null) : s.quotaPct;
+  el.classList.toggle('unknown', pct == null);
   let tag = el.querySelector('.cacct');
   if (act && !tag) el.insertAdjacentHTML('beforeend', '<b class="cacct" aria-hidden="true"></b>');
   tag = el.querySelector('.cacct');
@@ -91,7 +92,7 @@ function renderCoffee() {
   el.classList.toggle('low', left <= 30 && left > 10);
   el.classList.toggle('empty', left <= 10);
   const at = s.quotaAt ? fmtTime(s.quotaAt) : '';
-  el.title = `Cafetera: queda ${left} % de tu cuota semanal${s.quotaAccount ? ` (cuenta más llena: ${s.quotaAccount})` : ''} (usado ${pct} %${at ? `, medido a las ${at}` : ''}). Se vuelve a llenar cuando se renueva la cuota.${actTxt}`;
+  el.title = `Cafetera: queda ${left} % de la cuota semanal${act ? ` de la cuenta ${accountLabel(act)}` : ''} (usado ${pct} %${at && !act ? `, medido a las ${at}` : ''}). Se vuelve a llenar cuando se renueva la cuota.${actTxt}`;
 }
 function renderGrowth() {
   renderClock();

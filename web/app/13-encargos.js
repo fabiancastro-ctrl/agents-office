@@ -30,7 +30,9 @@ async function decideSpawn(d, allow) {
         }))
         .filter(x => x.on && x.text.trim())
     : d.spawnReq.items;
-  if (allow && items.length && !(await quotaOk(`${d.name} quiere lanzar ${items.length} robot${items.length === 1 ? '' : 's'}.`))) return;
+  // Children without an explicit account inherit the parent's.
+  if (allow && items.length && !(await quotaOk(`${d.name} quiere lanzar ${items.length} robot${items.length === 1 ? '' : 's'}.`, items[0].account || d.account || 'principal')))
+    return;
   const r = await api('POST', `/api/robots/${d.name}/encargos/${d.spawnReq.id}`, {
     decision: allow && items.length ? 'approve' : 'reject',
     items
@@ -179,7 +181,8 @@ function robotPanel(a) {
 
 // Aviso de cuota: antes de lanzar o retomar, si algún límite de tu suscripción va en 80 % o más, te pregunta.
 // Usa lo último leído de /usage (hasta 10 min); si no hay, lo pide con un tope de 4 s y, si no llega, no frena.
-async function quotaOk(what) {
+// `pick` is the account the launch will use (same values as the «Cuenta» selector): the warning reads that account.
+async function quotaOk(what, pick = '') {
   let c = st.claude;
   if (!(c && Date.now() - Date.parse(c.at) < 10 * 60e3)) {
     try {
@@ -192,10 +195,17 @@ async function quotaOk(what) {
       c = null;
     }
   }
-  const hot = (c?.limits || []).filter(l => l.pct >= 80);
+  const id = accountFor(pick);
+  let hot;
+  if (hasAccounts() && id === null) {
+    // «Automática» picks an account with room: warn only when every account is already hot.
+    const per = (st.config.accounts || []).map(a => limitsOf(c, a.id).filter(l => l.pct >= 80));
+    hot = per.every(h => h.length) ? per.flat() : [];
+  } else hot = limitsOf(c, id).filter(l => l.pct >= 80);
   if (!hot.length) return true;
+  const whose = hasAccounts() && id ? ` en la cuenta ${accountLabel(id)}` : '';
   return confirm(
-    `${what}\n\nVas en ${hot.map(l => `${l.pct} % de «${l.title}»${l.resets ? ` (${l.resets})` : ''}`).join(' y ')}. Cada robot gasta de la misma cuota.\n\n¿Seguir igual?`
+    `${what}\n\nVas en ${hot.map(l => `${l.pct} % de «${l.title}»${l.resets ? ` (${l.resets})` : ''}`).join(' y ')}${whose}. Cada robot de esa cuenta gasta de la misma cuota.\n\n¿Seguir igual?`
   );
 }
 

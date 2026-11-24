@@ -238,7 +238,7 @@ PANEL.addEventListener('submit', async e => {
       b.disabled = true;
     });
     try {
-      if (!(await quotaOk('Vas a lanzar un robot nuevo.'))) return;
+      if (!(await quotaOk('Vas a lanzar un robot nuevo.', body.account))) return;
       const r = await api('POST', '/api/robots', body);
       ['job-text', 'job-args', 'job-name'].forEach(id => {
         const el = document.getElementById(id);
@@ -334,7 +334,7 @@ PANEL.addEventListener('submit', async e => {
       queue: true
     });
     try {
-      if (!(await quotaOk('Vas a lanzar un robot en la sala.'))) return;
+      if (!(await quotaOk('Vas a lanzar un robot en la sala.', body.account))) return;
       const r = await api('POST', '/api/robots', body);
       ['sk-text', 'sk-args'].forEach(x => {
         document.getElementById(x).value = '';

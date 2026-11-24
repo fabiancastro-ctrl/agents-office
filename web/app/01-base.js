@@ -185,6 +185,16 @@ const brk = { bots: new Map() }; // robots de la sala de descanso (solo animaci�
 // '' = principal; 'auto' = the daemon picks the account with the most free weekly quota when the robot is launched.
 const hasAccounts = () => (st.config?.accounts?.length || 0) > 1;
 const accountLabel = id => (st.config?.accounts || []).find(a => a.id === id)?.nombre || id;
+// The account a launch will really use: «Por defecto» ('') follows the active account; 'auto' is decided by the daemon
+// at launch time (null here).
+const accountFor = pick => (pick === 'auto' ? null : pick || st.config?.activeAccount || 'principal');
+// /usage limits of one account from a claude-status reading. Without several accounts there is only one reading.
+function limitsOf(c, id) {
+  if (!c) return [];
+  if (!hasAccounts()) return c.limits || [];
+  const acc = (c.accounts || []).find(a => a.id === id);
+  return acc ? acc.limits || [] : id === 'principal' ? c.limits || [] : [];
+}
 function accountField(id, label) {
   if (!hasAccounts()) return '';
   const others = st.config.accounts

@@ -2317,7 +2317,8 @@ test('accounts: the page has the Cuenta selector (only with several accounts), t
       'hasAccounts()',
       "' · cuenta: '",
       'class="acct"',
-      'Cuenta más llena',
+      'Cuenta activa: ',
+      'limitsOf(st.claude, act)',
       'acct-q'
     ])
       assert.ok(js.includes(frag), frag);

@@ -270,7 +270,8 @@ function renderKpis() {
   const live = ds.reduce((k, d) => k + tokOf(d), 0);
   const week = st.weeks[0];
   const weekTok = week ? week.out + week.in + week.cacheWrite : 0;
-  const lim = st.claude?.limits?.[0];
+  const act = accountFor('');
+  const lim = limitsOf(st.claude, act)[0]; // the active account: the one new launches use
   const max = st.config.maxRobots || 3;
   const k = (cls, n, label, extra = '', act = '', tip = '') =>
     `<button type="button" class="kpi ${cls}"${act ? ` data-kpi="${act}"` : ''}${tip ? ` title="${esc(tip)}"` : ''}>${extra}<b>${n}</b><span>${label}</span></button>`;
@@ -295,8 +296,7 @@ function renderKpis() {
           esc(lim.title).toLowerCase(),
           `<i class="kbar" style="--p:${Math.min(100, lim.pct)}%"></i>`,
           'usage',
-          // With several accounts the chip shows the fullest one: say whose it is.
-          st.claude.accounts?.length > 1 && st.claude.account ? `Cuenta más llena: ${st.claude.account.nombre}` : ''
+          hasAccounts() ? `Cuenta activa: ${accountLabel(act)}` : ''
         )
       : k('k-tok', week ? fmtTok(weekTok) : '–', 'tokens esta semana', '', 'usage'));
   if (KPIS._html !== html) {
