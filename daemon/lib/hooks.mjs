@@ -380,6 +380,7 @@ async function onHook(name, body, via = '', closers = []) {
         if (r.bg) for (const [k, v] of Object.entries(r.bg)) if (v.kind === 'despertador') delete r.bg[k];
       } // un despertador que sonó
       r.needsPermission = false;
+      r.toolError = false;
       if (r.loop) {
         r.loop = null;
         r.loopTrack = {};
@@ -458,6 +459,7 @@ async function onHook(name, body, via = '', closers = []) {
     }
 
     case 'Stop':
+      r.toolError = false;
       r.loop = null;
       r.loopTrack = {}; // terminó su turno: ya no está dando vueltas
       pumpTranscript(r);

@@ -141,7 +141,9 @@ const VISOR_GLARE = `<path d="M12.4 13.4h4.2" stroke="#fff" stroke-width=".9" st
 // Expresiones (las muestra la hoja de estilos según el estado): feliz, pregunta y sudor.
 const FACES = `<g class="f f-happy" stroke="#bdf7ee" stroke-width="1.5" fill="none" stroke-linecap="round"><path d="M13.6 17q1.9-2.6 3.8 0M22.6 17q1.9-2.6 3.8 0"/></g>
   <g class="f f-ask" font-family="Arial,sans-serif" font-weight="700" font-size="6.2" fill="#ffd27a" text-anchor="middle"><text x="15.5" y="18.3">?</text><text x="24.5" y="18.3">?</text></g>
-  <g class="f f-sweat"><path d="M32.6 9.5q2.2 3.3 0 4.6q-2.2-1.3 0-4.6z" fill="#9fd3f0" stroke="#5c8fb3" stroke-width=".5"/></g>`;
+  <g class="f f-sweat"><path d="M32.6 9.5q2.2 3.3 0 4.6q-2.2-1.3 0-4.6z" fill="#9fd3f0" stroke="#5c8fb3" stroke-width=".5"/></g>
+  <g class="f f-frus"><path d="M13.4 14.6l4 1.7-4 1.7M26.6 14.6l-4 1.7 4 1.7" stroke="#ff9a8a" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path class="grr" d="M5.6 6.4q1.1.3 1.2 1.5M9.8 6.4q-1.1.3-1.2 1.5M5.6 10.4q1.1-.3 1.2-1.5M9.8 10.4q-1.1-.3-1.2-1.5" stroke="#ef5a6a" stroke-width="1" fill="none" stroke-linecap="round"/></g>
+  <g class="f f-proud"><ellipse cx="12.4" cy="20.4" rx="2.1" ry="1.1" fill="#ef8fb0" opacity=".7"/><ellipse cx="27.6" cy="20.4" rx="2.1" ry="1.1" fill="#ef8fb0" opacity=".7"/><path class="spark" d="M33.6 2.8l.9 2.5 2.5.9-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9z" fill="#ffd36b"/></g>`;
 const HATS = {
   santa: `<path d="M8.6 10.6Q11 2 22 1.6q9 .3 12.6 6.8L31.4 10.6z" fill="#d23b45" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="7.6" y="8.8" width="25" height="3.4" rx="1.7" fill="#f4efe2"/><circle cx="35" cy="8.4" r="2.3" fill="#f4efe2"/>`,
   witch: `<ellipse cx="20" cy="9.6" rx="15" ry="2.4" fill="#3b2a55"/><path d="M12.6 9.4L19 -4.4l7.6 13.8z" fill="#4a3570" stroke="rgba(8,12,20,.45)" stroke-width=".8"/><rect x="13.4" y="6.6" width="13" height="2.2" fill="#f3b74f"/>`,

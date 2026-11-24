@@ -98,6 +98,7 @@ function view(r, withLog = false) {
     hold: r.hold,
     ask: r.ask || null,
     ctx: ctxOf(r),
+    toolError: !!r.toolError, // last tool result was an error (cleared by the next successful one or a new turn)
     model: r.model || '', // last model seen in the transcript (the map sizes the robot by its family)
     request: requestOf(r),
     docs: r.docs,

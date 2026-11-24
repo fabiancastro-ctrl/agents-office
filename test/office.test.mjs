@@ -776,6 +776,22 @@ test('comandos de la consola, orden por hora real y contexto tras compactar', as
     assert.equal(r.ctx.window, 1000000, 'Opus 5 trabaja con 1 M de contexto');
     assert.equal(r.ctx.pct, 10);
     assert.equal(r.model, 'claude-opus-5-5', 'the view carries the model so the map can size the robot');
+    // A failed tool result raises the ephemeral flag; the next successful one (or the user's own refusal) clears it.
+    const result = (is_error, content = 'Exit code 1') =>
+      line({
+        type: 'user',
+        timestamp: new Date().toISOString(),
+        message: { content: [{ type: 'tool_result', tool_use_id: 'tu1', is_error, content }] }
+      });
+    result(true);
+    await waitFor(async () => (await o.robot('uno')).toolError === true, { what: 'the tool error flag' });
+    result(false, 'ok');
+    await waitFor(async () => (await o.robot('uno')).toolError === false, { what: 'the flag cleared by a good tool' });
+    result(true, "The user doesn't want to proceed with this tool use.");
+    result(true);
+    await waitFor(async () => (await o.robot('uno')).toolError === true, { what: 'the flag again' });
+    await o.hook('uno', { hook_event_name: 'Stop', last_assistant_message: 'listo' });
+    assert.equal((await o.robot('uno')).toolError, false, 'the flag does not outlive the turn');
     line({ type: 'system', subtype: 'compact_boundary', compactMetadata: { preTokens: 100000, postTokens: 12000 } });
     await waitFor(async () => (await o.robot('uno')).ctx.tokens === 12000, { what: 'el contexto tras compactar' });
   } finally {

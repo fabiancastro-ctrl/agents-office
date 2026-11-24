@@ -122,6 +122,18 @@ function onTranscript(r, e) {
   if (e.type === 'user' && e.message) {
     const content = e.message.content;
     const text = typeof content === 'string' ? content : (content || []).map(c => c.text || '').join(' ');
+    // Last tool result decides the ephemeral «frustrated» flag: PostToolUse only fires for successful tools, so the
+    // failure shows up here as is_error. The user's own refusal or Esc is not a tool failure.
+    const results = Array.isArray(content) ? content.filter(c => c.type === 'tool_result') : [];
+    if (results.length) {
+      const last = results[results.length - 1];
+      const body = typeof last.content === 'string' ? last.content : JSON.stringify(last.content || '');
+      const failed = last.is_error === true && !/doesn't want to proceed|Request interrupted|was rejected/i.test(body);
+      if (!!r.toolError !== failed) {
+        r.toolError = failed;
+        if (!r.restoring) emit(r);
+      }
+    }
     if (r.bg && Array.isArray(content))
       for (const c of content)
         if (c.type === 'tool_result' && r.bg[c.tool_use_id])

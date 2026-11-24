@@ -299,6 +299,8 @@ function paint(a) {
     tool,
     d.critical > 0 && d.state === 'done' ? 'crit' : '',
     isStuck(d) ? 'stuck' : '',
+    d.toolError && (shownState === 'working' || shownState === 'delegating') && !isStuck(d) ? 'frus' : '',
+    Date.now() < (a.proudUntil || 0) ? 'proud' : '',
     urg ? `urg-${urg}` : '',
     ...keep,
     st.selected === d.name ? 'sel' : '',
@@ -487,6 +489,11 @@ function onDeliver(name, items) {
     celebrate(items);
     return;
   }
+  // Proud face for 20 s (see .proud in style.css).
+  a.proudUntil = Date.now() + 20e3;
+  clearTimeout(a.proudTimer);
+  a.proudTimer = setTimeout(() => paint(a), 20e3 + 50);
+  paint(a);
   // N · Lo lleva un cartero desde su puesto; el robot no se levanta.
   sendCourier(a.el.classList.contains('offview') ? restPos(a) : { ...a.pos }, n).then(() => {
     celebrate(items);
