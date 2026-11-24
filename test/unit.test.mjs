@@ -180,3 +180,156 @@ test('limits: the «hit your limit» text gives its kind and reset instant (with
   const odd = parseLimit("You've hit your weekly limit · resets soon", from);
   assert.deepEqual([odd.kind, odd.until], ['week', null]);
 });
+
+// ---- Cuaderno (daemon/lib/memoria.mjs) ----
+const memDir = () => fs.mkdtempSync(path.join(tmp, 'memoria-'));
+const NOTE = `---
+titulo: nr-infra se fusiona con --admin
+tema: merge, nr-infra
+alcance: oficina            # oficina | sala:<id> | repo:<nombre>
+autor: Fabian
+creada: 2026-11-23
+revisar: 2027-02-23
+---
+En nr-infra los PR se fusionan con gh pr merge --admin.
+**Por qué:** el ruleset exige un architect.
+**Cuándo aplica:** solo nr-infra.
+`;
+
+test('notebook: a note parses (frontmatter, inline comments, body) and serializes back', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const { meta, body } = m.parseNote(NOTE);
+  assert.equal(meta.titulo, 'nr-infra se fusiona con --admin');
+  assert.equal(meta.alcance, 'oficina', 'the trailing comment is dropped');
+  assert.equal(meta.revisar, '2027-02-23');
+  assert.match(body, /\*\*Por qué:\*\*/);
+  assert.deepEqual(m.parseNote(m.serializeNote(meta, body)), { meta, body });
+  assert.deepEqual(m.parseNote('sin encabezado').meta, {});
+});
+
+test('notebook: revisar defaults to creada + 3 months (day clamped) and the note is validated', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  assert.equal(m.addMonths('2026-11-23'), '2027-02-23');
+  assert.equal(m.addMonths('2026-11-30'), '2027-02-28');
+  assert.equal(m.addMonths('2026-10-31'), '2027-01-31');
+  const n = m.normalizeNote('---\ntitulo: Algo\n---\nUn hecho.', { autor: 'robot x', today: '2026-11-24' });
+  assert.deepEqual([n.meta.alcance, n.meta.autor, n.meta.creada, n.meta.revisar], ['oficina', 'robot x', '2026-11-24', '2027-02-24']);
+  assert.throws(() => m.normalizeNote('---\ntema: x\n---\nhecho'), /titulo/);
+  assert.throws(() => m.normalizeNote('---\ntitulo: a\n---\n'), /no tiene texto/);
+  assert.throws(() => m.normalizeNote('---\ntitulo: a\nalcance: mundo\n---\nhecho'), /alcance/);
+  assert.throws(() => m.normalizeNote(`---\ntitulo: a\n---\n${'x'.repeat(2001)}`), /muy larga/);
+});
+
+test('notebook: credentials, emails and private URLs are rejected; public ones pass', async () => {
+  const { forbidden } = await import('../daemon/lib/memoria.mjs');
+  const bad = [
+    ['-----BEGIN RSA PRIVATE KEY-----', /llave privada/],
+    ['usa sk-ant-api03-abcdefghijklmnop1234', /API key/],
+    ['el token ghp_abcdefghijklmnopqrstuvwxyz0123456789', /GitHub/],
+    ['AKIAABCDEFGHIJKLMNOP', /AWS/],
+    ['Authorization: Bearer abcdefghijklmnopqrstuvwxyz123', /Bearer/],
+    ['eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk', /JWT/],
+    ['password: hunter2hunter2', /contraseña/],
+    ['contraseña = Abc12345', /contraseña/],
+    ['escribe a juan.perez@cliente.com', /correo/],
+    ['mira https://gitea.dex.moimolcp.com/Fabi/agent-office', /URL no pública/],
+    ['abre http://localhost:4778/api', /URL no pública/],
+    ['en nexus.dropi.co está la tarea', /dirección privada/]
+  ];
+  for (const [text, why] of bad) assert.match(forbidden(text).join(' | '), why, text);
+  const ok = [
+    'Ver https://github.com/NR-2-0/nr-kit/pull/12 y https://docs.github.com/es',
+    'El token expira rápido y la clave de partición es order_id',
+    'Se fusiona con @NR-2-0/frontend-maintainers',
+    'commit 0123456789abcdef0123456789abcdef01234567'
+  ];
+  for (const text of ok) assert.deepEqual(forbidden(text), [], text);
+});
+
+test('notebook: word search ignores case and accents, weighs title/tema, needs half of the words', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const notes = [
+    { id: 'a', titulo: 'Fusión de nr-infra', tema: 'merge', cuerpo: 'Usar --admin porque Fabian es architect' },
+    { id: 'b', titulo: 'Colima para pruebas', tema: 'docker', cuerpo: 'Sin DOCKER_HOST no corre nada' },
+    { id: 'c', titulo: 'Otra', tema: 'otra', cuerpo: 'merge de ramas' }
+  ];
+  assert.deepEqual(
+    m.search(notes, 'FUSION').map(n => n.id),
+    ['a']
+  );
+  assert.deepEqual(
+    m.search(notes, 'merge').map(n => n.id),
+    ['a', 'c'],
+    'tema outranks body'
+  );
+  assert.deepEqual(
+    m.search(notes, 'docker host').map(n => n.id),
+    ['b']
+  );
+  assert.deepEqual(
+    m.search(notes, 'nr-infra zzzz qqqq xxxx').map(n => n.id),
+    [],
+    'fewer than half of the words'
+  );
+  assert.deepEqual(m.search(notes, 'de la'), [], 'only stop words');
+  assert.deepEqual(m.search(notes, ''), []);
+});
+
+test('notebook: similar notes are found by title and tema word overlap', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const notes = [
+    { id: 'a', titulo: 'nr-infra se fusiona con --admin', tema: 'merge, nr-infra' },
+    { id: 'b', titulo: 'Colima para pruebas de integración', tema: 'docker' }
+  ];
+  assert.deepEqual(m.similar(notes, { titulo: 'Fusionar nr-infra con admin', tema: 'merge' }), [{ id: 'a', titulo: notes[0].titulo }]);
+  assert.deepEqual(m.similar(notes, { titulo: 'Algo distinto del todo', tema: 'otro' }), []);
+});
+
+test('notebook: propose, approve (INDICE.md), edit, renew and reads, all on files', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const dir = memDir();
+  const today = '2026-11-24';
+  const p = m.propose(
+    { titulo: 'Colima para pruebas', tema: 'docker, tests', hecho: 'Exporta DOCKER_HOST.', porque: 'sin él no corre', autor: 'robot uno' },
+    { dir, today }
+  );
+  assert.equal(p.id, 'colima-para-pruebas');
+  assert.equal(m.listProposals(dir, today).length, 1);
+  assert.equal(m.listNotes(dir, today).length, 0);
+  assert.throws(
+    () => m.propose({ titulo: 'Clave', hecho: 'api_key=abcd1234efgh' }, { dir, today }),
+    e => e.motivos?.length > 0
+  );
+  // a second one with the same title: unique id and «se parece a»
+  const q = m.propose({ titulo: 'Colima para pruebas', tema: 'docker', hecho: 'Otra vez.' }, { dir, today });
+  assert.equal(q.id, 'colima-para-pruebas-2');
+  assert.equal(q.parecidas[0].id, 'colima-para-pruebas');
+  const nid = m.approve(p.id, undefined, { dir, today });
+  assert.equal(m.listNotes(dir, today)[0].revisar, '2027-02-24');
+  assert.equal(m.listProposals(dir, today).length, 1);
+  assert.match(
+    fs.readFileSync(path.join(dir, 'INDICE.md'), 'utf8'),
+    /- Colima para pruebas — docker, tests — notas\/colima-para-pruebas\.md/
+  );
+  // edit and renew
+  m.editNote(nid, '---\ntitulo: Colima\ntema: docker\ncreada: 2026-01-01\nrevisar: 2026-04-01\n---\nTexto nuevo.', { dir, today });
+  assert.equal(m.listNotes(dir, today)[0].vencida, true, 'past revisar = expired');
+  m.renewNote(nid, { dir, today });
+  assert.deepEqual([m.listNotes(dir, today)[0].vencida, m.listNotes(dir, today)[0].revisar], [false, '2027-02-24']);
+  assert.throws(() => m.approve('no-existe', undefined, { dir }), /ya no está/);
+  // reads: per note, and distinct notes per robot (a new robot with the same name starts over)
+  assert.equal(m.recordReads([nid], 'rex', 't1', dir), 1);
+  assert.equal(m.recordReads([nid], 'rex', 't1', dir), 1);
+  assert.equal(m.readReads(dir).notas[nid], 2);
+  assert.equal(m.robotReads('rex', 't1', dir), 1);
+  assert.equal(m.robotReads('rex', 't2', dir), 0);
+});
+
+test('notebook: INDICE.md has one line per approved note', async () => {
+  const m = await import('../daemon/lib/memoria.mjs');
+  const txt = m.indexText([
+    { id: 'a', titulo: 'Uno', tema: 'x' },
+    { id: 'b', titulo: 'Dos', tema: '' }
+  ]);
+  assert.match(txt, /- Uno — x — notas\/a\.md\n- Dos — sin tema — notas\/b\.md\n$/);
+});
