@@ -12,6 +12,7 @@ function fillJob(req) {
   set('job-text', req.text);
   set('job-mode', req.permissionMode);
   set('job-title', req.title);
+  set('job-model', req.modelPick);
   set('job-name', '');
   const art = $('#job-artifact', PANEL);
   if (art) art.checked = !!req.tools?.includes('artifact');
@@ -47,6 +48,7 @@ PANEL.addEventListener('click', async e => {
       args: $('#job-args').value,
       text: $('#job-text').value,
       permissionMode: $('#job-mode').value,
+      modelPick: $('#job-model').value,
       title: $('#job-title').value
     });
     toast('Guardado en frecuentes');

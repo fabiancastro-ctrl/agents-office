@@ -24,6 +24,7 @@ async function decideSpawn(d, allow) {
           title: f.querySelector(`[data-sp-t="${i}"]`).value,
           text: f.querySelector(`[data-sp-x="${i}"]`).value,
           tools: it.tools || [],
+          modelPick: it.modelPick || '',
           on: f.querySelector(`[data-sp-on="${i}"]`).checked
         }))
         .filter(x => x.on && x.text.trim())
@@ -167,7 +168,7 @@ function robotPanel(a) {
           ${d.relevoPending ? '<span class="note">🔁 Escribiendo su relevo…</span>' : d.summaryPending ? '<span class="note">📝 Escribiendo su resumen para irse…</span>' : ''}
           <button class="btn sm danger pbar-end" data-act="kill" title="Lo despide ya, sin resumen. Si quieres que deje uno para retomar después, usa «📝 Despedir con resumen» (arriba).">Dar de baja</button>
         </div>
-        <div class="stats">tokens · salida ${u.out ?? 0} · entrada ${u.in ?? 0} · caché leída ${u.cacheRead ?? 0} · caché escrita ${u.cacheWrite ?? 0}${spendText(d) ? ` · gasto: ${esc(spendText(d))}` : ''}${d.permissionMode ? ' · permisos: ' + esc(d.permissionMode) : ''}</div>
+        <div class="stats">tokens · salida ${u.out ?? 0} · entrada ${u.in ?? 0} · caché leída ${u.cacheRead ?? 0} · caché escrita ${u.cacheWrite ?? 0}${spendText(d) ? ` · gasto: ${esc(spendText(d))}` : ''}${d.permissionMode ? ' · permisos: ' + esc(d.permissionMode) : ''}${d.modelPick ? ' · modelo: ' + esc(d.modelPick) : ''}</div>
         <div class="note">tmux attach -t ${esc(st.config.session || 'office')}:${esc(d.name)} · sesión ${esc(d.sessionId)}</div>
       </div>
     </div>`;
@@ -235,6 +236,7 @@ function newPanel() {
         <div class="field full" id="f-text" hidden><label for="job-text">Qué necesitas</label><textarea id="job-text" rows="5" data-ac placeholder="Ej.: revisa por qué falla el pipeline de dropi-atom y explícame la causa sin tocar código"></textarea></div>
         <div class="field full"><span class="flabel">Adjuntos: pega con Ctrl+V o arrastra aquí</span><div class="tray" data-tray="job">${trayHtml('job')}</div></div>
         <div class="field"><label for="job-mode">Permisos</label><select id="job-mode"><option value="">Heredar tu modo</option><option value="default">Preguntar (default)</option><option value="acceptEdits">Aceptar ediciones</option><option value="plan">Solo planear</option></select></div>
+        <div class="field"><label for="job-model">Modelo</label><select id="job-model"><option value="">Por defecto (el de Claude)</option><option value="opus">Opus</option><option value="sonnet">Sonnet</option><option value="haiku">Haiku</option></select></div>
         <div class="field span2"><label class="sp-on"><input type="checkbox" id="job-artifact"> 📄 Con Artifact (para publicar páginas; cuesta ~10 k tokens más por llamada)</label></div>
       </div>
       <div class="dlg-foot">
