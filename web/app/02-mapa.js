@@ -677,6 +677,10 @@ async function walkTo(a, dest) {
   } // los de la sala de descanso no tienen puesto ni sala
   if (st.view && !shownHere(a.data)) {
     placeAt(a, dest);
+    // Whoever queued this walk marked it in transit; it never walked, so clear it or, back in the office,
+    // it stays visible in the corridor in front of its room's door.
+    a.transit = false;
+    viewClass(a);
     return;
   } // dentro de una sala, los de afuera no se ven
   a.transit = true;
