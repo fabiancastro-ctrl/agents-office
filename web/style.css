@@ -240,6 +240,7 @@ table.usage tr.cur td{color:var(--ink);font-weight:600}
 .robot .nm{position:absolute;top:100%;left:50%;transform:translateX(-50%);font-size:11px;font-family:var(--mono);background:rgba(17,23,34,.85);padding:0 4px;border-radius:3px;white-space:nowrap;margin-top:1px}
 .robot.sel .nm{background:var(--amber);color:#2a1d05}
 .robot .nm .acct{display:inline-block;margin-left:4px;min-width:12px;padding:0 3px;border-radius:6px;background:var(--sky);color:#0d1a2a;font:700 9px/12px var(--mono);text-align:center;vertical-align:1px}
+.robot .nm .acct.main{background:var(--teal)}
 html.hc .robot .nm .acct{outline:1px solid currentColor}
 .robot .kill-x{position:absolute;top:-4px;right:-12px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;border:1px solid rgba(239,127,138,.6);background:rgba(17,23,34,.92);color:var(--rose);font:600 11px/14px var(--mono);cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s;white-space:nowrap;z-index:2}
 .robot:hover .kill-x,.robot:focus-within .kill-x,.robot.sel .kill-x,.robot .kill-x.armed{opacity:1;pointer-events:auto}

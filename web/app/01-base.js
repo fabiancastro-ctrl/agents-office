@@ -275,6 +275,13 @@ const brk = { bots: new Map() }; // robots de la sala de descanso (solo animaci�
 // '' = principal; 'auto' = the daemon picks the account with the most free weekly quota when the robot is launched.
 const hasAccounts = () => (st.config?.accounts?.length || 0) > 1;
 const accountLabel = id => (st.config?.accounts || []).find(a => a.id === id)?.nombre || id;
+// A robot's account as a name ('' = principal), and the text saying where it started when it was moved since.
+const robotAccount = id => accountLabel(id || 'principal');
+const accountStory = d => {
+  const now = robotAccount(d.account),
+    start = robotAccount(d.startAccount ?? d.account);
+  return start === now ? now : `${now} (inició en ${start})`;
+};
 // The account a launch will really use: «Por defecto» ('') follows the active account; 'auto' is decided by the daemon
 // at launch time (null here).
 const accountFor = pick => (pick === 'auto' ? null : pick || st.config?.activeAccount || 'principal');

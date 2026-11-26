@@ -387,9 +387,10 @@ function paint(a) {
   ]
     .filter(Boolean)
     .join(' ');
-  // Robots of an extra Claude account carry its initial next to their name (sky blue, never grey).
-  const nmHtml = d.account
-    ? `${esc(d.name)}<b class="acct" title="Cuenta de Claude: ${esc(accountLabel(d.account))}">${esc(accountLabel(d.account).slice(0, 1).toUpperCase())}</b>`
+  // With several Claude accounts every robot carries its account's initial next to its name (principal teal, the others
+  // sky blue, never grey); the tooltip also says where it started if it was moved to another account since.
+  const nmHtml = hasAccounts()
+    ? `${esc(d.name)}<b class="acct${d.account && d.account !== 'principal' ? '' : ' main'}" title="Cuenta de Claude: ${esc(accountStory(d))}">${esc(robotAccount(d.account).slice(0, 1).toUpperCase())}</b>`
     : esc(d.name);
   if (a.nmHtml !== nmHtml) {
     a.nmHtml = nmHtml;

@@ -174,7 +174,7 @@ function robotPanel(a) {
           ${d.relevoPending ? `<span class="note">${icon('repeat')} Escribiendo su relevo…</span>` : d.summaryPending ? `<span class="note">${icon('note')} Escribiendo su resumen para irse…</span>` : ''}
           <button class="btn sm danger pbar-end" data-act="kill" title="Lo despide ya, sin resumen. Si quieres que deje uno para retomar después, usa «Despedir con resumen» (arriba).">Dar de baja</button>
         </div>
-        <div class="stats">tokens · salida ${u.out ?? 0} · entrada ${u.in ?? 0} · caché leída ${u.cacheRead ?? 0} · caché escrita ${u.cacheWrite ?? 0}${spendText(d) ? ` · gasto: ${esc(spendText(d))}` : ''}${d.permissionMode ? ' · permisos: ' + esc(d.permissionMode) : ''}${d.modelPick ? ' · modelo: ' + esc(d.modelPick) : ''}${d.account ? ' · cuenta: ' + esc(accountLabel(d.account)) : ''}</div>
+        <div class="stats">tokens · salida ${u.out ?? 0} · entrada ${u.in ?? 0} · caché leída ${u.cacheRead ?? 0} · caché escrita ${u.cacheWrite ?? 0}${spendText(d) ? ` · gasto: ${esc(spendText(d))}` : ''}${d.permissionMode ? ' · permisos: ' + esc(d.permissionMode) : ''}${d.modelPick ? ' · modelo: ' + esc(d.modelPick) : ''}${hasAccounts() ? ' · cuenta: ' + esc(accountStory(d)) : ''}</div>
         <div class="note">tmux attach -t ${esc(st.config.session || 'office')}:${esc(d.name)} · sesión ${esc(d.sessionId)}</div>
       </div>
     </div>`;

@@ -2426,7 +2426,10 @@ test('accounts: the page has the Cuenta selector (only with several accounts), t
       "accountField('rt-account'",
       'hasAccounts()',
       "' · cuenta: '",
-      'class="acct"',
+      'class="acct${',
+      "' main'",
+      '(inició en ${start})',
+      "accountField('retake-account'",
       'Cuenta activa: ',
       'limitsOf(st.claude, act)',
       'acct-q'

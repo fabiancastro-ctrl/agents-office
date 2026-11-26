@@ -127,6 +127,7 @@ function view(r, withLog = false) {
     tools: r.tools || [],
     modelPick: r.modelPick || '',
     account: r.account || '',
+    startAccount: r.request?.account ?? r.account ?? '', // the account it was launched on (resolved: '' = principal)
     limit: limitView(r),
     startedAt: r.startedAt,
     timeline: (r.timeline || []).slice(-1),
