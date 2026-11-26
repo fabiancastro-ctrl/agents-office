@@ -187,14 +187,17 @@ async function relaunch(r, old, summary) {
     account: old.account,
     origin: `Relevo por contexto de ${old.name} (${fmtK(old.tokens)}): sigue con su resumen`
   };
-  let n;
+  let n,
+    noSala = '';
   try {
     n = await launch({ ...launchArgs, sala: old.sala || undefined });
   } catch (e) {
     // la sala pudo cerrarse al irse el último robot, o el nombre/cupo fallar: se reintenta sin sala
     if (!old.sala) throw e;
     n = await launch(launchArgs);
+    noSala = e.message;
   }
+  if (noSala) log(n, 'sys', `Entró sin su sala (${noSala}): múdalo desde su ventana si hace falta`);
   n.note = old.note;
   if (old.priority) n.priority = old.priority;
   n.salaNote = old.salaNote;

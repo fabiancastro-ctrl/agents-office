@@ -1816,6 +1816,38 @@ test('salas: el relevo de un hijo no cierra la sala; mudar robots y reabrir una 
   }
 });
 
+test('salas: el padre relevado vuelve a su sala aunque el prompt pase el tope de tmux (~16 KB)', async () => {
+  const o = await startOffice({ maxRobots: 4 });
+  try {
+    await o.api('POST', '/api/robots', { ...libre('jefe'), title: 'Epica' });
+    const req = await o.api('POST', '/api/robots/jefe/encargos', { encargos: [{ titulo: 'Hijo', encargo: 'haz algo' }] });
+    const salaId = (await o.api('POST', `/api/robots/jefe/encargos/${req.body.id}`, { decision: 'approve' })).body.sala;
+    // A big shared context (inlined up to 8 KB) plus a long summary: together they pass tmux's command limit.
+    fs.appendFileSync((await o.snapshot()).salas.find(s => s.id === salaId).context, 'room context line\n'.repeat(400));
+    await o.hook('jefe', { hook_event_name: 'Stop', last_assistant_message: 'listo por ahora' });
+    const oldSession = (await o.robot('jefe')).sessionId;
+    assert.equal((await o.api('POST', '/api/robots/jefe/relevar')).status, 200);
+    await o.hook('jefe', {
+      hook_event_name: 'Stop',
+      last_assistant_message: `## Relevo\n${'- keep going with a long step\n'.repeat(300)}`
+    });
+    const r = await waitFor(
+      async () => {
+        const x = await o.robot('jefe');
+        return x && x.sessionId !== oldSession ? x : null;
+      },
+      { what: 'el relevo del padre' }
+    );
+    assert.equal(r.place.sala, salaId, 'el relevo entra a la sala de su equipo');
+    assert.ok(
+      o.claudeCalls().some(c => c.includes('relevo por contexto') && c.includes('fin de la sala')),
+      'con la sala en su prompt'
+    );
+  } finally {
+    await o.stop();
+  }
+});
+
 test('cuota: robots sin herramientas pesadas, resumen sin tokens para uno frío y hilo de sala con @nombre', async () => {
   const old = new Date(Date.now() - 2 * 3600e3).toISOString();
   const o = await startOffice({

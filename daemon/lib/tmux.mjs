@@ -15,6 +15,7 @@ import {
   PORT,
   robots,
   run,
+  RUNS,
   SESSION,
   SETTINGS,
   trunc,
@@ -184,7 +185,10 @@ async function launchReserved({
   // A routine on an account that is out of quota follows the same policy as a robot that runs out of it.
   if (routine && exhaustedIds().includes(account || PRINCIPAL)) {
     const from = accountName(account) || 'Principal';
-    const next = limitPolicy() === 'switch' ? pickAccount(quotaReadings(readConfig().quotaAcc), Date.now(), { skip: exhaustedIds(), strict: true }) : null;
+    const next =
+      limitPolicy() === 'switch'
+        ? pickAccount(quotaReadings(readConfig().quotaAcc), Date.now(), { skip: exhaustedIds(), strict: true })
+        : null;
     if (!next) throw new Error(`La cuenta ${from} se quedó sin cuota: la rutina espera a que se renueve.`);
     account = next.id;
     note = `La cuenta ${from} estaba sin cuota: lanzado en ${accountName(account) || 'Principal'}`;
@@ -263,6 +267,11 @@ async function launchReserved({
     parent: parent || null
   };
   robots.set(name, r);
+  // The prompt goes through a file, not as a tmux argument: tmux rejects commands over ~16 KB («command too long»),
+  // and a handoff summary plus a room's CONTEXT.md and thread easily pass that. sh reads it, deletes it and execs claude.
+  const promptFile = path.join(RUNS, 'prompts', `${name}-${sessionId}.txt`);
+  fs.mkdirSync(path.dirname(promptFile), { recursive: true });
+  fs.writeFileSync(promptFile, prompt, { mode: 0o600 });
   // env -u: si ANTHROPIC_API_KEY esta en el entorno, `claude` la usa en vez del login de la suscripcion.
   const tmuxArgs = [
     'new-window',
@@ -278,9 +287,11 @@ async function launchReserved({
     '-e',
     `OFFICE_PORT=${PORT}`,
     ...accountTmuxEnv(account),
-    'env',
-    '-u',
-    'ANTHROPIC_API_KEY',
+    'sh',
+    '-c',
+    'p=$(cat -- "$1") && rm -f -- "$1" && shift && exec env -u ANTHROPIC_API_KEY "$@" "$p"',
+    'sh',
+    promptFile,
     CLAUDE_BIN,
     '--settings',
     SETTINGS,
@@ -291,10 +302,10 @@ async function launchReserved({
     ...robotFlags(r)
   ];
   if (permissionMode) tmuxArgs.push('--permission-mode', permissionMode);
-  tmuxArgs.push(prompt);
   try {
     await run('tmux', tmuxArgs);
   } catch (e) {
+    fs.rmSync(promptFile, { force: true });
     robots.delete(name);
     throw new Error(`No se pudo abrir la consola: ${e.message}`);
   }
