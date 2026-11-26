@@ -433,7 +433,8 @@ test('console liveness: a dead pane or a foreground shell means claude is gone; 
   assert.equal(paneVerdict({ dead: '0', command: 'zsh' }), 'shell');
   assert.equal(paneVerdict({ dead: '0', command: '-zsh' }), 'shell', 'login shell');
   for (const c of ['bash', 'sh', 'login', 'fish']) assert.equal(paneVerdict({ dead: '0', command: c }), 'shell', c);
-  for (const c of ['2.1.331', 'claude', 'node', 'env', 'cat', '', 'sleep']) assert.equal(paneVerdict({ dead: '0', command: c }), 'alive', c);
+  for (const c of ['2.1.331', 'claude', 'node', 'env', 'cat', '', 'sleep'])
+    assert.equal(paneVerdict({ dead: '0', command: c }), 'alive', c);
   assert.equal(paneVerdict(undefined), 'alive', 'no data never marks lost');
   assert.equal(paneVerdict({ dead: '0', command: 'bash' }, { scriptBin: true }), 'alive', 'a claude that is a shell script');
   assert.equal(paneVerdict({ dead: '1', command: 'bash' }, { scriptBin: true }), 'dead', 'a dead pane is dead either way');

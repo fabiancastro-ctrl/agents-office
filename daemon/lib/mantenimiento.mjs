@@ -153,14 +153,21 @@ function notebookCheck() {
       h.indexRegenerated = true;
     }
   } catch (e) {
-    return { label: 'Cuaderno', ok: false, detail: `No pude revisar el cuaderno: ${e.message}`, fix: 'Revisa la carpeta memoria/ de los datos de la oficina.' };
+    return {
+      label: 'Cuaderno',
+      ok: false,
+      detail: `No pude revisar el cuaderno: ${e.message}`,
+      fix: 'Revisa la carpeta memoria/ de los datos de la oficina.'
+    };
   }
   const problems = [];
   if (h.unparseable.length) problems.push(`${h.unparseable.length} sin formato legible (${h.unparseable.join(', ')})`);
   if (h.incomplete.length)
     problems.push(`${h.incomplete.length} con campos faltantes (${h.incomplete.map(i => `${i.id}: ${i.missing.join('/')}`).join('; ')})`);
   if (h.oldProposals.length)
-    problems.push(`${h.oldProposals.length} propuesta${h.oldProposals.length === 1 ? '' : 's'} con más de ${PROPOSAL_DAYS} días sin decidir (${h.oldProposals.map(p => p.id).join(', ')})`);
+    problems.push(
+      `${h.oldProposals.length} propuesta${h.oldProposals.length === 1 ? '' : 's'} con más de ${PROPOSAL_DAYS} días sin decidir (${h.oldProposals.map(p => p.id).join(', ')})`
+    );
   const base = `${h.notes} nota${h.notes === 1 ? '' : 's'}, ${h.proposals} propuesta${h.proposals === 1 ? '' : 's'}${h.indexRegenerated ? ' · regeneré INDICE.md' : ''}`;
   return {
     label: 'Cuaderno',

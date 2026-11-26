@@ -372,7 +372,8 @@ function exportAll(dir = MEMORIA_DIR) {
   const read = folder => {
     const o = {};
     try {
-      for (const f of fs.readdirSync(folder).filter(x => x.endsWith('.md'))) o[f.slice(0, -3)] = fs.readFileSync(path.join(folder, f), 'utf8');
+      for (const f of fs.readdirSync(folder).filter(x => x.endsWith('.md')))
+        o[f.slice(0, -3)] = fs.readFileSync(path.join(folder, f), 'utf8');
     } catch {
       /* no folder */
     }
