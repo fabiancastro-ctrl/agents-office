@@ -1,10 +1,13 @@
 /* ---------- 6 · Legibilidad ---------- */
 // Tamaño del texto (tarjetas, métricas, paneles y globos del mapa) y alto contraste. Son de este navegador: cada quien
 // ve la oficina como le resulte cómoda, sin cambiarla para los demás. El mapa no se escala (sus medidas son el dibujo).
-const FZ_STEPS = [1, 1.15, 1.3, 1.45];
+// FZ_BASE is the real size of «Aa 100 %»: the bare type scale read too small next to a terminal, so the default is bigger.
+// The steps are relative to it (85 % is about the old default). Stored under a new key so old choices do not shrink it.
+const FZ_BASE = 1.15;
+const FZ_STEPS = [0.85, 1, 1.15, 1.3];
 const legib = { fz: 1, hc: false };
 try {
-  const f = Number(localStorage.getItem('office.fz'));
+  const f = Number(localStorage.getItem('office.fz2'));
   if (FZ_STEPS.includes(f)) legib.fz = f;
   legib.hc = localStorage.getItem('office.hc') === '1';
 } catch {
@@ -12,13 +15,8 @@ try {
 }
 function applyLegib() {
   const root = document.documentElement;
-  if (legib.fz === 1) {
-    delete root.dataset.fz;
-    root.style.removeProperty('--fz');
-  } else {
-    root.dataset.fz = '';
-    root.style.setProperty('--fz', legib.fz);
-  }
+  root.dataset.fz = '';
+  root.style.setProperty('--fz', String(Math.round(FZ_BASE * legib.fz * 1000) / 1000));
   root.classList.toggle('hc', legib.hc);
   $('#btn-fz').textContent = `Aa ${Math.round(legib.fz * 100)} %`;
   $('#btn-hc').setAttribute('aria-pressed', String(legib.hc));
@@ -27,10 +25,10 @@ function applyLegib() {
 }
 $('#btn-fz').addEventListener('click', e => {
   const i = FZ_STEPS.indexOf(legib.fz),
-    step = e.shiftKey ? -1 : 1; // Mayús + clic: más chico
+    step = e.shiftKey ? -1 : 1; // Shift + click: smaller
   legib.fz = FZ_STEPS[(i + step + FZ_STEPS.length) % FZ_STEPS.length];
   try {
-    localStorage.setItem('office.fz', String(legib.fz));
+    localStorage.setItem('office.fz2', String(legib.fz));
   } catch {
     /* sin almacenamiento */
   }

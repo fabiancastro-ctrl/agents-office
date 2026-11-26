@@ -360,6 +360,13 @@ function logRow(l, robot, i, interim) {
     text = unwrapPaste(l.text);
   const body = md ? (l.kind === 'agent' ? copyable(mdHtml(text)) : mdHtml(text)) : '';
   const av = l.kind === 'agent' ? avatarOf(l.kind === 'agent' && !l.who ? robot : l.who) : '';
+  // Office notes to the robot («[Oficina] Resultado de…», relevo, despertador) are long and not yours: one folded line,
+  // opened with a click. The open ones survive panel repaints like tool groups (same set, keyed by time).
+  if (l.kind === 'user' && /^\s*\[Oficina\]/.test(text)) {
+    const k = `ofi:${l.at}`,
+      head = text.replace(/^\s*\[Oficina\]\s*/, '').split('\n')[0];
+    return `<details class="lg user ofi" data-k="${esc(k)}"${openTools.has(k) ? ' open' : ''}><summary><span class="w">Oficina · ${t}</span><span class="ofi-l">${esc(head)}</span></summary>${md ? `<div class="x md-chat">${body}</div>` : `<span class="x">${esc(text)}</span>`}</details>`;
+  }
   const cpAll =
     l.kind === 'agent' && md
       ? `<span class="lg-acts">${i != null ? `<button type="button" class="cp-btn" data-pin aria-label="Guardar en «Para enviar»" title="Guardar en «Para enviar» para pegarlo después">${icon('pin')}</button><button type="button" class="cp-btn" data-fwd title="Pasar este mensaje a otro robot">↪ Pasar</button>` : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg" title="Copiar todo el mensaje con formato de chat (Google Chat, WhatsApp)">${icon('clip')} Copiar</button></span>`

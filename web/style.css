@@ -418,6 +418,15 @@ html.hc .robot .nm .acct{outline:1px solid currentColor}
 .lg.sub .w{color:var(--violet)}
 .lg.user{justify-self:end;background:#2a2213;border-color:#5c4a24;border-right:3px solid var(--amber);border-top-right-radius:3px}
 .lg.user .w{color:var(--amber);text-align:right}
+.lg.ofi{padding-top:4px;padding-bottom:4px}
+.lg.ofi summary{display:flex;gap:8px;align-items:baseline;cursor:pointer;list-style:none;min-width:0}
+.lg.ofi summary::-webkit-details-marker{display:none}
+.lg.ofi summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+.lg.ofi[open] summary::before{transform:rotate(90deg)}
+.lg.ofi summary .w{flex:none}
+.lg.ofi .ofi-l{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d8c9a6}
+.lg.ofi[open] .ofi-l{display:none}
+.lg.ofi[open] .x{margin-top:4px}
 .lg.doc{justify-self:start;display:flex;gap:8px;align-items:baseline;background:#13202f;border:1px solid #2b4664;border-radius:999px;padding:3px 12px;max-width:100%}
 .lg.doc .w{color:var(--sky);flex:none}
 .lg.doc .x{color:#d5e6f8;font-family:var(--mono);font-size:11.5px}
@@ -1878,7 +1887,7 @@ body.cine .map-wrap{max-width:calc((100vh - 24px) * 1.6)}
 
 /* 6 · Legibilidad: tamaño del texto (zoom en tarjetas, métricas y paneles; letra más grande en los globos y nombres del
    mapa, sin escalar el dibujo) y alto contraste. Se eligen con «Aa» y «contraste» arriba, por navegador. */
-html[data-fz] aside.cards,html[data-fz] .kpis,html[data-fz] .panel{zoom:var(--fz)}
+html[data-fz] aside.cards,html[data-fz] .kpis,html[data-fz] .panel,html[data-fz] .modal .card,html[data-fz] .toast{zoom:var(--fz)}
 html[data-fz] .robot .bubble{font-size:calc(10.5px * var(--fz));max-width:calc(200px * var(--fz))}
 html[data-fz] .robot:hover .bubble{max-width:calc(340px * var(--fz))}
 html[data-fz] .robot .nm{font-size:calc(11px * var(--fz))}
