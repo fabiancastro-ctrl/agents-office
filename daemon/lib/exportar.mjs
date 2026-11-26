@@ -297,8 +297,9 @@ function searchArchive(q) {
 }
 
 // Retomar: entra un robot nuevo (sesión nueva) con solo el super resumen del que se fue y tu instrucción. Si necesita
-// más contexto, se lo das tú o lo busca en los documentos y la memoria del proyecto.
-async function retake(id, text) {
+// más contexto, se lo das tú o lo busca en los documentos y la memoria del proyecto. `account` es la elegida al retomar
+// (mismos valores que el selector «Cuenta»; vacío = la cuenta activa), nunca la del que se fue: esa pudo quedar sin cuota.
+async function retake(id, text, account = '') {
   const a = archive.find(x => x.id === id);
   if (!a) throw new Error('Ese robot ya no está en el archivo.');
   const summary = a.summary || '(sin resumen)';
@@ -317,7 +318,7 @@ async function retake(id, text) {
     look: a.look,
     tools: a.tools,
     modelPick: a.modelPick,
-    account: a.account,
+    account,
     origin: `Retoma la tarea de ${a.name} con su resumen (se había ido el ${new Date(a.leftAt).toLocaleString('es')})`
   });
   r.note = a.note || '';
@@ -340,7 +341,8 @@ async function despedidosApi(req, res, url, parts) {
   }
   if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'despedidos' && parts[2] && parts[3] === 'retomar') {
     try {
-      const r = await retake(parts[2], (await readBody(req)).text);
+      const b = await readBody(req);
+      const r = await retake(parts[2], b.text, b.account);
       return send(res, 201, { ok: true, name: r.name });
     } catch (e) {
       return send(res, 409, { error: e.message });

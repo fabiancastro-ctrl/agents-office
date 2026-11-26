@@ -192,10 +192,11 @@ PANEL.addEventListener('submit', async e => {
   if (e.target.id !== 'retake-form') return;
   e.preventDefault();
   const b = e.target.querySelector('button');
-  if (!(await quotaOk(`Vas a lanzar un robot para retomar la tarea de ${st.archView?.name || 'este robot'}.`, st.archView?.account || ''))) return;
+  const account = $('#retake-account')?.value ?? ''; // no select when there is one account
+  if (!(await quotaOk(`Vas a lanzar un robot para retomar la tarea de ${st.archView?.name || 'este robot'}.`, account))) return;
   b.disabled = true;
   try {
-    const { name } = await api('POST', `/api/despedidos/${e.target.dataset.archId}/retomar`, { text: $('#retake-in').value });
+    const { name } = await api('POST', `/api/despedidos/${e.target.dataset.archId}/retomar`, { text: $('#retake-in').value, account });
     toast(`${name} retoma la tarea con el resumen`);
     st.archView = null;
     select(name);
@@ -350,7 +351,7 @@ function archPanel(a) {
   return `<div class="ph"><div class="ph-av">${robotHead(COLORS[(a.color || 0) % COLORS.length], L)}</div><div style="min-width:0"><h3>${esc(a.name)} <small class="muted">ya se fue</small></h3>${a.title ? `<div class="rt-title"><b>${icon('pin')} ${esc(a.title)}</b></div>` : ''}${a.note ? `<div class="rt-note"><span>${icon('memo')} ${esc(a.note)}</span></div>` : ''}<div class="sub-h">${esc(a.kind === 'skill' ? a.label : 'Tarea libre · ' + a.label)}</div><div class="origin">${esc(a.origin || '')} · entró ${when(a.startedAt)} · se fue ${when(a.leftAt)}</div></div><button type="button" class="btn sm" data-act="export-arch" title="Guarda su conversación en docs/conversaciones-robots/ (si su transcript sigue en disco, completa; si no, lo que guardó la oficina) con su resumen al final">${icon('down')} Exportar</button><button type="button" class="btn sm" data-act="wake-arch" title="Crea un despertador que retoma esta tarea cuando pase algo (un PR aprobado, un ticket que cambia, una hora)">${icon('clock')} Retomar cuando…</button><button type="button" class="btn sm" data-act="arch-back">← Volver</button></div>
     <div class="rp-grid"><div class="rp-col"><h4>Conversación <small class="muted">(sin herramientas)</small></h4><div class="log" id="arch-log" data-src="@arch" style="--c:${COLORS[(a.color || 0) % COLORS.length]}">${renderLog(a.log, a.name)}</div></div>
     <div class="rp-col"><div class="sumbox lg agent" style="--c:${COLORS[(a.color || 0) % COLORS.length]}"><span class="w">${icon('note')} Super resumen · ${a.summaryBy === 'robot' ? 'lo escribió el robot' : 'lo armó la oficina'}</span><span class="lg-acts">${a.summaryPath ? `<button type="button" class="cp-btn" data-docpath="${esc(a.summaryPath)}" title="${esc(a.summaryPath)}">${icon('doc')} Documento</button>` : ''}<button type="button" class="cp-btn cp-msg" data-copy="msg">${icon('clip')} Copiar</button></span><div class="x md-chat">${mdHtml(a.summary || '_Sin resumen._')}</div></div>
-    <form class="rehire" id="retake-form" data-arch-id="${esc(a.id)}"><h4>↻ Retomar con este resumen</h4><p class="note">Entra un robot nuevo solo con este resumen (no con toda su conversación). Si necesita más, se lo das tú o lo busca en los documentos y la memoria.</p><textarea id="retake-in" rows="3" placeholder="Qué cambió o qué sigue. Ej.: Ramiro ya respondió: el stock lo maneja el WMS">${esc(a.note ? `Ya llegó lo que esperabas (${a.note}). ` : '')}</textarea><button class="btn primary sm">Retomar</button></form>
+    <form class="rehire" id="retake-form" data-arch-id="${esc(a.id)}"><h4>↻ Retomar con este resumen</h4><p class="note">Entra un robot nuevo solo con este resumen (no con toda su conversación). Si necesita más, se lo das tú o lo busca en los documentos y la memoria.</p><textarea id="retake-in" rows="3" placeholder="Qué cambió o qué sigue. Ej.: Ramiro ya respondió: el stock lo maneja el WMS">${esc(a.note ? `Ya llegó lo que esperabas (${a.note}). ` : '')}</textarea>${accountField('retake-account', 'Cuenta', { weekly: true })}<button class="btn primary sm">Retomar</button></form>
     ${
       a.docs.length
         ? `<h4>Documentos (${a.docs.length})</h4><div class="list doclist">${a.docs

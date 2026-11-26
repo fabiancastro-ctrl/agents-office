@@ -578,7 +578,7 @@ async function wakeAct(rt, what) {
     if (!r) {
       const ar = [...archive].reverse().find(x => x.name === a.robot);
       if (!ar) throw new Error(`${a.robot} ya no está en la oficina ni en el archivo.`);
-      r = await retake(ar.id, msg);
+      r = await retake(ar.id, msg, rt.account);
       return `${a.robot} se había ido: entró ${r.name} con su resumen`;
     }
     if (r.consoleLost) await revive(r);
@@ -587,7 +587,7 @@ async function wakeAct(rt, what) {
     return `le escribí a ${r.name}`;
   }
   if (a.kind === 'retake') {
-    const r = await retake(a.archId, msg);
+    const r = await retake(a.archId, msg, rt.account);
     return `entró ${r.name} con el resumen`;
   }
   if (a.kind === 'launch') {
